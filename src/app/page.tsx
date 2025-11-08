@@ -172,10 +172,6 @@ export default function Home() {
 
   const showConfirmationDialog = (title: string, message: string, code: string): Promise<boolean> => {
       return new Promise((resolve) => {
-        const qrCode = html5QrCodeRef.current;
-          if (scannerActive && selectedScannerMode === 'camara' && qrCode && qrCode.getState() === Html5QrcodeScannerState.SCANNING) {
-              qrCode.pause(true);
-          }
           setConfirmation({ isOpen: true, title, message, code, resolve });
       });
   };
@@ -476,10 +472,6 @@ export default function Home() {
   const handleConfirmation = (decision: boolean) => {
       confirmation.resolve(decision);
       setConfirmation({ isOpen: false, title: '', message: '', code: '', resolve: () => {} });
-      const qrCode = html5QrCodeRef.current;
-      if (scannerActive && selectedScannerMode === 'camara' && qrCode && qrCode.getState() === Html5QrcodeScannerState.PAUSED) {
-          qrCode.resume();
-      }
       if (selectedScannerMode === 'fisico' && scannerActive) {
           setTimeout(() => physicalScannerInputRef.current?.focus(), 100);
       }
@@ -561,7 +553,7 @@ export default function Home() {
           const headers = "CODIGO MEL,FECHA DE ESCANEO,HORA DE ESCANEO,ENCARGADO,AREA QUE REGISTRA\n";
           let csvRows = scannedData.map(row => [`="${row.code}"`, `"${row.fecha}"`, `"${row.hora}"`, `"${row.encargado.replace(/"/g, '""')}"`, `"${row.area.replace(/"/g, '""')}"`].join(',')).join('\n');
           
-          const blob = new Blob([BOM + headers + csvRows], { type: 'text/csv;charset=utf-8;' });
+          const blob = new Blob([BOM + headers + csvRows], { type: 'text/csv;charset=utf-t' });
           const link = document.createElement("a");
           link.href = URL.createObjectURL(blob);
           link.download = fileName;
