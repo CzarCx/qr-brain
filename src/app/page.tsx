@@ -2,7 +2,7 @@
 import {useEffect, useRef, useState} from 'react';
 import Head from 'next/head';
 import Image from 'next/image';
-import { Html5Qrcode, Html5QrcodeScannerState, QrCodeResultFormat } from 'html5-qrcode';
+import { Html5Qrcode, Html5QrcodeScannerState } from 'html5-qrcode';
 
 type ScannedItem = {
   code: string;
@@ -13,7 +13,7 @@ type ScannedItem = {
 };
 
 export default function Home() {
-  const [message, setMessage] = useState({text: 'Esperando para escanear...', type: 'info'});
+  const [message, setMessage] = useState({text: 'Esperando para escanear...', type: 'info' as 'info' | 'success' | 'duplicate'});
   const [encargado, setEncargado] = useState('');
   const [scannedData, setScannedData] = useState<ScannedItem[]>([]);
   const [melCodesCount, setMelCodesCount] = useState(0);
@@ -58,7 +58,7 @@ export default function Home() {
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
-        const html5QrCode = new Html5Qrcode('reader', { verbose: false });
+        const html5QrCode = new Html5Qrcode('reader', false);
         html5QrCodeRef.current = html5QrCode;
 
         Html5Qrcode.getCameras()
@@ -130,8 +130,11 @@ export default function Home() {
     scannedCodesRef.current.add(finalCode);
     lastSuccessfullyScannedCodeRef.current = finalCode;
 
-    setMelCodesCount(prev => finalCode.startsWith('4') ? prev + 1 : prev);
-    setOtherCodesCount(prev => !finalCode.startsWith('4') ? prev + 1 : prev);
+    if (finalCode.startsWith('4')) {
+        setMelCodesCount(prev => prev + 1);
+    } else {
+        setOtherCodesCount(prev => prev + 1);
+    }
     
     setSuccessModal({ isOpen: true, code: finalCode });
 
@@ -164,7 +167,7 @@ export default function Home() {
     return true;
   };
 
-  const onScanSuccess = async (decodedText: string, decodedResult: QrCodeResultFormat) => {
+  const onScanSuccess = async (decodedText: string, decodedResult: any) => {
     if (!scannerActive || Date.now() - lastScanTimeRef.current < MIN_SCAN_INTERVAL) return;
     lastScanTimeRef.current = Date.now();
 
@@ -285,7 +288,8 @@ export default function Home() {
   };
 
   const startCameraScanner = () => {
-    if (!html5QrCodeRef.current) return;
+    const qrCode = html5QrCodeRef.current;
+    if (!qrCode) return;
     if (!camerasRef.current.length) return showAppMessage('No se encontraron cámaras.', 'duplicate');
     
     const cameraId = (camerasRef.current[currentCameraIndexRef.current] as any).id;
@@ -305,7 +309,7 @@ export default function Home() {
         }
     };
 
-    html5QrCodeRef.current.start(
+    qrCode.start(
         cameraId, 
         config,
         onScanSuccess, 
@@ -314,18 +318,20 @@ export default function Home() {
         if (camerasRef.current.length > 1) setShowChangeCamera(true);
         const videoElement = document.querySelector('#reader video');
         if (videoElement) {
-            videoTrackRef.current = (videoElement as HTMLVideoElement).srcObject as MediaStream;
-            const track = videoTrackRef.current.getVideoTracks()[0];
+            const stream = (videoElement as HTMLVideoElement).srcObject as MediaStream;
+            const track = stream.getVideoTracks()[0];
+            videoTrackRef.current = track;
+            
             const capabilities = track.getCapabilities();
             if(capabilities.torch || capabilities.zoom) setShowAdvancedControls(true);
             if(capabilities.torch) setShowFlashControl(true);
             if(capabilities.zoom && capabilities.zoom.max > capabilities.zoom.min) {
                 setShowZoomControl(true);
                 if(zoomSliderRef.current) {
-                    zoomSliderRef.current.min = capabilities.zoom.min.toString();
-                    zoomSliderRef.current.max = capabilities.zoom.max.toString();
-                    zoomSliderRef.current.step = capabilities.zoom.step.toString();
-                    zoomSliderRef.current.value = capabilities.zoom.min.toString();
+                    zoomSliderRef.current.min = capabilities.zoom.min!.toString();
+                    zoomSliderRef.current.max = capabilities.zoom.max!.toString();
+                    zoomSliderRef.current.step = capabilities.zoom.step!.toString();
+                    zoomSliderRef.current.value = track.getSettings().zoom!.toString();
                 }
             }
         }
@@ -337,8 +343,9 @@ export default function Home() {
   };
 
   const stopCameraScanner = () => {
-    if (html5QrCodeRef.current && html5QrCodeRef.current.isScanning) {
-        html5QrCodeRef.current.stop().then(() => {
+    const qrCode = html5QrCodeRef.current;
+    if (qrCode && qrCode.isScanning) {
+        qrCode.stop().then(() => {
             videoTrackRef.current = null;
             setShowAdvancedControls(false);
             setShowChangeCamera(false);
@@ -362,7 +369,8 @@ export default function Home() {
   };
 
   const changeCamera = () => {
-      if (scannerActive && camerasRef.current.length > 1 && html5QrCodeRef.current) {
+    const qrCode = html5QrCodeRef.current;
+      if (scannerActive && camerasRef.current.length > 1 && qrCode) {
           stopCameraScanner();
           setTimeout(() => {
             currentCameraIndexRef.current = (currentCameraIndexRef.current + 1) % camerasRef.current.length;
@@ -372,34 +380,31 @@ export default function Home() {
   };
 
   const toggleFlash = () => {
-    if(videoTrackRef.current) {
-        const track = videoTrackRef.current.getVideoTracks()[0];
-        if (track && 'applyConstraints' in track) {
-            const newFlashState = !isFlashOn;
-            (track as any).applyConstraints({ advanced: [{ torch: newFlashState }] }).then(() => {
-                setIsFlashOn(newFlashState);
-            });
-        }
+    const track = videoTrackRef.current;
+    if(track && 'applyConstraints' in track) {
+        const newFlashState = !isFlashOn;
+        track.applyConstraints({ advanced: [{ torch: newFlashState }] }).then(() => {
+            setIsFlashOn(newFlashState);
+        }).catch(e => console.log('error flash', e));
     }
   };
 
   const handleZoom = (event: React.ChangeEvent<HTMLInputElement>) => {
-      if(videoTrackRef.current) {
-        const track = videoTrackRef.current.getVideoTracks()[0];
-          if(track && 'applyConstraints' in track) {
-              try {
-                  (track as any).applyConstraints({ advanced: [{ zoom: event.target.value }] });
-              } catch(error) {
-                  console.error("Error al aplicar zoom:", error);
-              }
+    const track = videoTrackRef.current;
+      if(track && 'applyConstraints' in track) {
+          try {
+              track.applyConstraints({ advanced: [{ zoom: event.target.value }] });
+          } catch(error) {
+              console.error("Error al aplicar zoom:", error);
           }
       }
   };
 
   const showConfirmationDialog = (title: string, message: string, code: string): Promise<boolean> => {
       return new Promise((resolve) => {
-          if (scannerActive && selectedScannerMode === 'camara' && html5QrCodeRef.current?.getState() === Html5QrcodeScannerState.SCANNING) {
-              html5QrCodeRef.current?.pause(true);
+        const qrCode = html5QrCodeRef.current;
+          if (scannerActive && selectedScannerMode === 'camara' && qrCode && qrCode.getState() === Html5QrcodeScannerState.SCANNING) {
+              qrCode.pause(true);
           }
           setConfirmation({ isOpen: true, title, message, code, resolve });
       });
@@ -408,8 +413,9 @@ export default function Home() {
   const handleConfirmation = (decision: boolean) => {
       confirmation.resolve(decision);
       setConfirmation({ isOpen: false, title: '', message: '', code: '', resolve: () => {} });
-      if (scannerActive && selectedScannerMode === 'camara' && html5QrCodeRef.current?.getState() === Html5QrcodeScannerState.PAUSED) {
-          html5QrCodeRef.current?.resume();
+      const qrCode = html5QrCodeRef.current;
+      if (scannerActive && selectedScannerMode === 'camara' && qrCode && qrCode.getState() === Html5QrcodeScannerState.PAUSED) {
+          qrCode.resume();
       }
       if (selectedScannerMode === 'fisico' && scannerActive) {
           setTimeout(() => physicalScannerInputRef.current?.focus(), 100);
@@ -707,3 +713,4 @@ export default function Home() {
     </>
   );
 }
+
