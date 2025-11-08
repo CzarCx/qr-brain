@@ -46,7 +46,7 @@ export default function Home() {
   const zoomSliderRef = useRef<HTMLInputElement | null>(null);
   const camerasRef = useRef<any[]>([]);
   const currentCameraIndexRef = useRef(0);
-  const lastScanTimeRef = useRef(0);
+  const lastScanTimeRef = useRef(Date.now());
   const lastSuccessfullyScannedCodeRef = useRef<string | null>(null);
   const scannedCodesRef = useRef(new Set<string>());
   const bufferRef = useRef('');
@@ -58,24 +58,6 @@ export default function Home() {
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      initializeScanner();
-    }
-    
-    const input = physicalScannerInputRef.current;
-    if (input) {
-      const downListener = (e: Event) => handlePhysicalScannerInput(e as KeyboardEvent);
-      input.addEventListener('keydown', downListener);
-      return () => {
-        if(input) {
-            input.removeEventListener('keydown', downListener);
-        }
-      };
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scannerActive, selectedScannerMode]);
-
-  const initializeScanner = () => {
-    if (!html5QrCodeRef.current && typeof window !== 'undefined') {
         const html5QrCode = new Html5Qrcode('reader', { verbose: false });
         html5QrCodeRef.current = html5QrCode;
 
@@ -95,7 +77,25 @@ export default function Home() {
         })
         .catch(err => console.error('No se pudieron obtener las cámaras:', err));
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    const input = physicalScannerInputRef.current;
+    const downListener = (e: Event) => handlePhysicalScannerInput(e as KeyboardEvent);
+    
+    if (selectedScannerMode === 'fisico' && scannerActive && input) {
+      input.addEventListener('keydown', downListener);
+      input.focus();
+    }
+    
+    return () => {
+      if (input) {
+        input.removeEventListener('keydown', downListener);
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scannerActive, selectedScannerMode]);
+
 
   const showAppMessage = (text: string, type: 'success' | 'duplicate' | 'info') => {
     setMessage({text, type});
@@ -130,11 +130,8 @@ export default function Home() {
     scannedCodesRef.current.add(finalCode);
     lastSuccessfullyScannedCodeRef.current = finalCode;
 
-    if (finalCode.startsWith('4')) {
-      setMelCodesCount(prev => prev + 1);
-    } else {
-      setOtherCodesCount(prev => prev + 1);
-    }
+    setMelCodesCount(prev => finalCode.startsWith('4') ? prev + 1 : prev);
+    setOtherCodesCount(prev => !finalCode.startsWith('4') ? prev + 1 : prev);
     
     setSuccessModal({ isOpen: true, code: finalCode });
 
@@ -161,11 +158,7 @@ export default function Home() {
       area: selectedArea,
     };
     
-    setScannedData(prevData => {
-        const updatedData = [newData, ...prevData];
-        updatedData.sort((a, b) => new Date(`1970/01/01T${b.hora}`).valueOf() - new Date(`1970/01/01T${a.hora}`).valueOf());
-        return updatedData;
-    });
+    setScannedData(prevData => [newData, ...prevData].sort((a, b) => new Date(`1970/01/01T${b.hora}`).valueOf() - new Date(`1970/01/01T${a.hora}`).valueOf()));
 
     invalidateCSV();
     return true;
@@ -246,8 +239,6 @@ export default function Home() {
   };
 
   const handlePhysicalScannerInput = (event: KeyboardEvent) => {
-      if(selectedScannerMode !== 'fisico' || !scannerActive) return;
-
       if(event.key === 'Enter') {
           event.preventDefault();
           if(bufferRef.current.length > 0) {
@@ -273,6 +264,8 @@ export default function Home() {
     if (!encargado.trim()) return showAppMessage('Por favor, ingresa el nombre del encargado.', 'duplicate');
     if (!selectedArea) return showAppMessage('Por favor, selecciona un área.', 'duplicate');
     
+    setScannerActive(true);
+
     if(selectedScannerMode === 'camara') {
         startCameraScanner();
     } else {
@@ -287,16 +280,15 @@ export default function Home() {
         } else {
             stopPhysicalScanner();
         }
+        setScannerActive(false);
     }
   };
 
   const startCameraScanner = () => {
-    if (!html5QrCodeRef.current) {
-        initializeScanner();
-    }
-    if (!camerasRef.current.length || !html5QrCodeRef.current) return showAppMessage('No se encontraron cámaras.', 'duplicate');
-    const cameraId = (camerasRef.current[currentCameraIndexRef.current] as any).id;
+    if (!html5QrCodeRef.current) return;
+    if (!camerasRef.current.length) return showAppMessage('No se encontraron cámaras.', 'duplicate');
     
+    const cameraId = (camerasRef.current[currentCameraIndexRef.current] as any).id;
     showAppMessage('Cámara activada. Apunta al código.', 'info');
 
     const config = {
@@ -319,12 +311,12 @@ export default function Home() {
         onScanSuccess, 
         (e: any) => {}
     ).then(() => {
-        setScannerActive(true);
         if (camerasRef.current.length > 1) setShowChangeCamera(true);
         const videoElement = document.querySelector('#reader video');
         if (videoElement) {
-            videoTrackRef.current = (videoElement as HTMLVideoElement).srcObject.getVideoTracks()[0];
-            const capabilities = videoTrackRef.current.getCapabilities();
+            videoTrackRef.current = (videoElement as HTMLVideoElement).srcObject as MediaStream;
+            const track = videoTrackRef.current.getVideoTracks()[0];
+            const capabilities = track.getCapabilities();
             if(capabilities.torch || capabilities.zoom) setShowAdvancedControls(true);
             if(capabilities.torch) setShowFlashControl(true);
             if(capabilities.zoom && capabilities.zoom.max > capabilities.zoom.min) {
@@ -347,7 +339,6 @@ export default function Home() {
   const stopCameraScanner = () => {
     if (html5QrCodeRef.current && html5QrCodeRef.current.isScanning) {
         html5QrCodeRef.current.stop().then(() => {
-            setScannerActive(false);
             videoTrackRef.current = null;
             setShowAdvancedControls(false);
             setShowChangeCamera(false);
@@ -359,13 +350,11 @@ export default function Home() {
   };
   
   const startPhysicalScanner = () => {
-      setScannerActive(true);
       physicalScannerInputRef.current?.focus();
       showAppMessage('Escáner físico activo. Escanea códigos.', 'info');
   };
 
   const stopPhysicalScanner = () => {
-      setScannerActive(false);
       bufferRef.current = '';
       if(scanTimeoutRef.current) clearTimeout(scanTimeoutRef.current);
       physicalScannerInputRef.current?.blur();
@@ -383,19 +372,26 @@ export default function Home() {
   };
 
   const toggleFlash = () => {
-      if(videoTrackRef.current && 'applyConstraints' in videoTrackRef.current) {
-          const newFlashState = !isFlashOn;
-          (videoTrackRef.current as any).applyConstraints({ advanced: [{ torch: newFlashState }] });
-          setIsFlashOn(newFlashState);
-      }
+    if(videoTrackRef.current) {
+        const track = videoTrackRef.current.getVideoTracks()[0];
+        if (track && 'applyConstraints' in track) {
+            const newFlashState = !isFlashOn;
+            (track as any).applyConstraints({ advanced: [{ torch: newFlashState }] }).then(() => {
+                setIsFlashOn(newFlashState);
+            });
+        }
+    }
   };
 
   const handleZoom = (event: React.ChangeEvent<HTMLInputElement>) => {
-      if(videoTrackRef.current && 'applyConstraints' in videoTrackRef.current) {
-          try {
-              (videoTrackRef.current as any).applyConstraints({ advanced: [{ zoom: event.target.value }] });
-          } catch(error) {
-              console.error("Error al aplicar zoom:", error);
+      if(videoTrackRef.current) {
+        const track = videoTrackRef.current.getVideoTracks()[0];
+          if(track && 'applyConstraints' in track) {
+              try {
+                  (track as any).applyConstraints({ advanced: [{ zoom: event.target.value }] });
+              } catch(error) {
+                  console.error("Error al aplicar zoom:", error);
+              }
           }
       }
   };
@@ -583,7 +579,7 @@ export default function Home() {
                     <div className="scanner-container">
                         <div id="reader" style={{ display: selectedScannerMode === 'camara' ? 'block' : 'none' }}></div>
                         <div id="laser-line" style={{ display: scannerActive && selectedScannerMode === 'camara' ? 'block' : 'none' }}></div>
-                        <input type="text" id="physical-scanner-input" ref={physicalScannerInputRef} className="hidden-input" autoComplete="off" readOnly />
+                        <input type="text" id="physical-scanner-input" ref={physicalScannerInputRef} className="hidden-input" autoComplete="off" />
                     </div>
                     <div id="scanner-controls" className="mt-4 flex flex-wrap gap-2 justify-center">
                         <button onClick={startScanner} disabled={scannerActive} className={`px-4 py-2 text-white font-semibold rounded-lg shadow-md transition-colors duration-200 ${scannerActive ? 'bg-gray-400' : 'bg-blue-600 hover:bg-blue-700'}`}>Iniciar Escaneo</button>
