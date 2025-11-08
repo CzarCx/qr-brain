@@ -169,8 +169,8 @@ export default function Home() {
   };
 
   const onScanSuccess = async (decodedText: string, decodedResult: any) => {
-    console.log(`Código escaneado (raw): ${decodedText}`);
     setLastScanned(decodedText);
+    console.log(`Código escaneado (raw): ${decodedText}`);
 
     if (!scannerActive || Date.now() - lastScanTimeRef.current < MIN_SCAN_INTERVAL) return;
     lastScanTimeRef.current = Date.now();
