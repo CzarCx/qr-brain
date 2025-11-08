@@ -661,6 +661,26 @@ export default function Home() {
                         </div>
                     </div>
 
+                    <div className="mb-4">
+                        <h2 className="text-xl font-bold text-starbucks-dark mb-2">Registros de Personal</h2>
+                        <div className="table-container border border-gray-200 rounded-lg">
+                            <table className="w-full min-w-full divide-y divide-gray-200">
+                                <thead className="bg-starbucks-cream sticky top-0">
+                                    <tr>
+                                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">Codigo (MEL o otro)</th>
+                                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">SKU</th>
+                                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">Personal</th>
+                                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">Encargado</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="bg-starbucks-white divide-y divide-gray-200">
+                                    {/* Las filas de esta tabla se agregarán aquí dinámicamente */}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+
                     <div className="flex justify-between items-center mb-2">
                         <h2 className="text-xl font-bold text-starbucks-dark">Registros Únicos</h2>
                         <div className="flex flex-wrap gap-2">
