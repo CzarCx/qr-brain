@@ -3,6 +3,9 @@ import {useEffect, useRef, useState, useCallback} from 'react';
 import Head from 'next/head';
 import Image from 'next/image';
 import { Html5Qrcode, Html5QrcodeScannerState } from 'html5-qrcode';
+import { supabase } from '@/lib/supabaseClient';
+import { supabase as supabaseDB2 } from '@/lib/supabaseClient';
+
 
 type ScannedItem = {
   code: string;
@@ -149,26 +152,29 @@ export default function Home() {
     return true;
   }, [encargado, selectedArea]);
 
-  const associateNameToScans = (name: string) => {
-    const newPersonalScans: PersonalScanItem[] = [];
-
-    scannedData.forEach(item => {
-      newPersonalScans.push({
-        code: item.code,
-        sku: '', // As per requirement, SKU is empty for now
-        personal: name,
-        encargado: item.encargado,
+  const associateNameToScans = (name: string, pendingScans: ScannedItem[]) => {
+      const newPersonalScans: PersonalScanItem[] = [];
+  
+      pendingScans.forEach(item => {
+        newPersonalScans.push({
+          code: item.code,
+          sku: '', // As per requirement, SKU is empty for now
+          personal: name,
+          encargado: item.encargado,
+        });
       });
-    });
-
-    if (newPersonalScans.length > 0) {
-      setPersonalScans(prev => [...prev, ...newPersonalScans].sort((a, b) => a.code.localeCompare(b.code)));
-      setScannedData([]); // Clear the unique scans table after association
-      showAppMessage(`Se asociaron ${newPersonalScans.length} códigos a ${name}.`, 'success');
-    } else {
-      showAppMessage(`${name} escaneado, pero no había códigos pendientes.`, 'info');
-    }
-  };
+  
+      if (newPersonalScans.length > 0) {
+        setPersonalScans(prev => [...prev, ...newPersonalScans].sort((a, b) => a.code.localeCompare(b.code)));
+        setScannedData([]); // Clear the unique scans table after association
+        scannedCodesRef.current.clear(); // also clear the ref set
+        setMelCodesCount(0);
+        setOtherCodesCount(0);
+        showAppMessage(`Se asociaron ${newPersonalScans.length} códigos a ${name}.`, 'success');
+      } else {
+        showAppMessage(`${name} escaneado, pero no había códigos pendientes.`, 'info');
+      }
+    };
 
   const showConfirmationDialog = (title: string, message: string, code: string): Promise<boolean> => {
       return new Promise((resolve) => {
@@ -192,7 +198,7 @@ export default function Home() {
     // Check if it's a name
     if (isLikelyName(finalCode)) {
       if ('vibrate' in navigator) navigator.vibrate([100, 50, 100]);
-      associateNameToScans(finalCode);
+      associateNameToScans(finalCode, scannedData);
       lastSuccessfullyScannedCodeRef.current = finalCode; // Prevent re-scanning the same name
       return;
     }
@@ -238,87 +244,92 @@ export default function Home() {
     if (!isMounted || !readerRef.current) {
       return;
     }
-    
-    if (!html5QrCodeRef.current) {
-      html5QrCodeRef.current = new Html5Qrcode(readerRef.current.id, false);
-    }
-
-    const qrCode = html5QrCodeRef.current;
-    
-    if (scannerActive && selectedScannerMode === 'camara') {
-      const config = {
-        fps: 10,
-        qrbox: { width: 250, height: 250 },
-        experimentalFeatures: { useBarCodeDetectorIfSupported: true },
-        videoConstraints: {
-            width: { ideal: 1920 },
-            height: { ideal: 1080 },
-            facingMode: "environment"
-        }
-      };
-
-      const startCamera = () => {
-         Html5Qrcode.getCameras().then(devices => {
-            if (devices && devices.length) {
-              camerasRef.current = devices;
-              const rearCameraIndex = devices.findIndex(
-                  (camera: any) =>
-                  camera.label.toLowerCase().includes('back') ||
-                  camera.label.toLowerCase().includes('trasera')
-              );
-              if (rearCameraIndex !== -1) {
-                  currentCameraIndexRef.current = rearCameraIndex;
-              }
-              if (devices.length > 1) setShowChangeCamera(true);
-
-              const cameraId = devices[currentCameraIndexRef.current].id;
-              
-              qrCode.start(cameraId, config, onScanSuccess, (e: any) => {}).then(() => {
-                const videoElement = document.querySelector(`#${readerRef.current!.id} video`);
-                if (videoElement) {
-                    const stream = (videoElement as HTMLVideoElement).srcObject as MediaStream;
-                    const track = stream.getVideoTracks()[0];
-                    videoTrackRef.current = track;
-                    
-                    const capabilities = track.getCapabilities();
-                    if(capabilities.torch || capabilities.zoom) setShowAdvancedControls(true);
-                    if(capabilities.torch) setShowFlashControl(true);
-                    if(capabilities.zoom && capabilities.zoom.max > capabilities.zoom.min) {
-                        setShowZoomControl(true);
-                        if(zoomSliderRef.current) {
-                            zoomSliderRef.current.min = capabilities.zoom.min!.toString();
-                            zoomSliderRef.current.max = capabilities.zoom.max!.toString();
-                            zoomSliderRef.current.step = capabilities.zoom.step!.toString();
-                            zoomSliderRef.current.value = track.getSettings().zoom!.toString();
-                        }
-                    }
-                }
-              }).catch(err => {
-                  console.error("Error al iniciar camara", err);
-                  showAppMessage('Error al iniciar la cámara. Revisa los permisos.', 'duplicate');
-                  setScannerActive(false);
-              });
-            }
-         }).catch(err => {
-            console.error('No se pudieron obtener las cámaras:', err);
-            showAppMessage('No se encontraron cámaras.', 'duplicate');
-            setScannerActive(false);
-         });
-      };
-      
-      startCamera();
-
-    } else if (!scannerActive && qrCode && qrCode.getState() === Html5QrcodeScannerState.SCANNING) {
-        qrCode.stop().then(() => {
-          console.log("Scanner stopped");
-        }).catch(err => console.error("Failed to stop scanner", err));
-    }
-    
-    // Función de limpieza
-    return () => {
+  
+    let qrCode = html5QrCodeRef.current;
+  
+    const cleanup = () => {
       if (qrCode && qrCode.getState() === Html5QrcodeScannerState.SCANNING) {
-        qrCode.stop().catch(err => console.error("Failed to stop scanner on cleanup", err));
+        return qrCode.stop().catch(err => {
+          console.error("Failed to stop scanner on cleanup", err);
+        });
       }
+      return Promise.resolve();
+    };
+  
+    if (!qrCode) {
+      qrCode = new Html5Qrcode(readerRef.current.id, false);
+      html5QrCodeRef.current = qrCode;
+    }
+  
+    if (scannerActive && selectedScannerMode === 'camara') {
+      if (qrCode.getState() !== Html5QrcodeScannerState.SCANNING) {
+        const config = {
+          fps: 10,
+          qrbox: { width: 250, height: 250 },
+          experimentalFeatures: { useBarCodeDetectorIfSupported: true },
+          videoConstraints: {
+              width: { ideal: 1920 },
+              height: { ideal: 1080 },
+              facingMode: "environment"
+          }
+        };
+  
+        const startCamera = () => {
+          Html5Qrcode.getCameras().then(devices => {
+             if (devices && devices.length) {
+               camerasRef.current = devices;
+               const rearCameraIndex = devices.findIndex(
+                   (camera: any) =>
+                   camera.label.toLowerCase().includes('back') ||
+                   camera.label.toLowerCase().includes('trasera')
+               );
+               if (rearCameraIndex !== -1) {
+                   currentCameraIndexRef.current = rearCameraIndex;
+               }
+               if (devices.length > 1) setShowChangeCamera(true);
+ 
+               const cameraId = devices[currentCameraIndexRef.current].id;
+               
+               qrCode.start(cameraId, config, onScanSuccess, (e: any) => {}).then(() => {
+                 const videoElement = document.querySelector(`#${readerRef.current!.id} video`);
+                 if (videoElement) {
+                     const stream = (videoElement as HTMLVideoElement).srcObject as MediaStream;
+                     const track = stream.getVideoTracks()[0];
+                     videoTrackRef.current = track;
+                     
+                     const capabilities = track.getCapabilities();
+                     if(capabilities.torch || capabilities.zoom) setShowAdvancedControls(true);
+                     if(capabilities.torch) setShowFlashControl(true);
+                     if(capabilities.zoom && capabilities.zoom.max > capabilities.zoom.min) {
+                         setShowZoomControl(true);
+                         if(zoomSliderRef.current) {
+                             zoomSliderRef.current.min = capabilities.zoom.min!.toString();
+                             zoomSliderRef.current.max = capabilities.zoom.max!.toString();
+                             zoomSliderRef.current.step = capabilities.zoom.step!.toString();
+                             zoomSliderRef.current.value = track.getSettings().zoom!.toString();
+                         }
+                     }
+                 }
+               }).catch(err => {
+                   console.error("Error al iniciar camara", err);
+                   showAppMessage('Error al iniciar la cámara. Revisa los permisos.', 'duplicate');
+                   setScannerActive(false);
+               });
+             }
+          }).catch(err => {
+             console.error('No se pudieron obtener las cámaras:', err);
+             showAppMessage('No se encontraron cámaras.', 'duplicate');
+             setScannerActive(false);
+          });
+       };
+       startCamera();
+      }
+    } else if (!scannerActive) {
+      cleanup();
+    }
+  
+    return () => {
+      cleanup();
     };
   }, [scannerActive, selectedScannerMode, onScanSuccess, isMounted]);
 
@@ -531,10 +542,10 @@ export default function Home() {
           const data = await response.json();
           const now = new Date(data.datetime);
           
-          const encargadoName = encargado.trim().toUpperCase().replace(/ /g, '_') || 'SIN_NOMBRE';
+          const encargadoName = (encargado || "SIN_NOMBRE").trim().toUpperCase().replace(/ /g, '_');
           const etiquetas = `ETIQUETAS(${scannedCodesRef.current.size})`;
           const removeAccents = (str: string) => str.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-          const areaName = removeAccents(selectedArea.toUpperCase().replace(/ /g, '_'));
+          const areaName = removeAccents((selectedArea || "SIN_AREA").toUpperCase().replace(/ /g, '_'));
 
           const day = String(now.getDate()).padStart(2, '0');
           const year = String(now.getFullYear()).slice(-2);
@@ -575,23 +586,68 @@ export default function Home() {
     setLoading(true);
 
     try {
-        const response = await fetch(APPS_SCRIPT_URL, {
-            method: 'POST',
-            redirect: 'follow',
-            body: JSON.stringify({ data: scannedData }),
-            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        });
-        if (response.ok) {
-            showAppMessage(`¡Éxito! Se enviaron ${scannedData.length} registros.`, 'success');
-            clearSessionData();
-        } else {
-            throw new Error(`Error del servidor: ${response.status}`);
-        }
-    } catch (error) {
-        console.error("Error al enviar datos:", error);
-        showAppMessage('Error al enviar los datos. Inténtalo de nuevo.', 'duplicate');
+        const { error } = await supabase.from('escaneos').insert(scannedData.map(item => ({
+          codigo: item.code,
+          fecha_escaneo: item.fecha,
+          hora_escaneo: item.hora,
+          encargado: item.encargado,
+          area: item.area,
+        })));
+
+        if (error) throw error;
+        
+        showAppMessage(`¡Éxito! Se enviaron ${scannedData.length} registros a Supabase.`, 'success');
+        clearSessionData();
+
+    } catch (error: any) {
+        console.error("Error al enviar datos a Supabase:", error);
+        showAppMessage(`Error al enviar los datos: ${error.message}`, 'duplicate');
     } finally {
         setLoading(false);
+    }
+  };
+
+  const handleSavePersonal = async () => {
+    if (personalScans.length === 0) {
+      showAppMessage('No hay datos de personal para guardar.', 'info');
+      return;
+    }
+    setLoading(true);
+
+    try {
+      const { data: lastIdData, error: lastIdError } = await supabaseDB2
+        .from('personal')
+        .select('id')
+        .order('id', { ascending: false })
+        .limit(1)
+        .single();
+  
+      if (lastIdError && lastIdError.code !== 'PGRST116') { // PGRST116: no rows found
+        throw lastIdError;
+      }
+  
+      let nextId = (lastIdData?.id || 0) + 1;
+  
+      const dataToInsert = personalScans.map((item) => ({
+        id: nextId++,
+        name: item.personal,
+        product: item.sku,
+      }));
+
+      const { error } = await supabaseDB2.from('personal').insert(dataToInsert);
+
+      if (error) {
+        throw error;
+      }
+
+      showAppMessage(`¡Éxito! Se guardaron ${personalScans.length} registros de personal.`, 'success');
+      setPersonalScans([]);
+
+    } catch (error: any) {
+      console.error("Error al guardar datos de personal:", error);
+      showAppMessage(`Error al guardar: ${error.message}`, 'duplicate');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -700,7 +756,12 @@ export default function Home() {
                     </div>
 
                     <div className="mb-4">
-                        <h2 className="text-xl font-bold text-starbucks-dark mb-2">Registros de Personal</h2>
+                        <div className="flex justify-between items-center mb-2">
+                           <h2 className="text-xl font-bold text-starbucks-dark">Registros de Personal</h2>
+                            <button onClick={handleSavePersonal} className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-sm text-sm transition-colors duration-200">
+                                Guardar Personal
+                            </button>
+                        </div>
                         <div className="table-container border border-gray-200 rounded-lg">
                             <table className="w-full min-w-full divide-y divide-gray-200">
                                 <thead className="bg-starbucks-cream sticky top-0">
@@ -800,3 +861,5 @@ export default function Home() {
     </>
   );
 }
+
+    
