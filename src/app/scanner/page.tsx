@@ -26,10 +26,10 @@ export default function ScannerPage() {
   const MIN_SCAN_INTERVAL = 2000; // 2 seconds between scans
 
   const onScanSuccess = useCallback(async (decodedText: string) => {
-    if (Date.now() - lastScanTimeRef.current < MIN_SCAN_INTERVAL) return;
+    if (loading || Date.now() - lastScanTimeRef.current < MIN_SCAN_INTERVAL) return;
+    
     lastScanTimeRef.current = Date.now();
     setLoading(true);
-    setScannerActive(false); // Stop scanner after a successful scan
     setMessage('Procesando código...');
     if ('vibrate' in navigator) navigator.vibrate(200);
 
@@ -76,7 +76,7 @@ export default function ScannerPage() {
     } finally {
         setLoading(false);
     }
-  }, []);
+  }, [loading]);
 
   useEffect(() => {
     if (!readerRef.current) return;
