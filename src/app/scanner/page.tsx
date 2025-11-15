@@ -5,6 +5,17 @@ import Head from 'next/head';
 import Image from 'next/image';
 import { Html5Qrcode, Html5QrcodeScannerState } from 'html5-qrcode';
 import { supabaseDB2 } from '@/lib/supabaseClient';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
+import { Button } from "@/components/ui/button"
+
 
 type ScanResult = {
     name: string | null;
@@ -19,6 +30,7 @@ export default function ScannerPage() {
   const [lastScannedResult, setLastScannedResult] = useState<ScanResult | null>(null);
   const [scannerActive, setScannerActive] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [isRatingModalOpen, setIsRatingModalOpen] = useState(false);
 
   const html5QrCodeRef = useRef<Html5Qrcode | null>(null);
   const readerRef = useRef<HTMLDivElement>(null);
@@ -174,6 +186,28 @@ export default function ScannerPage() {
                             <h3 className="font-bold text-starbucks-dark uppercase text-sm">Producto</h3>
                             <p className="text-lg text-gray-800">{lastScannedResult.product || 'No especificado'}</p>
                         </div>
+                        <Dialog open={isRatingModalOpen} onOpenChange={setIsRatingModalOpen}>
+                          <DialogTrigger asChild>
+                            <Button className="w-full mt-4 bg-starbucks-accent hover:bg-starbucks-green text-white">
+                              Calificar Empaquetado
+                            </Button>
+                          </DialogTrigger>
+                          <DialogContent className="sm:max-w-[425px]">
+                            <DialogHeader>
+                              <DialogTitle>Calificar Empaquetado</DialogTitle>
+                              <DialogDescription>
+                                ¿Cómo calificarías la calidad del empaquetado de este producto?
+                              </DialogDescription>
+                            </DialogHeader>
+                            <div className="grid gap-4 py-4">
+                              {/* Aquí irían las estrellas o botones de calificación */}
+                              <p className="text-center">Opciones de calificación aquí.</p>
+                            </div>
+                            <DialogFooter>
+                              <Button type="submit" onClick={() => setIsRatingModalOpen(false)}>Enviar Calificación</Button>
+                            </DialogFooter>
+                          </DialogContent>
+                        </Dialog>
                     </>
                 ) : (
                   lastScannedResult.error ? (
