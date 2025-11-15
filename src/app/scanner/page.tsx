@@ -263,20 +263,22 @@ export default function ScannerPage() {
                                     </Select>
                                )}
                             </div>
-                            <DialogFooter>
+                            <DialogFooter className="sm:justify-center">
                                 {showReportSelect ? (
-                                    <Button variant="destructive" onClick={() => {
+                                    <Button size="lg" variant="destructive" onClick={() => {
                                         console.log('Reportado con motivo:', selectedReport);
                                         handleOpenRatingModal(false);
                                     }}>
                                         Enviar Reporte
                                     </Button>
                                 ) : (
-                                    <Button variant="destructive" onClick={() => setShowReportSelect(true)}>
+                                  <>
+                                    <Button size="lg" variant="destructive" onClick={() => setShowReportSelect(true)}>
                                         Reportar
                                     </Button>
+                                    <Button size="lg" type="submit" onClick={() => handleOpenRatingModal(false)} className="bg-green-600 hover:bg-green-700">Aceptar</Button>
+                                  </>
                                 )}
-                              <Button type="submit" onClick={() => handleOpenRatingModal(false)} className="bg-green-600 hover:bg-green-700">Calificar</Button>
                             </DialogFooter>
                           </DialogContent>
                         </Dialog>
