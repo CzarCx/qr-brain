@@ -171,7 +171,7 @@ export default function ScannerPage() {
     try {
         const { error } = await supabaseDB2
             .from('personal')
-            .update({ details: selectedReport })
+            .update({ details: selectedReport, status: 'REPORTADO' })
             .eq('code', lastScannedResult.code);
 
         if (error) {
