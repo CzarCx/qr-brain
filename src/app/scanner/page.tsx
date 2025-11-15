@@ -15,6 +15,15 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 
 
 type ScanResult = {
@@ -25,12 +34,20 @@ type ScanResult = {
     error?: string;
 };
 
+type ReportReason = {
+    id: number;
+    t_report: string;
+};
+
 export default function ScannerPage() {
   const [message, setMessage] = useState('Apunte la cámara a un código QR.');
   const [lastScannedResult, setLastScannedResult] = useState<ScanResult | null>(null);
   const [scannerActive, setScannerActive] = useState(false);
   const [loading, setLoading] = useState(false);
   const [isRatingModalOpen, setIsRatingModalOpen] = useState(false);
+  const [reportReasons, setReportReasons] = useState<ReportReason[]>([]);
+  const [selectedReport, setSelectedReport] = useState('');
+
 
   const html5QrCodeRef = useRef<Html5Qrcode | null>(null);
   const readerRef = useRef<HTMLDivElement>(null);
@@ -133,6 +150,24 @@ export default function ScannerPage() {
     };
   }, [scannerActive, onScanSuccess]);
 
+  useEffect(() => {
+    if (isRatingModalOpen) {
+        const fetchReportReasons = async () => {
+            const { data, error } = await supabaseDB2
+                .from('reports')
+                .select('id, t_report');
+            
+            if (error) {
+                console.error('Error fetching report reasons:', error);
+            } else {
+                setReportReasons(data || []);
+            }
+        };
+
+        fetchReportReasons();
+    }
+  }, [isRatingModalOpen]);
+
 
   return (
     <>
@@ -200,11 +235,31 @@ export default function ScannerPage() {
                               </DialogDescription>
                             </DialogHeader>
                             <div className="grid gap-4 py-4">
-                              {/* Aquí irían las estrellas o botones de calificación */}
-                              <p className="text-center">Opciones de calificación aquí.</p>
+                               <Select onValueChange={setSelectedReport} value={selectedReport}>
+                                <SelectTrigger className="w-full">
+                                    <SelectValue placeholder="Selecciona un motivo de reporte" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectGroup>
+                                    <SelectLabel>Motivos de Reporte</SelectLabel>
+                                    {reportReasons.map((reason) => (
+                                        <SelectItem key={reason.id} value={reason.t_report}>
+                                        {reason.t_report}
+                                        </SelectItem>
+                                    ))}
+                                    </SelectGroup>
+                                </SelectContent>
+                                </Select>
                             </div>
                             <DialogFooter>
-                              <Button type="submit" onClick={() => setIsRatingModalOpen(false)}>Enviar Calificación</Button>
+                                <Button variant="destructive" onClick={() => {
+                                    // Lógica para reportar aquí
+                                    console.log('Reportado con motivo:', selectedReport);
+                                    setIsRatingModalOpen(false);
+                                }}>
+                                    Reportar
+                                </Button>
+                              <Button type="submit" onClick={() => setIsRatingModalOpen(false)} className="bg-green-600 hover:bg-green-700">Aceptar</Button>
                             </DialogFooter>
                           </DialogContent>
                         </Dialog>
