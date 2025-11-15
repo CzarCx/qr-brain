@@ -157,6 +157,8 @@ export default function ScannerPage() {
         // Reset state when modal closes
         setShowReportSelect(false);
         setSelectedReport('');
+        setLastScannedResult(null);
+        setMessage('Apunte la cámara a un código QR.');
     }
   }
 
