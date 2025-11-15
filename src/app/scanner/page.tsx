@@ -155,7 +155,7 @@ export default function ScannerPage() {
           </div>
 
           <div id="result-container" className="space-y-4">
-            <div className={`p-4 rounded-lg text-center font-semibold text-lg ${lastScannedResult?.found ? 'bg-green-100 border-green-400 text-green-700' : 'bg-yellow-100 border-yellow-400 text-yellow-700'}`}>
+            <div className={`p-4 rounded-lg text-center font-semibold text-lg ${!lastScannedResult ? 'bg-gray-100' : lastScannedResult.found ? 'bg-green-100 border-green-400 text-green-700' : 'bg-yellow-100 border-yellow-400 text-yellow-700'}`}>
               {message}
             </div>
             {lastScannedResult && (
