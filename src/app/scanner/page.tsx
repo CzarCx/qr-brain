@@ -162,6 +162,33 @@ export default function ScannerPage() {
     }
   }
 
+  const handleSendReport = async () => {
+    if (!selectedReport || !lastScannedResult?.code) {
+        alert("Por favor, selecciona un motivo de reporte.");
+        return;
+    }
+    setLoading(true);
+    try {
+        const { error } = await supabaseDB2
+            .from('personal')
+            .update({ details: selectedReport })
+            .eq('code', lastScannedResult.code);
+
+        if (error) {
+            throw error;
+        }
+
+        alert('Reporte enviado correctamente.');
+        handleOpenRatingModal(false); // Close and reset
+
+    } catch (e: any) {
+        console.error('Error enviando el reporte:', e);
+        alert(`Error al enviar el reporte: ${e.message}`);
+    } finally {
+        setLoading(false);
+    }
+  };
+
   useEffect(() => {
     if (isRatingModalOpen && showReportSelect && reportReasons.length === 0) {
         const fetchReportReasons = async () => {
@@ -267,11 +294,8 @@ export default function ScannerPage() {
                             </div>
                             <DialogFooter className="sm:justify-center">
                                 {showReportSelect ? (
-                                    <Button size="lg" variant="destructive" onClick={() => {
-                                        console.log('Reportado con motivo:', selectedReport);
-                                        handleOpenRatingModal(false);
-                                    }}>
-                                        Enviar Reporte
+                                    <Button size="lg" variant="destructive" onClick={handleSendReport} disabled={loading}>
+                                        {loading ? 'Enviando...' : 'Enviar Reporte'}
                                     </Button>
                                 ) : (
                                   <>
