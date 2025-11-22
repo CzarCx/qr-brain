@@ -32,6 +32,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { AlertTriangle } from 'lucide-react';
 
 
 type ScanResult = {
@@ -41,6 +43,7 @@ type ScanResult = {
     found: boolean;
     error?: string;
     status?: string | null;
+    details?: string | null;
 };
 
 type ReportReason = {
@@ -88,7 +91,7 @@ export default function ScannerPage() {
     try {
         const { data, error } = await supabaseDB2
             .from('personal')
-            .select('name, product, status')
+            .select('name, product, status, details')
             .eq('code', decodedText)
             .single();
 
@@ -103,9 +106,10 @@ export default function ScannerPage() {
                 code: decodedText,
                 found: true,
                 status: data.status,
+                details: data.details,
             };
 
-            if (data.status === 'CALIFICADO' || data.status === 'REPORTADO') {
+            if (data.status === 'CALIFICADO') {
                 setMessage(`Etiqueta ya procesada (Estado: ${data.status}).`);
                 setLastScannedResult(result);
             } else {
@@ -114,9 +118,13 @@ export default function ScannerPage() {
                     setMessage('Etiqueta confirmada correctamente.');
                     setIsRatingModalOpen(true);
                 } else { // Mass scanning mode
+                    if (data.status === 'REPORTADO') {
+                       setMessage(`Añadido a la lista (previamente reportado): ${decodedText}`);
+                    } else {
+                       setMessage(`Añadido a la lista: ${decodedText}`);
+                    }
                     setMassScannedCodes(prev => [result, ...prev]);
                     massScannedCodesRef.current.add(decodedText);
-                    setMessage(`Añadido a la lista: ${decodedText}`);
                 }
             }
         } else {
@@ -239,7 +247,7 @@ export default function ScannerPage() {
       try {
           const { error } = await supabaseDB2
               .from('personal')
-              .update({ status: 'CALIFICADO' })
+              .update({ status: 'CALIFICADO', details: null })
               .eq('code', lastScannedResult.code);
 
           if (error) {
@@ -266,7 +274,7 @@ export default function ScannerPage() {
         const codesToUpdate = massScannedCodes.map(item => item.code);
         const { error } = await supabaseDB2
             .from('personal')
-            .update({ status: 'CALIFICADO' })
+            .update({ status: 'CALIFICADO', details: null })
             .in('code', codesToUpdate);
 
         if (error) {
@@ -383,7 +391,7 @@ export default function ScannerPage() {
                             <h3 className="font-bold text-starbucks-dark uppercase text-sm">Producto</h3>
                             <p className="text-lg text-gray-800">{lastScannedResult.product || 'No especificado'}</p>
                         </div>
-                        {lastScannedResult.status === 'CALIFICADO' || lastScannedResult.status === 'REPORTADO' ? (
+                        {lastScannedResult.status === 'CALIFICADO' ? (
                              <div className="text-center font-semibold text-orange-600 bg-orange-100 border border-orange-300 p-3 rounded-md">
                                 Esta etiqueta ya fue procesada. Estado: {lastScannedResult.status}
                             </div>
@@ -402,6 +410,15 @@ export default function ScannerPage() {
                                 </DialogDescription>
                                 </DialogHeader>
                                 <div className="grid gap-4 py-4">
+                                {lastScannedResult.status === 'REPORTADO' && (
+                                    <Alert variant="destructive">
+                                        <AlertTriangle className="h-4 w-4" />
+                                        <AlertTitle>Atención: Reporte Previo</AlertTitle>
+                                        <AlertDescription>
+                                            Este producto fue reportado por: <span className="font-semibold">{lastScannedResult.details || 'Motivo no especificado'}</span>.
+                                        </AlertDescription>
+                                    </Alert>
+                                )}
                                 {showReportSelect && (
                                     <Select onValueChange={setSelectedReport} value={selectedReport}>
                                     <SelectTrigger className="w-full">
