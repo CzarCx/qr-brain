@@ -51,6 +51,7 @@ export default function ScannerPage() {
   const [showReportSelect, setShowReportSelect] = useState(false);
   const [selectedScannerMode, setSelectedScannerMode] = useState('camara');
   const [encargado, setEncargado] = useState('');
+  const [scanMode, setScanMode] = useState('individual');
 
 
   const html5QrCodeRef = useRef<Html5Qrcode | null>(null);
@@ -63,7 +64,9 @@ export default function ScannerPage() {
     
     lastScanTimeRef.current = Date.now();
     setLoading(true);
-    setScannerActive(false);
+     if (scanMode === 'individual') {
+      setScannerActive(false);
+    }
     setMessage('Procesando código...');
     if ('vibrate' in navigator) navigator.vibrate(200);
 
@@ -91,6 +94,9 @@ export default function ScannerPage() {
                 setMessage(`Etiqueta ya procesada (Estado: ${data.status}).`);
             } else {
                 setMessage('Etiqueta confirmada correctamente.');
+                 if (scanMode === 'individual') {
+                  setIsRatingModalOpen(true);
+                }
             }
         } else {
             const result: ScanResult = {
@@ -115,7 +121,7 @@ export default function ScannerPage() {
     } finally {
         setLoading(false);
     }
-  }, [loading]);
+  }, [loading, scanMode]);
 
   useEffect(() => {
     if (!readerRef.current) return;
@@ -265,6 +271,14 @@ export default function ScannerPage() {
                   <button onClick={() => setSelectedScannerMode('fisico')} className={`area-btn w-full px-4 py-3 border border-gray-300 rounded-md shadow-sm focus:outline-none ${selectedScannerMode === 'fisico' ? 'scanner-mode-selected' : ''}`} disabled={scannerActive}>ESCÁNER FÍSICO</button>
               </div>
           </div>
+          
+          <div className="space-y-2">
+              <label className="block text-sm font-bold text-starbucks-dark mb-2">Tipo de Escaneo:</label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <button onClick={() => setScanMode('individual')} className={`area-btn w-full px-4 py-3 border border-gray-300 rounded-md shadow-sm focus:outline-none ${scanMode === 'individual' ? 'scanner-mode-selected' : ''}`} disabled={scannerActive}>Escaneo Individual</button>
+                  <button onClick={() => setScanMode('masivo')} className={`area-btn w-full px-4 py-3 border border-gray-300 rounded-md shadow-sm focus:outline-none ${scanMode === 'masivo' ? 'scanner-mode-selected' : ''}`} disabled={scannerActive}>Escaneo Masivo</button>
+              </div>
+          </div>
 
           <div className="bg-starbucks-cream p-4 rounded-lg">
             <div className="scanner-container">
@@ -314,6 +328,7 @@ export default function ScannerPage() {
                                 Esta etiqueta ya fue procesada. Estado: {lastScannedResult.status}
                             </div>
                         ) : (
+                          (scanMode === 'individual') &&
                             <Dialog open={isRatingModalOpen} onOpenChange={handleOpenRatingModal}>
                             <DialogTrigger asChild>
                                 <Button className="w-full mt-4 bg-starbucks-accent hover:bg-starbucks-green text-white">
