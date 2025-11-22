@@ -282,7 +282,7 @@ export default function ScannerPage() {
       }
   };
 
-  const handleMassQualify = async () => {
+const handleMassQualify = async () => {
     if (massScannedCodes.length === 0) {
         alert("No hay códigos en la lista para calificar.");
         return;
