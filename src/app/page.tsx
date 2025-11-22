@@ -40,7 +40,7 @@ export default function Home() {
   const [personalScans, setPersonalScans] = useState<PersonalScanItem[]>([]);
   const [melCodesCount, setMelCodesCount] = useState(0);
   const [otherCodesCount, setOtherCodesCount] = useState(0);
-  const [selectedArea, setSelectedArea] = useState('');
+  const [selectedArea, setSelectedArea] = useState('REVISIÓN CALIDAD');
   const [selectedScannerMode, setSelectedScannerMode] = useState('camara');
   const [scannerActive, setScannerActive] = useState(false);
   const [ingresarDatosEnabled, setIngresarDatosEnabled] = useState(false);
@@ -702,14 +702,6 @@ export default function Home() {
                     </div>
                 </div>
 
-                <div className="space-y-2">
-                    <label className="block text-sm font-bold text-starbucks-dark mb-2">Área que Registra:</label>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <button onClick={() => setSelectedArea('REVISIÓN CALIDAD')} className={`area-btn w-full px-4 py-3 border border-gray-300 rounded-md shadow-sm focus:outline-none ${selectedArea === 'REVISIÓN CALIDAD' ? 'area-selected' : ''}`} disabled={scannerActive}>REVISIÓN CALIDAD</button>
-                        <button onClick={() => setSelectedArea('ENTREGA A COLECTA')} className={`area-btn w-full px-4 py-3 border border-gray-300 rounded-md shadow-sm focus:outline-none ${selectedArea === 'ENTREGA A COLECTA' ? 'area-selected' : ''}`} disabled={scannerActive}>ENTREGA A COLECTA</button>
-                    </div>
-                </div>
-
                 <div className="bg-starbucks-cream p-4 rounded-lg">
                     <div className="scanner-container">
                         <div id="reader" ref={readerRef} style={{ display: selectedScannerMode === 'camara' ? 'block' : 'none' }}></div>
@@ -865,9 +857,3 @@ export default function Home() {
     </>
   );
 }
-
-    
-
-    
-
-    
