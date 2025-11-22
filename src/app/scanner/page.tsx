@@ -64,9 +64,6 @@ export default function ScannerPage() {
     
     lastScanTimeRef.current = Date.now();
     setLoading(true);
-     if (scanMode === 'individual') {
-      setScannerActive(false);
-    }
     setMessage('Procesando código...');
     if ('vibrate' in navigator) navigator.vibrate(200);
 
@@ -164,7 +161,7 @@ export default function ScannerPage() {
     return () => {
       cleanup();
     };
-  }, [scannerActive, onScanSuccess, selectedScannerMode]);
+  }, [scannerActive, selectedScannerMode]);
 
   const handleOpenRatingModal = (isOpen: boolean) => {
     setIsRatingModalOpen(isOpen);
@@ -394,3 +391,5 @@ export default function ScannerPage() {
     </>
   );
 }
+
+    
