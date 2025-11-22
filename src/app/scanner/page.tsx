@@ -33,7 +33,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, Trash2 } from 'lucide-react';
 
 
 type ScanResult = {
@@ -99,7 +99,7 @@ export default function ScannerPage() {
     lastScanTimeRef.current = Date.now();
     setLoading(true);
     setMessage('Procesando código...');
-    if ('vibrate' in navigator) navigator.vibrate(200);
+    if ('vibrate' in navigator) navigator.vibrate(100);
 
     // Prevent duplicates in mass scanning mode
     if (scanMode === 'masivo' && massScannedCodesRef.current.has(decodedText)) {
@@ -184,8 +184,9 @@ export default function ScannerPage() {
     const cleanup = () => {
         if (qrCode && qrCode.getState() === Html5QrcodeScannerState.SCANNING) {
             return qrCode.stop().catch(err => {
-                if (String(err).includes('transition')) return;
-                console.error("Fallo al detener el escáner en la limpieza:", err);
+                if (!String(err).includes('not started')) {
+                    console.error("Fallo al detener el escáner:", err);
+                }
             });
         }
         return Promise.resolve();
@@ -194,14 +195,10 @@ export default function ScannerPage() {
     if (scannerActive && selectedScannerMode === 'camara') {
         if (qrCode.getState() !== Html5QrcodeScannerState.SCANNING) {
             const config = {
-                fps: 10,
+                fps: 5,
                 qrbox: { width: 250, height: 250 },
-                videoConstraints: {
-                    facingMode: "environment"
-                }
             };
             qrCode.start({ facingMode: "environment" }, config, onScanSuccess, (e: any) => {}).catch(err => {
-                if (String(err).includes('transition')) return;
                 console.error("Error al iniciar camara:", err);
                 setMessage('Error al iniciar la cámara. Revisa los permisos.');
                 setScannerActive(false);
@@ -314,6 +311,12 @@ export default function ScannerPage() {
     }
 };
 
+  const removeFromMassList = (codeToRemove: string) => {
+    setMassScannedCodes(prev => prev.filter(item => item.code !== codeToRemove));
+    massScannedCodesRef.current.delete(codeToRemove);
+    setMessage(`Código ${codeToRemove} eliminado de la lista.`);
+  };
+
 
   useEffect(() => {
     if (isRatingModalOpen && showReportSelect && reportReasons.length === 0) {
@@ -379,8 +382,14 @@ export default function ScannerPage() {
           </div>
 
           <div className="bg-starbucks-cream p-4 rounded-lg">
-            <div className="scanner-container">
-              <div id="reader" ref={readerRef} style={{ display: selectedScannerMode === 'camara' ? 'block' : 'none' }}></div>
+            <div className="scanner-container relative">
+                <div id="reader" ref={readerRef} style={{ display: selectedScannerMode === 'camara' && scannerActive ? 'block' : 'none' }}></div>
+                {scannerActive && selectedScannerMode === 'camara' && <div id="laser-line"></div>}
+                {selectedScannerMode === 'camara' && !scannerActive && (
+                    <div className="text-center p-8 border-2 border-dashed border-gray-300 rounded-lg">
+                        <p className="text-gray-500">La cámara está desactivada.</p>
+                    </div>
+                )}
             </div>
              {loading && (
                 <div className="flex justify-center items-center mt-4">
@@ -402,7 +411,7 @@ export default function ScannerPage() {
           </div>
 
           <div id="result-container" className="space-y-4">
-            <div className={`p-4 rounded-lg text-center font-semibold text-lg ${!lastScannedResult && massScannedCodes.length === 0 ? 'bg-gray-100' : lastScannedResult?.found ? 'bg-green-100 border-green-400 text-green-700' : 'bg-yellow-100 border-yellow-400 text-yellow-700'}`}>
+            <div className={`p-4 rounded-lg text-center font-semibold text-lg transition-all duration-300 ${!lastScannedResult && massScannedCodes.length === 0 ? 'bg-gray-100 text-gray-800' : lastScannedResult?.found ? 'bg-green-100 border-green-400 text-green-700' : 'bg-yellow-100 border-yellow-400 text-yellow-700'}`}>
               {message}
             </div>
 
@@ -471,7 +480,7 @@ export default function ScannerPage() {
                                 </div>
                                 <DialogFooter className="sm:justify-center">
                                     {showReportSelect ? (
-                                        <Button size="lg" variant="destructive" onClick={handleSendReport} disabled={loading}>
+                                        <Button size="lg" variant="destructive" onClick={handleSendReport} disabled={loading || !selectedReport}>
                                             {loading ? 'Enviando...' : 'Enviar Reporte'}
                                         </Button>
                                     ) : (
@@ -497,7 +506,7 @@ export default function ScannerPage() {
               </div>
             )}
              {/* Mass Scan Results */}
-             {scanMode === 'masivo' && massScannedCodes.length > 0 && (
+             {scanMode === 'masivo' && (
                 <div className="space-y-4">
                     <div className="flex justify-between items-center">
                         <h2 className="text-xl font-bold text-starbucks-dark">Códigos Escaneados ({massScannedCodes.length})</h2>
@@ -512,16 +521,28 @@ export default function ScannerPage() {
                                     <TableHead>Código</TableHead>
                                     <TableHead>Producto</TableHead>
                                     <TableHead>Empaquetado por</TableHead>
+                                    <TableHead className="text-right">Acción</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {massScannedCodes.map((item) => (
+                                {massScannedCodes.length > 0 ? massScannedCodes.map((item) => (
                                     <TableRow key={item.code}>
                                         <TableCell className="font-mono">{item.code}</TableCell>
                                         <TableCell>{item.product || 'N/A'}</TableCell>
                                         <TableCell>{item.name || 'N/A'}</TableCell>
+                                        <TableCell className="text-right">
+                                            <Button variant="ghost" size="icon" onClick={() => removeFromMassList(item.code)} className="text-red-500 hover:text-red-700">
+                                                <Trash2 className="h-4 w-4" />
+                                            </Button>
+                                        </TableCell>
                                     </TableRow>
-                                ))}
+                                )) : (
+                                     <TableRow>
+                                        <TableCell colSpan={4} className="text-center text-gray-500 py-8">
+                                            No hay códigos en la lista.
+                                        </TableCell>
+                                    </TableRow>
+                                )}
                             </TableBody>
                         </Table>
                     </div>
@@ -533,5 +554,3 @@ export default function ScannerPage() {
     </>
   );
 }
-
-    
