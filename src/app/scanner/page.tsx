@@ -260,26 +260,28 @@ export default function ScannerPage() {
   };
 
   const handleAccept = async () => {
-      if (!lastScannedResult?.code) return;
-      setLoading(true);
-      try {
-          const { error } = await supabaseDB2
-              .from('personal')
-              .update({ status: 'CALIFICADO', details: null })
-              .eq('code', lastScannedResult.code);
+    if (!lastScannedResult?.code) return;
+    setLoading(true);
+    try {
+        const qualificationTimestamp = new Date().toISOString();
+        const { error } = await supabaseDB2
+            .from('personal')
+            .update({ status: 'CALIFICADO', details: null, date_cal: qualificationTimestamp })
+            .eq('code', lastScannedResult.code);
 
-          if (error) {
-              throw error;
-          }
+        if (error) {
+            throw error;
+        }
 
-          alert('Calificación guardada correctamente.');
-          handleOpenRatingModal(false); // Cierra y resetea
-      } catch (e: any) {
-          console.error('Error guardando la calificación:', e);
-          alert(`Error al guardar la calificación: ${e.message}`);
-      } finally {
-          setLoading(false);
-      }
+        alert('Calificación guardada correctamente.');
+        handleOpenRatingModal(false);
+    } catch (e: any) {
+        console.error('Error guardando la calificación:', e);
+        const errorMessage = e.message || JSON.stringify(e);
+        alert(`Error al guardar la calificación: ${errorMessage}`);
+    } finally {
+        setLoading(false);
+    }
   };
 
 const handleMassQualify = async () => {
