@@ -91,7 +91,7 @@ export default function Home() {
             scannedCodesRef.current.add(finalCode);
             showAppMessage(`Paquete listo para entrega: ${finalCode}`, 'success');
         } else {
-             showModalNotification('Estado Incorrecto', `El paquete tiene estado "${data.status}" y no puede ser entregado aún.`);
+             showModalNotification('Paquete ya Procesado', `Este paquete ya fue procesado y registrado anteriormente (Estado: ${data.status}).`);
         }
 
     } catch (e: any) {
