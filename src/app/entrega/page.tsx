@@ -57,7 +57,7 @@ export default function Home() {
         const { data, error } = await supabaseDB2
             .from('personal_name')
             .select('name')
-            .eq('rol', 'barra');
+            .eq('rol', 'entrega');
 
         if (error) {
             console.error('Error fetching encargados:', error);
