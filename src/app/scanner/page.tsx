@@ -24,6 +24,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 
 
 type ScanResult = {
@@ -52,12 +60,14 @@ export default function ScannerPage() {
   const [selectedScannerMode, setSelectedScannerMode] = useState('camara');
   const [encargado, setEncargado] = useState('');
   const [scanMode, setScanMode] = useState('individual');
+  const [massScannedCodes, setMassScannedCodes] = useState<ScanResult[]>([]);
 
 
   const html5QrCodeRef = useRef<Html5Qrcode | null>(null);
   const readerRef = useRef<HTMLDivElement>(null);
   const lastScanTimeRef = useRef(Date.now());
   const MIN_SCAN_INTERVAL = 2000; // 2 seconds between scans
+  const massScannedCodesRef = useRef(new Set<string>());
 
   const onScanSuccess = useCallback(async (decodedText: string) => {
     if (loading || Date.now() - lastScanTimeRef.current < MIN_SCAN_INTERVAL) return;
@@ -66,6 +76,14 @@ export default function ScannerPage() {
     setLoading(true);
     setMessage('Procesando código...');
     if ('vibrate' in navigator) navigator.vibrate(200);
+
+    // Prevent duplicates in mass scanning mode
+    if (scanMode === 'masivo' && massScannedCodesRef.current.has(decodedText)) {
+        setMessage(`Código duplicado: ${decodedText}`);
+        setLoading(false);
+        return;
+    }
+    
 
     try {
         const { data, error } = await supabaseDB2
@@ -86,13 +104,19 @@ export default function ScannerPage() {
                 found: true,
                 status: data.status,
             };
-            setLastScannedResult(result);
+
             if (data.status === 'CALIFICADO' || data.status === 'REPORTADO') {
                 setMessage(`Etiqueta ya procesada (Estado: ${data.status}).`);
+                setLastScannedResult(result);
             } else {
-                setMessage('Etiqueta confirmada correctamente.');
                  if (scanMode === 'individual') {
-                  setIsRatingModalOpen(true);
+                    setLastScannedResult(result);
+                    setMessage('Etiqueta confirmada correctamente.');
+                    setIsRatingModalOpen(true);
+                } else { // Mass scanning mode
+                    setMassScannedCodes(prev => [result, ...prev]);
+                    massScannedCodesRef.current.add(decodedText);
+                    setMessage(`Añadido a la lista: ${decodedText}`);
                 }
             }
         } else {
@@ -161,7 +185,15 @@ export default function ScannerPage() {
     return () => {
       cleanup();
     };
-  }, [scannerActive, selectedScannerMode]);
+  }, [scannerActive, selectedScannerMode, onScanSuccess]);
+
+
+  useEffect(() => {
+      // Clear list when switching modes
+      setMassScannedCodes([]);
+      massScannedCodesRef.current.clear();
+      setLastScannedResult(null);
+  }, [scanMode]);
 
   const handleOpenRatingModal = (isOpen: boolean) => {
     setIsRatingModalOpen(isOpen);
@@ -224,6 +256,35 @@ export default function ScannerPage() {
       }
   };
 
+  const handleMassQualify = async () => {
+    if (massScannedCodes.length === 0) {
+        alert("No hay códigos en la lista para calificar.");
+        return;
+    }
+    setLoading(true);
+    try {
+        const codesToUpdate = massScannedCodes.map(item => item.code);
+        const { error } = await supabaseDB2
+            .from('personal')
+            .update({ status: 'CALIFICADO' })
+            .in('code', codesToUpdate);
+
+        if (error) {
+            throw error;
+        }
+
+        alert(`Se calificaron ${massScannedCodes.length} etiquetas correctamente.`);
+        setMassScannedCodes([]); // Clear the list
+        massScannedCodesRef.current.clear();
+
+    } catch (e: any) {
+        console.error('Error en la calificación masiva:', e);
+        alert(`Error al calificar masivamente: ${e.message}`);
+    } finally {
+        setLoading(false);
+    }
+};
+
 
   useEffect(() => {
     if (isRatingModalOpen && showReportSelect && reportReasons.length === 0) {
@@ -250,7 +311,7 @@ export default function ScannerPage() {
         <title>Confirmación de Etiquetado</title>
       </Head>
       <main className="bg-starbucks-light-gray text-starbucks-dark min-h-screen flex items-center justify-center p-4">
-        <div className="w-full max-w-md mx-auto bg-starbucks-white rounded-xl shadow-2xl p-6 space-y-6">
+        <div className="w-full max-w-lg mx-auto bg-starbucks-white rounded-xl shadow-2xl p-6 space-y-6">
           <header className="text-center">
             <h1 className="text-2xl font-bold text-starbucks-green">Confirmación de Etiquetado</h1>
             <p className="text-gray-600 mt-1">Escanea el código QR de la etiqueta para ver los detalles.</p>
@@ -301,10 +362,12 @@ export default function ScannerPage() {
           </div>
 
           <div id="result-container" className="space-y-4">
-            <div className={`p-4 rounded-lg text-center font-semibold text-lg ${!lastScannedResult ? 'bg-gray-100' : lastScannedResult.found ? 'bg-green-100 border-green-400 text-green-700' : 'bg-yellow-100 border-yellow-400 text-yellow-700'}`}>
+            <div className={`p-4 rounded-lg text-center font-semibold text-lg ${!lastScannedResult && massScannedCodes.length === 0 ? 'bg-gray-100' : lastScannedResult?.found ? 'bg-green-100 border-green-400 text-green-700' : 'bg-yellow-100 border-yellow-400 text-yellow-700'}`}>
               {message}
             </div>
-            {lastScannedResult && (
+
+            {/* Individual Scan Result */}
+            {lastScannedResult && scanMode === 'individual' && (
               <div className="bg-starbucks-cream p-4 rounded-lg text-left space-y-2">
                 <div>
                     <h3 className="font-bold text-starbucks-dark uppercase text-sm">Código</h3>
@@ -325,7 +388,6 @@ export default function ScannerPage() {
                                 Esta etiqueta ya fue procesada. Estado: {lastScannedResult.status}
                             </div>
                         ) : (
-                          (scanMode === 'individual') &&
                             <Dialog open={isRatingModalOpen} onOpenChange={handleOpenRatingModal}>
                             <DialogTrigger asChild>
                                 <Button className="w-full mt-4 bg-starbucks-accent hover:bg-starbucks-green text-white">
@@ -384,6 +446,37 @@ export default function ScannerPage() {
                   ) : null
                 )}
               </div>
+            )}
+             {/* Mass Scan Results */}
+             {scanMode === 'masivo' && massScannedCodes.length > 0 && (
+                <div className="space-y-4">
+                    <div className="flex justify-between items-center">
+                        <h2 className="text-xl font-bold text-starbucks-dark">Códigos Escaneados ({massScannedCodes.length})</h2>
+                        <Button onClick={handleMassQualify} disabled={loading || massScannedCodes.length === 0} className="bg-green-600 hover:bg-green-700">
+                            {loading ? 'Calificando...' : 'Calificar Todos'}
+                        </Button>
+                    </div>
+                    <div className="table-container border border-gray-200 rounded-lg max-h-60 overflow-y-auto">
+                        <Table>
+                            <TableHeader className="sticky top-0 bg-starbucks-cream">
+                                <TableRow>
+                                    <TableHead>Código</TableHead>
+                                    <TableHead>Producto</TableHead>
+                                    <TableHead>Empaquetado por</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {massScannedCodes.map((item) => (
+                                    <TableRow key={item.code}>
+                                        <TableCell className="font-mono">{item.code}</TableCell>
+                                        <TableCell>{item.product || 'N/A'}</TableCell>
+                                        <TableCell>{item.name || 'N/A'}</TableCell>
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
+                    </div>
+                </div>
             )}
           </div>
         </div>
