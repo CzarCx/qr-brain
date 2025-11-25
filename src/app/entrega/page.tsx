@@ -117,9 +117,9 @@ export default function Home() {
             };
             setDeliveryList(prev => [newItem, ...prev]);
             scannedCodesRef.current.add(finalCode);
-            showAppMessage(`Paquete listo para entrega: ${finalCode}`, 'success');
+            showAppMessage(`Paquete listo: ${finalCode}`, 'success');
         } else {
-             showModalNotification('Paquete ya Procesado', `Este paquete ya fue procesado y registrado anteriormente (Estado: ${data.status}).`);
+             showModalNotification('Paquete no Calificado', `Este paquete aún no ha sido calificado (Estado: ${data.status}).`);
         }
 
     } catch (e: any) {
@@ -213,7 +213,7 @@ export default function Home() {
   }, [scannerActive, selectedScannerMode, onScanSuccess, isMounted]);
 
   const startScanner = () => {
-    if (!encargado.trim()) return showAppMessage('Por favor, ingresa el nombre del encargado.', 'error');
+    if (!encargado.trim()) return showAppMessage('Por favor, selecciona un encargado.', 'error');
     setScannerActive(true);
     if(selectedScannerMode === 'camara') {
       showAppMessage('Cámara activada. Apunta al código.', 'info');
@@ -284,34 +284,35 @@ export default function Home() {
         </Head>
 
         <main className="text-starbucks-dark flex items-center justify-center p-4">
-            <div className="w-full max-w-4xl mx-auto bg-starbucks-white rounded-xl shadow-2xl p-6 md:p-8 space-y-6">
+            <div className="w-full max-w-md mx-auto bg-starbucks-white rounded-xl shadow-2xl p-4 md:p-6 space-y-4">
                 <header className="text-center">
-                    <Image src="https://media0.giphy.com/media/v1.Y2lkPTc5MGI3NjExbnQ4MGZzdXYzYWo1cXRiM3I1cjNoNjd4cjdia202ZXcwNjJ6YjdvbiZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/QQO6BH98nhigF8FLsb/giphy.gif" alt="Scanner Logo" width={96} height={96} className="mx-auto h-24 w-auto mb-4" />
-                    <h1 className="text-2xl md:text-3xl font-bold text-starbucks-green">Módulo de Entrega</h1>
-                    <p className="text-gray-600 mt-1">Escanea los paquetes para confirmar su entrega.</p>
+                    <h1 className="text-xl md:text-2xl font-bold text-starbucks-green">Módulo de Entrega</h1>
+                    <p className="text-gray-600 text-sm mt-1">Escanea los paquetes para confirmar su entrega.</p>
                 </header>
 
-                <div className="space-y-2">
-                    <label htmlFor="encargado" className="block text-sm font-bold text-starbucks-dark mb-2">Nombre del Encargado:</label>
-                     <Select onValueChange={setEncargado} value={encargado} disabled={scannerActive}>
-                        <SelectTrigger className="form-input">
-                            <SelectValue placeholder="Selecciona un encargado" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            {encargadosList.map((enc) => (
-                                <SelectItem key={enc.name} value={enc.name}>
-                                    {enc.name}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                </div>
-                
-                <div className="space-y-2">
-                    <label className="block text-sm font-bold text-starbucks-dark mb-2">Método de Escaneo:</label>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <button onClick={() => setSelectedScannerMode('camara')} className={`area-btn w-full px-4 py-3 border border-gray-300 rounded-md shadow-sm focus:outline-none ${selectedScannerMode === 'camara' ? 'scanner-mode-selected' : ''}`} disabled={scannerActive}>CÁMARA</button>
-                        <button onClick={() => setSelectedScannerMode('fisico')} className={`area-btn w-full px-4 py-3 border border-gray-300 rounded-md shadow-sm focus:outline-none ${selectedScannerMode === 'fisico' ? 'scanner-mode-selected' : ''}`} disabled={scannerActive}>ESCÁNER FÍSICO</button>
+                <div className="space-y-4">
+                    <div>
+                        <label htmlFor="encargado" className="block text-sm font-bold text-starbucks-dark mb-1">Nombre del Encargado:</label>
+                         <Select onValueChange={setEncargado} value={encargado} disabled={scannerActive}>
+                            <SelectTrigger className="form-input">
+                                <SelectValue placeholder="Selecciona un encargado" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {encargadosList.map((enc) => (
+                                    <SelectItem key={enc.name} value={enc.name}>
+                                        {enc.name}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    
+                    <div>
+                        <label className="block text-sm font-bold text-starbucks-dark mb-1">Método de Escaneo:</label>
+                        <div className="grid grid-cols-2 gap-2">
+                            <button onClick={() => setSelectedScannerMode('camara')} className={`area-btn w-full px-4 py-3 text-sm rounded-md shadow-sm focus:outline-none ${selectedScannerMode === 'camara' ? 'scanner-mode-selected' : ''}`} disabled={scannerActive}>CÁMARA</button>
+                            <button onClick={() => setSelectedScannerMode('fisico')} className={`area-btn w-full px-4 py-3 text-sm rounded-md shadow-sm focus:outline-none ${selectedScannerMode === 'fisico' ? 'scanner-mode-selected' : ''}`} disabled={scannerActive}>ESCÁNER FÍSICO</button>
+                        </div>
                     </div>
                 </div>
 
@@ -328,35 +329,34 @@ export default function Home() {
                     </div>
                     
                     <div id="scanner-controls" className="mt-4 flex flex-wrap gap-2 justify-center">
-                        <Button onClick={startScanner} disabled={scannerActive || loading || !encargado} className="bg-blue-600 hover:bg-blue-700">Iniciar Escaneo</Button>
-                        <Button onClick={stopScanner} disabled={!scannerActive} variant="destructive">Detener Escaneo</Button>
+                        <Button onClick={startScanner} disabled={scannerActive || loading || !encargado} className="bg-blue-600 hover:bg-blue-700 text-sm">Iniciar</Button>
+                        <Button onClick={stopScanner} disabled={!scannerActive} variant="destructive" className="text-sm">Detener</Button>
                     </div>
 
-                    <div id="physical-scanner-status" className="mt-4 text-center p-2 rounded-md bg-starbucks-accent text-white" style={{ display: scannerActive && selectedScannerMode === 'fisico' ? 'block' : 'none' }}>
-                        Escáner físico listo. Comienza a escanear.
+                    <div id="physical-scanner-status" className="mt-4 text-center p-2 rounded-md bg-starbucks-accent text-white text-sm" style={{ display: scannerActive && selectedScannerMode === 'fisico' ? 'block' : 'none' }}>
+                        Escáner físico listo.
                     </div>
                 </div>
 
                 <div id="result-container" className="space-y-4">
-                     <div id="message" className={`p-3 rounded-lg text-center font-medium text-md transition-all duration-300 ${messageClasses[message.type]}`}>
+                     <div id="message" className={`p-3 rounded-lg text-center font-medium text-base transition-all duration-300 ${messageClasses[message.type]}`}>
                         {message.text}
                     </div>
                 </div>
                 
                 <div>
-                     <div className="flex justify-between items-center mb-2">
-                        <h2 className="text-xl font-bold text-starbucks-dark">Paquetes para Entrega ({deliveryList.length})</h2>
-                        <Button onClick={handleUpdateStatusToDelivered} disabled={loading || deliveryList.length === 0} className="bg-green-600 hover:bg-green-700">
-                           <PackageCheck className="mr-2 h-4 w-4" /> Marcar como Entregados
+                     <div className="flex flex-col sm:flex-row justify-between items-center mb-2 gap-2">
+                        <h2 className="text-lg font-bold text-starbucks-dark">Para Entrega ({deliveryList.length})</h2>
+                        <Button onClick={handleUpdateStatusToDelivered} disabled={loading || deliveryList.length === 0} className="bg-green-600 hover:bg-green-700 w-full sm:w-auto">
+                           <PackageCheck className="mr-2 h-4 w-4" /> Entregar
                         </Button>
                     </div>
 
-                    <div className="table-container border border-gray-200 rounded-lg max-h-60 overflow-y-auto">
+                    <div className="table-container border border-gray-200 rounded-lg max-h-60 overflow-auto">
                         <Table>
                             <TableHeader className="sticky top-0 bg-starbucks-cream">
                                 <TableRow>
                                     <TableHead>Código</TableHead>
-                                    <TableHead>Producto</TableHead>
                                     <TableHead>Empaquetado por</TableHead>
                                     <TableHead className="text-right">Acción</TableHead>
                                 </TableRow>
@@ -364,19 +364,18 @@ export default function Home() {
                             <TableBody>
                                 {deliveryList.length > 0 ? deliveryList.map((item) => (
                                     <TableRow key={item.code}>
-                                        <TableCell className="font-mono">{item.code}</TableCell>
-                                        <TableCell>{item.product || 'N/A'}</TableCell>
-                                        <TableCell>{item.name || 'N/A'}</TableCell>
+                                        <TableCell className="font-mono text-xs">{item.code}</TableCell>
+                                        <TableCell className="text-xs">{item.name || 'N/A'}</TableCell>
                                         <TableCell className="text-right">
-                                            <Button variant="ghost" size="icon" onClick={() => removeFromList(item.code)} className="text-red-500 hover:text-red-700">
+                                            <Button variant="ghost" size="icon" onClick={() => removeFromList(item.code)} className="text-red-500 hover:text-red-700 h-8 w-8">
                                                 <Trash2 className="h-4 w-4" />
                                             </Button>
                                         </TableCell>
                                     </TableRow>
                                 )) : (
                                     <TableRow>
-                                        <TableCell colSpan={4} className="text-center text-gray-500 py-8">
-                                            No hay paquetes en la lista de entrega.
+                                        <TableCell colSpan={3} className="text-center text-gray-500 py-8">
+                                            No hay paquetes en la lista.
                                         </TableCell>
                                     </TableRow>
                                 )}
@@ -388,12 +387,12 @@ export default function Home() {
 
             {loading && <div id="loading-overlay" style={{display: 'flex'}}>
                 <div className="overlay-spinner"></div>
-                <p className="text-xl font-semibold">Procesando...</p>
+                <p className="text-lg font-semibold">Procesando...</p>
             </div>}
             
             {showNotification && (
                 <div id="qr-confirmation-overlay" className="p-4" style={{display: 'flex'}}>
-                     <div className="bg-starbucks-white rounded-lg shadow-xl p-6 w-full max-w-md text-center space-y-4">
+                     <div className="bg-starbucks-white rounded-lg shadow-xl p-6 w-full max-w-sm text-center space-y-4">
                         <Alert variant={notification.variant as any}>
                             {notification.variant === 'destructive' ? <XCircle className="h-5 w-5" /> : <AlertTriangle className="h-5 w-5" />}
                             <AlertTitle>{notification.title}</AlertTitle>

@@ -704,38 +704,40 @@ export default function Home() {
   return (
     <>
         <Head>
-            <title>Escáner de Códigos</title>
+            <title>Asignar Empaquetado</title>
         </Head>
 
         <main className="text-starbucks-dark flex items-center justify-center p-4">
-            <div className="w-full max-w-4xl mx-auto bg-starbucks-white rounded-xl shadow-2xl p-6 md:p-8 space-y-6">
+            <div className="w-full max-w-2xl mx-auto bg-starbucks-white rounded-xl shadow-2xl p-4 md:p-6 space-y-4">
                 <header className="text-center">
-                    <Image src="https://media0.giphy.com/media/v1.Y2lkPTc5MGI3NjExbnQ4MGZzdXYzYWo1cXRiM3I1cjNoNjd4cjdia202ZXcwNjJ6YjdvbiZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/QQO6BH98nhigF8FLsb/giphy.gif" alt="Scanner Logo" width={96} height={96} className="mx-auto h-24 w-auto mb-4" />
-                    <h1 className="text-2xl md:text-3xl font-bold text-starbucks-green">Escáner de Códigos</h1>
-                    <p className="text-gray-600 mt-1">Escanea con cámara o escáner físico, exporta a CSV y luego ingresa los datos.</p>
+                    <Image src="https://media0.giphy.com/media/v1.Y2lkPTc5MGI3NjExbnQ4MGZzdXYzYWo1cXRiM3I1cjNoNjd4cjdia202ZXcwNjJ6YjdvbiZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/QQO6BH98nhigF8FLsb/giphy.gif" alt="Scanner Logo" width={80} height={80} className="mx-auto h-20 w-auto mb-2" />
+                    <h1 className="text-xl md:text-2xl font-bold text-starbucks-green">Asignar Empaquetado</h1>
+                    <p className="text-gray-600 text-sm md:text-base mt-1">Asigna un producto a un miembro del personal.</p>
                 </header>
 
-                <div className="space-y-2">
-                    <label htmlFor="encargado" className="block text-sm font-bold text-starbucks-dark mb-2">Nombre del Encargado:</label>
-                    <Select onValueChange={setEncargado} value={encargado} disabled={scannerActive}>
-                        <SelectTrigger className="form-input">
-                            <SelectValue placeholder="Selecciona un encargado" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            {encargadosList.map((enc) => (
-                                <SelectItem key={enc.name} value={enc.name}>
-                                    {enc.name}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                </div>
-                
-                <div className="space-y-2">
-                    <label className="block text-sm font-bold text-starbucks-dark mb-2">Método de Escaneo:</label>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <button onClick={() => setSelectedScannerMode('camara')} className={`area-btn w-full px-4 py-3 border border-gray-300 rounded-md shadow-sm focus:outline-none ${selectedScannerMode === 'camara' ? 'scanner-mode-selected' : ''}`} disabled={scannerActive}>CÁMARA</button>
-                        <button onClick={() => setSelectedScannerMode('fisico')} className={`area-btn w-full px-4 py-3 border border-gray-300 rounded-md shadow-sm focus:outline-none ${selectedScannerMode === 'fisico' ? 'scanner-mode-selected' : ''}`} disabled={scannerActive}>ESCÁNER FÍSICO</button>
+                <div className="space-y-4">
+                    <div>
+                        <label htmlFor="encargado" className="block text-sm font-bold text-starbucks-dark mb-1">Nombre del Encargado:</label>
+                        <Select onValueChange={setEncargado} value={encargado} disabled={scannerActive}>
+                            <SelectTrigger className="form-input">
+                                <SelectValue placeholder="Selecciona un encargado" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {encargadosList.map((enc) => (
+                                    <SelectItem key={enc.name} value={enc.name}>
+                                        {enc.name}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    
+                    <div>
+                        <label className="block text-sm font-bold text-starbucks-dark mb-1">Método de Escaneo:</label>
+                        <div className="grid grid-cols-2 gap-2">
+                            <button onClick={() => setSelectedScannerMode('camara')} className={`area-btn w-full px-4 py-3 text-sm rounded-md shadow-sm focus:outline-none ${selectedScannerMode === 'camara' ? 'scanner-mode-selected' : ''}`} disabled={scannerActive}>CÁMARA</button>
+                            <button onClick={() => setSelectedScannerMode('fisico')} className={`area-btn w-full px-4 py-3 text-sm rounded-md shadow-sm focus:outline-none ${selectedScannerMode === 'fisico' ? 'scanner-mode-selected' : ''}`} disabled={scannerActive}>ESCÁNER FÍSICO</button>
+                        </div>
                     </div>
                 </div>
 
@@ -746,86 +748,82 @@ export default function Home() {
                         <input type="text" id="physical-scanner-input" ref={physicalScannerInputRef} className="hidden-input" autoComplete="off" />
                     </div>
                     {lastScanned && (
-                        <p className="mt-2 text-center text-sm bg-blue-100 border border-blue-400 text-blue-700 px-4 py-3 rounded relative">
-                            <strong>Último escaneo detectado:</strong> {lastScanned}
+                        <p className="mt-2 text-center text-xs bg-blue-100 border border-blue-400 text-blue-700 px-3 py-2 rounded relative">
+                            <strong>Último escaneo:</strong> {lastScanned}
                         </p>
                     )}
                     <div id="scanner-controls" className="mt-4 flex flex-wrap gap-2 justify-center">
-                        <button onClick={startScanner} disabled={scannerActive} className={`px-4 py-2 text-white font-semibold rounded-lg shadow-md transition-colors duration-200 ${scannerActive ? 'bg-gray-400' : 'bg-blue-600 hover:bg-blue-700'}`}>Iniciar Escaneo</button>
-                        <button onClick={stopScanner} disabled={!scannerActive} className={`px-4 py-2 text-white font-semibold rounded-lg shadow-md transition-colors duration-200 ${!scannerActive ? 'bg-gray-400' : 'bg-red-600 hover:bg-red-700'}`}>Detener Escaneo</button>
-                        {showChangeCamera && <button id="change-camera" onClick={changeCamera} className="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white font-semibold rounded-lg shadow-md">Cambiar Cámara 📸</button>}
+                        <button onClick={startScanner} disabled={scannerActive} className={`px-4 py-2 text-white font-semibold rounded-lg shadow-md transition-colors duration-200 text-sm ${scannerActive ? 'bg-gray-400' : 'bg-blue-600 hover:bg-blue-700'}`}>Iniciar</button>
+                        <button onClick={stopScanner} disabled={!scannerActive} className={`px-4 py-2 text-white font-semibold rounded-lg shadow-md transition-colors duration-200 text-sm ${!scannerActive ? 'bg-gray-400' : 'bg-red-600 hover:bg-red-700'}`}>Detener</button>
+                        {showChangeCamera && <button id="change-camera" onClick={changeCamera} className="px-3 py-2 bg-gray-600 hover:bg-gray-700 text-white font-semibold rounded-lg shadow-md text-sm">Cambiar 📸</button>}
                     </div>
                     {showAdvancedControls && selectedScannerMode === 'camara' && (
-                        <div id="camera-adv-controls" className="mt-4 p-4 bg-starbucks-cream rounded-lg space-y-4">
+                        <div id="camera-adv-controls" className="mt-4 p-2 bg-starbucks-cream rounded-lg space-y-2">
                             {showFlashControl && <div id="flash-control" className="text-center">
-                                <button id="flash-btn" onClick={toggleFlash} className="w-full px-4 py-2 bg-gray-500 hover:bg-gray-700 text-white font-semibold rounded-lg shadow-md">{isFlashOn ? 'Desactivar Flash 💡' : 'Activar Flash 🔦'}</button>
+                                <button id="flash-btn" onClick={toggleFlash} className="w-full px-4 py-2 text-sm bg-gray-500 hover:bg-gray-700 text-white font-semibold rounded-lg shadow-md">{isFlashOn ? 'Apagar Flash 💡' : 'Encender Flash 🔦'}</button>
                             </div>}
                            {showZoomControl && <div id="zoom-control" className="text-center">
-                                <label htmlFor="zoom-slider" className="block mb-2 font-medium text-starbucks-dark">Zoom 🔎</label>
+                                <label htmlFor="zoom-slider" className="block mb-1 text-xs font-medium text-starbucks-dark">Zoom 🔎</label>
                                 <input type="range" id="zoom-slider" ref={zoomSliderRef} onChange={handleZoom} className="w-full" />
                             </div>}
                         </div>
                     )}
                      <div id="physical-scanner-status" className="mt-4 text-center p-2 rounded-md bg-starbucks-accent text-white" style={{ display: scannerActive && selectedScannerMode === 'fisico' ? 'block' : 'none' }}>
-                        Escáner físico listo. Conecta tu dispositivo y comienza a escanear.
+                        Escáner físico listo.
                     </div>
                 </div>
 
                 <div id="result-container" className="space-y-4">
-                    <div id="message" className={`p-4 rounded-lg text-center font-semibold text-lg transition-all duration-300 ${messageClasses[message.type]}`}>
+                    <div id="message" className={`p-3 rounded-lg text-center font-semibold text-base transition-all duration-300 ${messageClasses[message.type]}`}>
                         {message.text}
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-center">
-                        <div className="bg-starbucks-cream p-3 rounded-lg">
-                            <h3 className="font-bold text-starbucks-dark uppercase text-sm">Escaneo Total</h3>
-                            <p id="total-scans" className="text-3xl font-mono text-starbucks-green">{melCodesCount + otherCodesCount}</p>
+                    <div className="grid grid-cols-3 gap-2 text-center">
+                        <div className="bg-starbucks-cream p-2 rounded-lg">
+                            <h3 className="font-bold text-starbucks-dark uppercase text-xs">Total</h3>
+                            <p id="total-scans" className="text-2xl font-mono text-starbucks-green">{melCodesCount + otherCodesCount}</p>
                         </div>
-                        <div className="bg-starbucks-cream p-3 rounded-lg">
-                            <h3 className="font-bold text-starbucks-dark uppercase text-sm">FedEx, P. Express, Otros</h3>
-                            <p id="other-scans" className="text-3xl font-mono text-yellow-500">{otherCodesCount}</p>
+                        <div className="bg-starbucks-cream p-2 rounded-lg">
+                            <h3 className="font-bold text-starbucks-dark uppercase text-xs">Otros</h3>
+                            <p id="other-scans" className="text-2xl font-mono text-yellow-500">{otherCodesCount}</p>
                         </div>
-                        <div className="bg-starbucks-cream p-3 rounded-lg">
-                            <h3 className="font-bold text-starbucks-dark uppercase text-sm">Códigos MEL</h3>
-                            <p id="unique-scans" className="text-3xl font-mono text-starbucks-accent">{melCodesCount}</p>
+                        <div className="bg-starbucks-cream p-2 rounded-lg">
+                            <h3 className="font-bold text-starbucks-dark uppercase text-xs">MEL</h3>
+                            <p id="unique-scans" className="text-2xl font-mono text-starbucks-accent">{melCodesCount}</p>
                         </div>
                     </div>
                 </div>
                 
-                <div>
-                     <div className="mb-4 p-4 bg-starbucks-cream rounded-lg">
-                        <label htmlFor="manual-code-input" className="block text-sm font-bold text-starbucks-dark mb-2">Ingreso Manual (si el escáner falla):</label>
+                <div className="space-y-4">
+                     <div className="p-4 bg-starbucks-cream rounded-lg">
+                        <label htmlFor="manual-code-input" className="block text-sm font-bold text-starbucks-dark mb-1">Ingreso Manual:</label>
                         <div className="mt-1 flex rounded-md shadow-sm">
-                            <input type="text" id="manual-code-input" className="form-input flex-1 block w-full rounded-none rounded-l-md" placeholder="Escriba el código aquí..." onKeyDown={(e) => e.key === 'Enter' && handleManualAdd()}/>
-                            <button type="button" id="manual-add-btn" onClick={handleManualAdd} className="inline-flex items-center px-4 py-2 border border-l-0 border-green-600 rounded-r-md bg-green-600 text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 font-semibold">
-                                Agregar +
+                            <input type="text" id="manual-code-input" className="form-input flex-1 block w-full rounded-none rounded-l-md" placeholder="Escriba el código..." onKeyDown={(e) => e.key === 'Enter' && handleManualAdd()}/>
+                            <button type="button" id="manual-add-btn" onClick={handleManualAdd} className="inline-flex items-center px-4 py-2 border border-l-0 border-green-600 rounded-r-md bg-green-600 text-white hover:bg-green-700 font-semibold text-sm">
+                                +
                             </button>
                         </div>
                     </div>
 
-                    <div className="mb-4">
+                    <div>
                         <div className="flex justify-between items-center mb-2">
-                           <h2 className="text-xl font-bold text-starbucks-dark">Registros de Personal</h2>
-                            <button onClick={handleSavePersonal} className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-sm text-sm transition-colors duration-200">
-                                Guardar Personal
+                           <h2 className="text-lg font-bold text-starbucks-dark">Personal Asignado</h2>
+                            <button onClick={handleSavePersonal} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-sm text-sm transition-colors duration-200">
+                                Guardar
                             </button>
                         </div>
                         <div className="table-container border border-gray-200 rounded-lg">
                             <table className="w-full min-w-full divide-y divide-gray-200">
                                 <thead className="bg-starbucks-cream sticky top-0">
                                     <tr>
-                                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">Codigo (MEL o otro)</th>
-                                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">SKU</th>
-                                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">Personal</th>
-                                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">Encargado</th>
+                                        <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">Codigo</th>
+                                        <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">Personal</th>
                                     </tr>
                                 </thead>
                                 <tbody className="bg-starbucks-white divide-y divide-gray-200">
                                     {personalScans.map((data: PersonalScanItem) => (
                                         <tr key={data.code}>
-                                            <td className="px-6 py-4 whitespace-nowrap font-mono">{data.code}</td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{data.sku}</td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm">{data.personal}</td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm">{data.encargado}</td>
+                                            <td className="px-4 py-3 whitespace-nowrap font-mono text-sm">{data.code}</td>
+                                            <td className="px-4 py-3 whitespace-nowrap text-sm">{data.personal}</td>
                                         </tr>
                                     ))}
                                 </tbody>
@@ -833,60 +831,55 @@ export default function Home() {
                         </div>
                     </div>
 
-
-                    <div className="flex justify-between items-center mb-2">
-                        <h2 className="text-xl font-bold text-starbucks-dark">Registros Únicos</h2>
-                        <div className="flex flex-wrap gap-2">
-                            <button id="export-csv" onClick={exportCsv} className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg shadow-sm text-sm transition-colors duration-200">1. Exportar CSV</button>
-                            <button id="ingresar-datos" onClick={ingresarDatos} disabled={!ingresarDatosEnabled} className="flex items-center gap-1 px-3 py-1 bg-purple-600 text-white font-semibold rounded-lg shadow-sm text-sm transition-colors duration-200 disabled:bg-gray-400 disabled:cursor-not-allowed">2. Ingresar Datos</button>
-                            <button id="clear-data" onClick={() => { if(window.confirm('¿Estás seguro?')) clearSessionData() }} className="px-3 py-1 bg-yellow-500 hover:bg-yellow-600 text-white font-semibold rounded-lg shadow-sm text-sm transition-colors duration-200">Limpiar</button>
+                    <div>
+                        <div className="flex flex-wrap justify-between items-center mb-2 gap-2">
+                            <h2 className="text-lg font-bold text-starbucks-dark">Registros Pendientes</h2>
+                            <div className="flex flex-wrap gap-2">
+                                <button id="export-csv" onClick={exportCsv} className="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg shadow-sm text-xs transition-colors duration-200">1. Exportar</button>
+                                <button id="ingresar-datos" onClick={ingresarDatos} disabled={!ingresarDatosEnabled} className="flex items-center gap-1 px-3 py-1.5 bg-purple-600 text-white font-semibold rounded-lg shadow-sm text-xs transition-colors duration-200 disabled:bg-gray-400">2. Ingresar</button>
+                                <button id="clear-data" onClick={() => { if(window.confirm('¿Estás seguro?')) clearSessionData() }} className="px-3 py-1.5 bg-yellow-500 hover:bg-yellow-600 text-white font-semibold rounded-lg shadow-sm text-xs transition-colors duration-200">Limpiar</button>
+                            </div>
                         </div>
-                    </div>
 
-                    <div className="table-container border border-gray-200 rounded-lg">
-                        <table className="w-full min-w-full divide-y divide-gray-200">
-                            <thead className="bg-starbucks-cream sticky top-0">
-                                <tr>
-                                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">CODIGO MEL</th>
-                                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">FECHA</th>
-                                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">HORA</th>
-                                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">ENCARGADO</th>
-                                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">AREA</th>
-                                    <th scope="col" className="px-6 py-3 text-center text-xs font-medium text-starbucks-dark uppercase tracking-wider">ACCIONES</th>
-                                </tr>
-                            </thead>
-                            <tbody id="scanned-list" className="bg-starbucks-white divide-y divide-gray-200">
-                                {scannedData.map((data: ScannedItem) => (
-                                    <tr key={data.code}>
-                                        <td className="px-6 py-4 whitespace-nowrap font-mono">{data.code}</td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{data.fecha}</td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{data.hora}</td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm">{data.encargado}</td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm">{data.area}</td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-center">
-                                            <button className="delete-btn text-red-500 hover:text-red-700 font-semibold" onClick={() => deleteRow(data.code)}>Borrar</button>
-                                        </td>
+                        <div className="table-container border border-gray-200 rounded-lg">
+                            <table className="w-full min-w-full divide-y divide-gray-200">
+                                <thead className="bg-starbucks-cream sticky top-0">
+                                    <tr>
+                                        <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">CODIGO</th>
+                                        <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">HORA</th>
+                                        <th scope="col" className="px-4 py-2 text-center text-xs font-medium text-starbucks-dark uppercase tracking-wider">ACCION</th>
                                     </tr>
-                                ))}
-                            </tbody>
-                        </table>
+                                </thead>
+                                <tbody id="scanned-list" className="bg-starbucks-white divide-y divide-gray-200">
+                                    {scannedData.map((data: ScannedItem) => (
+                                        <tr key={data.code}>
+                                            <td className="px-4 py-3 whitespace-nowrap font-mono text-sm">{data.code}</td>
+                                            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{data.hora}</td>
+                                            <td className="px-4 py-3 whitespace-nowrap text-sm text-center">
+                                                <button className="delete-btn text-red-500 hover:text-red-700 font-semibold text-xs" onClick={() => deleteRow(data.code)}>Borrar</button>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 </div>
             </div>
 
             {loading && <div id="loading-overlay" style={{display: 'flex'}}>
                 <div className="overlay-spinner"></div>
-                <p className="text-xl font-semibold">Enviando registros...</p>
+                <p className="text-lg font-semibold">Enviando registros...</p>
             </div>}
             
             {confirmation.isOpen && <div id="qr-confirmation-overlay" className="p-4" style={{display: 'flex'}}>
-                 <div className="bg-starbucks-white rounded-lg shadow-xl p-6 w-full max-w-md text-center space-y-4">
+                 <div className="bg-starbucks-white rounded-lg shadow-xl p-6 w-full max-w-sm text-center space-y-4">
                     <h3 id="confirmation-title" className="text-lg font-bold text-starbucks-dark">{confirmation.title}</h3>
                     <p id="confirmation-message" className="text-sm text-gray-600">{confirmation.message}</p>
-                    <div id="qr-code-display" className="bg-starbucks-cream p-3 rounded-md font-mono text-sm break-words max-h-40 overflow-y-auto font-bold text-starbucks-dark">{confirmation.code}</div>
+                    <div id="qr-code-display" className="bg-starbucks-cream p-3 rounded-md font-mono text-xs break-words max-h-28 overflow-y-auto font-bold text-starbucks-dark">{confirmation.code}</div>
                     <div className="flex justify-center gap-4 mt-4">
-                        <button id="qr-confirm-yes" onClick={() => handleConfirmation(true)} className="px-6 py-2 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg shadow-md">Sí, Agregar</button>
-                        <button id="qr-confirm-no" onClick={() => handleConfirmation(false)} className="px-6 py-2 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-lg shadow-md">No, Cancelar</button>
+                        <button id="qr-confirm-yes" onClick={() => handleConfirmation(true)} className="px-6 py-2 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg shadow-md">Sí</button>
+                        <button id="qr-confirm-no" onClick={() => handleConfirmation(false)} className="px-6 py-2 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-lg shadow-md">No</button>
                     </div>
                 </div>
             </div>}

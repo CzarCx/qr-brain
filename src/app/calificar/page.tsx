@@ -2,7 +2,6 @@
 'use client';
 import {useEffect, useRef, useState, useCallback} from 'react';
 import Head from 'next/head';
-import Image from 'next/image';
 import { Html5Qrcode, Html5QrcodeScannerState } from 'html5-qrcode';
 import { supabaseDB2 } from '@/lib/supabaseClient';
 import {
@@ -140,7 +139,7 @@ export default function ScannerPage() {
                     setIsRatingModalOpen(true);
                 } else { // Mass scanning mode
                     if (data.status === 'REPORTADO') {
-                       setMessage(`Añadido a la lista (previamente reportado): ${decodedText}`);
+                       setMessage(`Añadido (Reportado): ${decodedText}`);
                     } else {
                        setMessage(`Añadido a la lista: ${decodedText}`);
                     }
@@ -345,44 +344,46 @@ const handleMassQualify = async () => {
   return (
     <>
       <Head>
-        <title>Confirmación de Etiquetado</title>
+        <title>Calificar Empaquetado</title>
       </Head>
       <main className="text-starbucks-dark flex items-center justify-center p-4">
-        <div className="w-full max-w-lg mx-auto bg-starbucks-white rounded-xl shadow-2xl p-6 space-y-6">
+        <div className="w-full max-w-md mx-auto bg-starbucks-white rounded-xl shadow-2xl p-4 md:p-6 space-y-4">
           <header className="text-center">
-            <h1 className="text-2xl font-bold text-starbucks-green">Confirmación de Etiquetado</h1>
-            <p className="text-gray-600 mt-1">Escanea el código QR de la etiqueta para ver los detalles.</p>
+            <h1 className="text-xl md:text-2xl font-bold text-starbucks-green">Calificar Empaquetado</h1>
+            <p className="text-gray-600 text-sm mt-1">Escanea el QR para calificar la calidad.</p>
           </header>
 
-          <div className="space-y-2">
-              <label htmlFor="encargado" className="block text-sm font-bold text-starbucks-dark mb-2">Nombre del Encargado:</label>
-               <Select onValueChange={setEncargado} value={encargado} disabled={scannerActive}>
-                  <SelectTrigger className="form-input">
-                      <SelectValue placeholder="Selecciona un encargado" />
-                  </SelectTrigger>
-                  <SelectContent>
-                      {encargadosList.map((enc) => (
-                          <SelectItem key={enc.name} value={enc.name}>
-                              {enc.name}
-                          </SelectItem>
-                      ))}
-                  </SelectContent>
-              </Select>
-          </div>
-
-          <div className="space-y-2">
-              <label className="block text-sm font-bold text-starbucks-dark mb-2">Método de Escaneo:</label>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <button onClick={() => setSelectedScannerMode('camara')} className={`area-btn w-full px-4 py-3 border border-gray-300 rounded-md shadow-sm focus:outline-none ${selectedScannerMode === 'camara' ? 'scanner-mode-selected' : ''}`} disabled={scannerActive}>CÁMARA</button>
-                  <button onClick={() => setSelectedScannerMode('fisico')} className={`area-btn w-full px-4 py-3 border border-gray-300 rounded-md shadow-sm focus:outline-none ${selectedScannerMode === 'fisico' ? 'scanner-mode-selected' : ''}`} disabled={scannerActive}>ESCÁNER FÍSICO</button>
+          <div className="space-y-4">
+              <div>
+                  <label htmlFor="encargado" className="block text-sm font-bold text-starbucks-dark mb-1">Nombre del Encargado:</label>
+                   <Select onValueChange={setEncargado} value={encargado} disabled={scannerActive}>
+                      <SelectTrigger className="form-input">
+                          <SelectValue placeholder="Selecciona un encargado" />
+                      </SelectTrigger>
+                      <SelectContent>
+                          {encargadosList.map((enc) => (
+                              <SelectItem key={enc.name} value={enc.name}>
+                                  {enc.name}
+                              </SelectItem>
+                          ))}
+                      </SelectContent>
+                  </Select>
               </div>
-          </div>
-          
-          <div className="space-y-2">
-              <label className="block text-sm font-bold text-starbucks-dark mb-2">Tipo de Escaneo:</label>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <button onClick={() => setScanMode('individual')} className={`area-btn w-full px-4 py-3 border border-gray-300 rounded-md shadow-sm focus:outline-none ${scanMode === 'individual' ? 'scanner-mode-selected' : ''}`} disabled={scannerActive}>Escaneo Individual</button>
-                  <button onClick={() => setScanMode('masivo')} className={`area-btn w-full px-4 py-3 border border-gray-300 rounded-md shadow-sm focus:outline-none ${scanMode === 'masivo' ? 'scanner-mode-selected' : ''}`} disabled={scannerActive}>Escaneo Masivo</button>
+
+              <div>
+                  <label className="block text-sm font-bold text-starbucks-dark mb-1">Método de Escaneo:</label>
+                  <div className="grid grid-cols-2 gap-2">
+                      <button onClick={() => setSelectedScannerMode('camara')} className={`area-btn w-full px-4 py-3 text-sm rounded-md shadow-sm focus:outline-none ${selectedScannerMode === 'camara' ? 'scanner-mode-selected' : ''}`} disabled={scannerActive}>CÁMARA</button>
+                      <button onClick={() => setSelectedScannerMode('fisico')} className={`area-btn w-full px-4 py-3 text-sm rounded-md shadow-sm focus:outline-none ${selectedScannerMode === 'fisico' ? 'scanner-mode-selected' : ''}`} disabled={scannerActive}>ESCÁNER FÍSICO</button>
+                  </div>
+              </div>
+              
+              <div>
+                  <label className="block text-sm font-bold text-starbucks-dark mb-1">Tipo de Escaneo:</label>
+                  <div className="grid grid-cols-2 gap-2">
+                      <button onClick={() => setScanMode('individual')} className={`area-btn w-full px-4 py-3 text-sm rounded-md shadow-sm focus:outline-none ${scanMode === 'individual' ? 'scanner-mode-selected' : ''}`} disabled={scannerActive}>Individual</button>
+                      <button onClick={() => setScanMode('masivo')} className={`area-btn w-full px-4 py-3 text-sm rounded-md shadow-sm focus:outline-none ${scanMode === 'masivo' ? 'scanner-mode-selected' : ''}`} disabled={scannerActive}>Masivo</button>
+                  </div>
               </div>
           </div>
 
@@ -403,20 +404,20 @@ const handleMassQualify = async () => {
                 </div>
              )}
             <div id="scanner-controls" className="mt-4 flex flex-wrap gap-2 justify-center">
-              <button onClick={() => { setScannerActive(true); setLastScannedResult(null); setMessage('Apunte la cámara a un código QR.'); }} disabled={scannerActive || loading || !encargado} className="px-4 py-2 text-white font-semibold rounded-lg shadow-md transition-colors duration-200 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400">
-                Iniciar Escaneo
+              <button onClick={() => { setScannerActive(true); setLastScannedResult(null); setMessage('Apunte la cámara a un código QR.'); }} disabled={scannerActive || loading || !encargado} className="px-4 py-2 text-white font-semibold rounded-lg shadow-md transition-colors duration-200 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-sm">
+                Iniciar
               </button>
-              <button onClick={() => setScannerActive(false)} disabled={!scannerActive || loading} className="px-4 py-2 text-white font-semibold rounded-lg shadow-md transition-colors duration-200 bg-red-600 hover:bg-red-700 disabled:bg-gray-400">
-                Detener Escaneo
+              <button onClick={() => setScannerActive(false)} disabled={!scannerActive || loading} className="px-4 py-2 text-white font-semibold rounded-lg shadow-md transition-colors duration-200 bg-red-600 hover:bg-red-700 disabled:bg-gray-400 text-sm">
+                Detener
               </button>
             </div>
              <div id="physical-scanner-status" className="mt-4 text-center p-2 rounded-md bg-starbucks-accent text-white" style={{ display: scannerActive && selectedScannerMode === 'fisico' ? 'block' : 'none' }}>
-                Escáner físico listo. Conecta tu dispositivo y comienza a escanear.
+                Escáner físico listo.
             </div>
           </div>
 
           <div id="result-container" className="space-y-4">
-            <div className={`p-4 rounded-lg text-center font-semibold text-lg transition-all duration-300 ${!lastScannedResult && massScannedCodes.length === 0 ? 'bg-gray-100 text-gray-800' : lastScannedResult?.found ? 'bg-green-100 border-green-400 text-green-700' : 'bg-yellow-100 border-yellow-400 text-yellow-700'}`}>
+            <div className={`p-3 rounded-lg text-center font-semibold text-base transition-all duration-300 ${!lastScannedResult && massScannedCodes.length === 0 ? 'bg-gray-100 text-gray-800' : lastScannedResult?.found ? 'bg-green-100 border-green-400 text-green-700' : 'bg-yellow-100 border-yellow-400 text-yellow-700'}`}>
               {message}
             </div>
 
@@ -425,30 +426,30 @@ const handleMassQualify = async () => {
               <div className="bg-starbucks-cream p-4 rounded-lg text-left space-y-2">
                 <div>
                     <h3 className="font-bold text-starbucks-dark uppercase text-sm">Código</h3>
-                    <p className="text-lg font-mono text-starbucks-green break-words">{lastScannedResult.code}</p>
+                    <p className="text-base font-mono text-starbucks-green break-words">{lastScannedResult.code}</p>
                 </div>
                 {lastScannedResult.found ? (
                     <>
                         <div>
                             <h3 className="font-bold text-starbucks-dark uppercase text-sm">Empaquetado por</h3>
-                            <p className="text-lg text-gray-800">{lastScannedResult.name || 'No especificado'}</p>
+                            <p className="text-base text-gray-800">{lastScannedResult.name || 'No especificado'}</p>
                         </div>
                         <div>
                             <h3 className="font-bold text-starbucks-dark uppercase text-sm">Producto</h3>
-                            <p className="text-lg text-gray-800">{lastScannedResult.product || 'No especificado'}</p>
+                            <p className="text-base text-gray-800">{lastScannedResult.product || 'No especificado'}</p>
                         </div>
                         {(lastScannedResult.status !== 'CALIFICADO' || lastScannedResult.status === 'REPORTADO') && (
                              <Dialog open={isRatingModalOpen} onOpenChange={handleOpenRatingModal}>
                              <DialogTrigger asChild>
                                  <Button className="w-full mt-4 bg-starbucks-accent hover:bg-starbucks-green text-white">
-                                 Calificar Empaquetado
+                                 Calificar
                                  </Button>
                              </DialogTrigger>
                              <DialogContent className="sm:max-w-[425px]">
                                  <DialogHeader>
                                  <DialogTitle>Calificar Empaquetado</DialogTitle>
                                  <DialogDescription>
-                                     ¿Cómo calificarías la calidad del empaquetado de este producto?
+                                     ¿Cómo calificarías la calidad del empaquetado?
                                  </DialogDescription>
                                  </DialogHeader>
                                  <div className="grid gap-4 py-4">
@@ -457,7 +458,7 @@ const handleMassQualify = async () => {
                                          <AlertTriangle className="h-4 w-4" />
                                          <AlertTitle>Atención: Reporte Previo</AlertTitle>
                                          <AlertDescription>
-                                             Este producto fue reportado por: <span className="font-semibold">{lastScannedResult.details || 'Motivo no especificado'}</span>.
+                                             Reportado por: <span className="font-semibold">{lastScannedResult.details || 'N/E'}</span>.
                                          </AlertDescription>
                                      </Alert>
                                  )}
@@ -479,9 +480,9 @@ const handleMassQualify = async () => {
                                      </Select>
                                  )}
                                  </div>
-                                 <DialogFooter className="sm:justify-center">
+                                 <DialogFooter className="grid grid-cols-2 gap-2 sm:flex sm:justify-center">
                                      {showReportSelect ? (
-                                         <Button size="lg" variant="destructive" onClick={handleSendReport} disabled={loading || !selectedReport}>
+                                         <Button size="lg" variant="destructive" onClick={handleSendReport} disabled={loading || !selectedReport} className="w-full">
                                              {loading ? 'Enviando...' : 'Enviar Reporte'}
                                          </Button>
                                      ) : (
@@ -509,37 +510,35 @@ const handleMassQualify = async () => {
              {/* Mass Scan Results */}
              {scanMode === 'masivo' && (
                 <div className="space-y-4">
-                    <div className="flex justify-between items-center">
-                        <h2 className="text-xl font-bold text-starbucks-dark">Códigos Escaneados ({massScannedCodes.length})</h2>
-                        <Button onClick={handleMassQualify} disabled={loading || massScannedCodes.length === 0} className="bg-green-600 hover:bg-green-700">
+                    <div className="flex flex-col sm:flex-row justify-between items-center gap-2">
+                        <h2 className="text-lg font-bold text-starbucks-dark">Escaneados ({massScannedCodes.length})</h2>
+                        <Button onClick={handleMassQualify} disabled={loading || massScannedCodes.length === 0} className="bg-green-600 hover:bg-green-700 w-full sm:w-auto">
                             {loading ? 'Calificando...' : 'Calificar Todos'}
                         </Button>
                     </div>
-                    <div className="table-container border border-gray-200 rounded-lg max-h-60 overflow-y-auto">
+                    <div className="table-container border border-gray-200 rounded-lg max-h-60 overflow-auto">
                         <Table>
                             <TableHeader className="sticky top-0 bg-starbucks-cream">
                                 <TableRow>
                                     <TableHead>Código</TableHead>
                                     <TableHead>Producto</TableHead>
-                                    <TableHead>Empaquetado por</TableHead>
                                     <TableHead className="text-right">Acción</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
                                 {massScannedCodes.length > 0 ? massScannedCodes.map((item) => (
                                     <TableRow key={item.code}>
-                                        <TableCell className="font-mono">{item.code}</TableCell>
-                                        <TableCell>{item.product || 'N/A'}</TableCell>
-                                        <TableCell>{item.name || 'N/A'}</TableCell>
+                                        <TableCell className="font-mono text-xs">{item.code}</TableCell>
+                                        <TableCell className="text-xs">{item.product || 'N/A'}</TableCell>
                                         <TableCell className="text-right">
-                                            <Button variant="ghost" size="icon" onClick={() => removeFromMassList(item.code)} className="text-red-500 hover:text-red-700">
+                                            <Button variant="ghost" size="icon" onClick={() => removeFromMassList(item.code)} className="text-red-500 hover:text-red-700 h-8 w-8">
                                                 <Trash2 className="h-4 w-4" />
                                             </Button>
                                         </TableCell>
                                     </TableRow>
                                 )) : (
                                      <TableRow>
-                                        <TableCell colSpan={4} className="text-center text-gray-500 py-8">
+                                        <TableCell colSpan={3} className="text-center text-gray-500 py-8">
                                             No hay códigos en la lista.
                                         </TableCell>
                                     </TableRow>

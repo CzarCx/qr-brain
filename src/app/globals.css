@@ -136,7 +136,7 @@ body {
 
 .table-container {
   max-height: 400px;
-  overflow-y: auto;
+  overflow: auto; /* Changed to auto for both directions */
 }
 
 .area-btn {
@@ -258,5 +258,5 @@ body {
 }
 
 .form-input {
-  @apply shadow-inner appearance-none border rounded-lg w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-starbucks-accent;
+  @apply shadow-inner appearance-none border rounded-lg w-full py-2 px-3 text-base md:text-sm text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-starbucks-accent;
 }
