@@ -246,9 +246,11 @@ export default function Home() {
       }
     } else {
       cleanup().then(() => {
-        setCameraCapabilities(null);
-        setIsFlashOn(false);
-        setZoom(1);
+        if(isMobile) {
+            setCameraCapabilities(null);
+            setIsFlashOn(false);
+            setZoom(1);
+        }
       });
     }
 
@@ -478,5 +480,3 @@ export default function Home() {
     </>
   );
 }
-
-    
