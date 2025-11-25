@@ -234,7 +234,7 @@ export default function Home() {
               cantidad = data.Cantidad || 0;
               empresa = data.EMPRESA || '';
             } else {
-              showAppMessage(`Código ${item.code} no encontrado. Se añade sin SKU/Producto.`, 'info');
+              showAppMessage(`Código ${item.code} no encontrado. Se añade sin detalles.`, 'info');
             }
           } catch (e: any) {
             console.error(`Error al buscar el código ${item.code}:`, e.message);
@@ -701,6 +701,7 @@ export default function Home() {
         quantity: item.quantity,
         status: 'ASIGNADO',
         organization: item.organization,
+        date: new Date().toISOString(),
       }));
 
       const { error } = await supabaseDB2.from('personal').insert(dataToInsert);
@@ -941,7 +942,3 @@ export default function Home() {
     </>
   );
 }
-
-    
-
-    
