@@ -37,6 +37,7 @@ type PersonalScanItem = {
   encargado: string;
   product: string | null;
   quantity: number | null;
+  organization: string | null;
 };
 
 type Encargado = {
@@ -213,12 +214,13 @@ export default function Home() {
       let sku = item.sku;
       let producto = item.producto;
       let cantidad = item.cantidad;
+      let empresa = item.empresa;
   
-      if (!sku || !producto || !cantidad) {
+      if (!sku || !producto || !cantidad || !empresa) {
           try {
             const { data, error } = await supabase
               .from('BASE DE DATOS ETIQUETAS IMPRESAS')
-              .select('SKU, Producto, Cantidad')
+              .select('SKU, Producto, Cantidad, EMPRESA')
               .eq('Código', item.code)
               .single();
     
@@ -230,6 +232,7 @@ export default function Home() {
               sku = data.SKU || '';
               producto = data.Producto || '';
               cantidad = data.Cantidad || 0;
+              empresa = data.EMPRESA || '';
             } else {
               showAppMessage(`Código ${item.code} no encontrado. Se añade sin SKU/Producto.`, 'info');
             }
@@ -246,6 +249,7 @@ export default function Home() {
         encargado: item.encargado,
         product: producto,
         quantity: cantidad,
+        organization: empresa,
       };
     });
   
@@ -690,6 +694,8 @@ export default function Home() {
         sku: item.sku,
         product: item.product,
         quantity: item.quantity,
+        status: 'ASIGNADO',
+        organization: item.organization,
       }));
 
       const { error } = await supabaseDB2.from('personal').insert(dataToInsert);
@@ -930,5 +936,7 @@ export default function Home() {
     </>
   );
 }
+
+    
 
     
