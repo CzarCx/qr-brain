@@ -16,6 +16,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { useIsMobile } from '@/hooks/use-mobile';
 
 
 type DeliveryItem = {
@@ -43,6 +44,8 @@ export default function Home() {
   const [cameraCapabilities, setCameraCapabilities] = useState<any>(null);
   const [isFlashOn, setIsFlashOn] = useState(false);
   const [zoom, setZoom] = useState(1);
+  const isMobile = useIsMobile();
+
 
   // Refs
   const html5QrCodeRef = useRef<Html5Qrcode | null>(null);
@@ -174,17 +177,17 @@ export default function Home() {
     };
   }, [scannerActive, selectedScannerMode]);
 
-  const applyCameraConstraints = (track: MediaStreamTrack) => {
+  const applyCameraConstraints = useCallback((track: MediaStreamTrack) => {
     track.applyConstraints({
       advanced: [{
         zoom: zoom,
         torch: isFlashOn
       }]
     }).catch(e => console.error("Failed to apply constraints", e));
-  };
+  }, [zoom, isFlashOn]);
   
   useEffect(() => {
-    if (scannerActive && selectedScannerMode === 'camara' && html5QrCodeRef.current?.isScanning) {
+    if (isMobile && scannerActive && selectedScannerMode === 'camara' && html5QrCodeRef.current?.isScanning) {
       const videoElement = document.getElementById('reader')?.querySelector('video');
       if (videoElement && videoElement.srcObject) {
         const stream = videoElement.srcObject as MediaStream;
@@ -194,18 +197,14 @@ export default function Home() {
         }
       }
     }
-  }, [zoom, isFlashOn, scannerActive, selectedScannerMode]);
+  }, [zoom, isFlashOn, scannerActive, selectedScannerMode, isMobile, applyCameraConstraints]);
 
   useEffect(() => {
     if (!isMounted || !readerRef.current) return;
 
     const cleanup = () => {
       if (html5QrCodeRef.current && html5QrCodeRef.current.isScanning) {
-        return html5QrCodeRef.current.stop().then(() => {
-            setCameraCapabilities(null);
-            setIsFlashOn(false);
-            setZoom(1);
-        }).catch(err => {
+        return html5QrCodeRef.current.stop().catch(err => {
           if (!String(err).includes('not started')) {
             console.error("Fallo al detener el escáner:", err);
           }
@@ -225,15 +224,19 @@ export default function Home() {
           qrbox: { width: 250, height: 250 },
         };
         html5QrCodeRef.current.start({ facingMode: "environment" }, config, onScanSuccess, (e: any) => {}).then(() => {
-            const videoElement = document.getElementById('reader')?.querySelector('video');
-            if(videoElement && videoElement.srcObject) {
-                const stream = videoElement.srcObject as MediaStream;
-                const track = stream.getVideoTracks()[0];
-                if (track) {
-                    const capabilities = track.getCapabilities();
-                    setCameraCapabilities(capabilities);
-                    setZoom(capabilities.zoom?.min || 1);
-                }
+            if (isMobile) {
+              const videoElement = document.getElementById('reader')?.querySelector('video');
+              if(videoElement && videoElement.srcObject) {
+                  const stream = videoElement.srcObject as MediaStream;
+                  const track = stream.getVideoTracks()[0];
+                  if (track) {
+                      const capabilities = track.getCapabilities();
+                      setCameraCapabilities(capabilities);
+                      if (capabilities.zoom) {
+                        setZoom(capabilities.zoom.min || 1);
+                      }
+                  }
+              }
             }
         }).catch(err => {
             console.error("Error al iniciar camara:", err);
@@ -242,13 +245,17 @@ export default function Home() {
         });
       }
     } else {
-      cleanup();
+      cleanup().then(() => {
+        setCameraCapabilities(null);
+        setIsFlashOn(false);
+        setZoom(1);
+      });
     }
 
     return () => {
       cleanup();
     };
-  }, [scannerActive, selectedScannerMode, onScanSuccess, isMounted]);
+  }, [scannerActive, selectedScannerMode, onScanSuccess, isMounted, isMobile]);
 
   const startScanner = () => {
     if (!encargado.trim()) return showAppMessage('Por favor, selecciona un encargado.', 'error');
@@ -366,7 +373,7 @@ export default function Home() {
                          )}
                     </div>
                     
-                     {scannerActive && selectedScannerMode === 'camara' && cameraCapabilities && (
+                     {isMobile && scannerActive && selectedScannerMode === 'camara' && cameraCapabilities && (
                         <div id="camera-controls" className="flex items-center gap-4 mt-4 p-2 rounded-lg bg-gray-200">
                             {cameraCapabilities.torch && (
                                 <Button variant="ghost" size="icon" onClick={() => setIsFlashOn(prev => !prev)} className={isFlashOn ? 'bg-yellow-400' : ''}>
