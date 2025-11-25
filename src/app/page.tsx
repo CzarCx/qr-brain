@@ -317,37 +317,33 @@ export default function Home() {
   useEffect(() => {
     if (!isMounted || !readerRef.current) return;
 
-    if (!html5QrCodeRef.current) {
-      html5QrCodeRef.current = new Html5Qrcode(readerRef.current.id, false);
-    }
-    const qrCode = html5QrCodeRef.current;
-
     const cleanup = () => {
-      if (qrCode && qrCode.getState() === Html5QrcodeScannerState.SCANNING) {
-        return qrCode.stop().catch(err => {
+      if (html5QrCodeRef.current && html5QrCodeRef.current.isScanning) {
+        html5QrCodeRef.current.stop().catch(err => {
           if (!String(err).includes("not started")) {
             console.error("Fallo al detener el escáner:", err);
           }
         });
       }
-      return Promise.resolve();
     };
 
     if (scannerActive && selectedScannerMode === 'camara') {
-      if (qrCode.getState() !== Html5QrcodeScannerState.SCANNING) {
+      if (!html5QrCodeRef.current) {
+        html5QrCodeRef.current = new Html5Qrcode(readerRef.current.id, false);
+      }
+      
+      if (html5QrCodeRef.current && !html5QrCodeRef.current.isScanning) {
         const config = {
           fps: 10,
           qrbox: { width: 250, height: 250 },
           experimentalFeatures: { useBarCodeDetectorIfSupported: true },
         };
         
-        qrCode.start(
+        html5QrCodeRef.current.start(
           { facingMode: "environment" },
           config,
           onScanSuccess,
-          (errorMessage) => {
-            // No-op for scan errors
-          }
+          (errorMessage) => { /* No-op */ }
         ).catch(err => {
             console.error("Error al iniciar la cámara:", err);
             showAppMessage('Error al iniciar la cámara. Revisa los permisos.', 'duplicate');
@@ -711,13 +707,8 @@ export default function Home() {
                             </div>
                         )}
                     </div>
-                    {lastScanned && (
-                        <p className="mt-2 text-center text-xs bg-blue-100 border border-blue-400 text-blue-700 px-3 py-2 rounded relative">
-                            <strong>Último escaneo:</strong> {lastScanned}
-                        </p>
-                    )}
                     <div id="scanner-controls" className="mt-4 flex flex-wrap gap-2 justify-center">
-                        <button onClick={startScanner} disabled={scannerActive} className={`px-4 py-2 text-white font-semibold rounded-lg shadow-md transition-colors duration-200 text-sm ${scannerActive ? 'bg-gray-400' : 'bg-blue-600 hover:bg-blue-700'}`}>Iniciar</button>
+                        <button onClick={startScanner} disabled={scannerActive || !encargado} className={`px-4 py-2 text-white font-semibold rounded-lg shadow-md transition-colors duration-200 text-sm ${scannerActive || !encargado ? 'bg-gray-400' : 'bg-blue-600 hover:bg-blue-700'}`}>Iniciar</button>
                         <button onClick={stopScanner} disabled={!scannerActive} className={`px-4 py-2 text-white font-semibold rounded-lg shadow-md transition-colors duration-200 text-sm ${!scannerActive ? 'bg-gray-400' : 'bg-red-600 hover:bg-red-700'}`}>Detener</button>
                     </div>
 
@@ -840,3 +831,5 @@ export default function Home() {
     </>
   );
 }
+
+    

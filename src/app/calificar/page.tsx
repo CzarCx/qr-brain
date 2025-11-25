@@ -175,36 +175,34 @@ export default function ScannerPage() {
   useEffect(() => {
     if (!readerRef.current) return;
 
-    if (!html5QrCodeRef.current) {
-        html5QrCodeRef.current = new Html5Qrcode(readerRef.current.id, false);
-    }
-    const qrCode = html5QrCodeRef.current;
-
     const cleanup = () => {
-        if (qrCode && qrCode.getState() === Html5QrcodeScannerState.SCANNING) {
-            return qrCode.stop().catch(err => {
-                if (!String(err).includes('not started')) {
-                    console.error("Fallo al detener el escáner:", err);
-                }
-            });
-        }
-        return Promise.resolve();
+      if (html5QrCodeRef.current && html5QrCodeRef.current.isScanning) {
+        html5QrCodeRef.current.stop().catch(err => {
+          if (!String(err).includes('not started')) {
+            console.error("Fallo al detener el escáner:", err);
+          }
+        });
+      }
     };
 
     if (scannerActive && selectedScannerMode === 'camara') {
-        if (qrCode.getState() !== Html5QrcodeScannerState.SCANNING) {
-            const config = {
-                fps: 5,
-                qrbox: { width: 250, height: 250 },
-            };
-            qrCode.start({ facingMode: "environment" }, config, onScanSuccess, (e: any) => {}).catch(err => {
-                console.error("Error al iniciar camara:", err);
-                setMessage('Error al iniciar la cámara. Revisa los permisos.');
-                setScannerActive(false);
-            });
-        }
+      if (!html5QrCodeRef.current) {
+        html5QrCodeRef.current = new Html5Qrcode(readerRef.current.id, false);
+      }
+
+      if (html5QrCodeRef.current && !html5QrCodeRef.current.isScanning) {
+        const config = {
+          fps: 5,
+          qrbox: { width: 250, height: 250 },
+        };
+        html5QrCodeRef.current.start({ facingMode: "environment" }, config, onScanSuccess, (e: any) => {}).catch(err => {
+            console.error("Error al iniciar camara:", err);
+            setMessage('Error al iniciar la cámara. Revisa los permisos.');
+            setScannerActive(false);
+        });
+      }
     } else {
-        cleanup();
+      cleanup();
     }
 
     return () => {
@@ -554,3 +552,5 @@ const handleMassQualify = async () => {
     </>
   );
 }
+
+    
