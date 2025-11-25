@@ -283,7 +283,7 @@ export default function Home() {
             <title>Entrega de Paquetes</title>
         </Head>
 
-        <main className="bg-starbucks-light-gray text-starbucks-dark min-h-screen flex items-center justify-center p-4">
+        <main className="text-starbucks-dark flex items-center justify-center p-4">
             <div className="w-full max-w-4xl mx-auto bg-starbucks-white rounded-xl shadow-2xl p-6 md:p-8 space-y-6">
                 <header className="text-center">
                     <Image src="https://media0.giphy.com/media/v1.Y2lkPTc5MGI3NjExbnQ4MGZzdXYzYWo1cXRiM3I1cjNoNjd4cjdia202ZXcwNjJ6YjdvbiZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/QQO6BH98nhigF8FLsb/giphy.gif" alt="Scanner Logo" width={96} height={96} className="mx-auto h-24 w-auto mb-4" />

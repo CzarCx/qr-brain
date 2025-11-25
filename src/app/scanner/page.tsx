@@ -347,7 +347,7 @@ const handleMassQualify = async () => {
       <Head>
         <title>Confirmación de Etiquetado</title>
       </Head>
-      <main className="bg-starbucks-light-gray text-starbucks-dark min-h-screen flex items-center justify-center p-4">
+      <main className="text-starbucks-dark flex items-center justify-center p-4">
         <div className="w-full max-w-lg mx-auto bg-starbucks-white rounded-xl shadow-2xl p-6 space-y-6">
           <header className="text-center">
             <h1 className="text-2xl font-bold text-starbucks-green">Confirmación de Etiquetado</h1>
