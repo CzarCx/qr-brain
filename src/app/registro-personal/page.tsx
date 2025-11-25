@@ -58,7 +58,7 @@ export default function RegistroPersonal() {
       <Head>
         <title>Registro de Personal</title>
       </Head>
-      <main className="text-starbucks-dark flex items-center justify-center p-4">
+      <main className="text-starbucks-dark flex min-h-screen items-center justify-center p-4">
         <div className="w-full max-w-md mx-auto bg-starbucks-white rounded-xl shadow-2xl p-6 md:p-8 space-y-6">
           <header className="text-center">
             <UserPlus className="mx-auto h-16 w-16 text-starbucks-green mb-4" />
