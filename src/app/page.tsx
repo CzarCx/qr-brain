@@ -24,6 +24,9 @@ type ScannedItem = {
   hora: string;
   encargado: string;
   area: string;
+  sku: string | null;
+  cantidad: number | null;
+  producto: string | null;
 };
 
 type PersonalScanItem = {
@@ -136,7 +139,7 @@ export default function Home() {
     setIngresarDatosEnabled(false);
   };
 
-  const addCodeAndUpdateCounters = useCallback((codeToAdd: string) => {
+  const addCodeAndUpdateCounters = useCallback((codeToAdd: string, details: { sku: string | null; cantidad: number | null; producto: string | null; }) => {
     const finalCode = codeToAdd.trim();
 
     if (scannedCodesRef.current.has(finalCode)) {
@@ -182,6 +185,9 @@ export default function Home() {
       hora: horaEscaneo,
       encargado: encargado.trim(),
       area: 'REVISIÓN CALIDAD',
+      sku: details.sku,
+      cantidad: details.cantidad,
+      producto: details.producto,
     };
     
     setScannedData(prevData => [newData, ...prevData].sort((a, b) => new Date(`1970/01/01T${b.hora}`).valueOf() - new Date(`1970/01/01T${a.hora}`).valueOf()));
@@ -283,7 +289,7 @@ export default function Home() {
     setLoading(true);
     const { data, error } = await supabase
         .from('BASE DE DATOS ETIQUETAS IMPRESAS')
-        .select('Código')
+        .select('Código, SKU, Cantidad, Producto')
         .eq('Código', finalCode)
         .single();
     setLoading(false);
@@ -298,6 +304,7 @@ export default function Home() {
         return;
     }
 
+    const { SKU, Cantidad, Producto } = data;
 
     const isBarcode = decodedResult.result?.format?.formatName !== 'QR_CODE';
     let confirmed = true;
@@ -311,7 +318,7 @@ export default function Home() {
     }
 
     if (confirmed) {
-      addCodeAndUpdateCounters(finalCode);
+      addCodeAndUpdateCounters(finalCode, { sku: SKU, cantidad: Cantidad, producto: Producto });
     } else {
       showAppMessage('Escaneo cancelado.', 'info');
     }
@@ -443,7 +450,7 @@ export default function Home() {
     setLoading(true);
     const { data, error } = await supabase
         .from('BASE DE DATOS ETIQUETAS IMPRESAS')
-        .select('Código')
+        .select('Código, SKU, Cantidad, Producto')
         .eq('Código', finalCode)
         .single();
     setLoading(false);
@@ -458,8 +465,10 @@ export default function Home() {
         return;
     }
 
+    const { SKU, Cantidad, Producto } = data;
+
     if(finalCode.startsWith('4') && finalCode.length === 11) {
-        addCodeAndUpdateCounters(finalCode);
+        addCodeAndUpdateCounters(finalCode, { sku: SKU, cantidad: Cantidad, producto: Producto });
         return;
     }
     
@@ -473,7 +482,7 @@ export default function Home() {
     }
 
     if (confirmed) {
-        addCodeAndUpdateCounters(finalCode);
+        addCodeAndUpdateCounters(finalCode, { sku: SKU, cantidad: Cantidad, producto: Producto });
     } else {
         showAppMessage('Escaneo cancelado.', 'info');
     }
@@ -543,7 +552,7 @@ export default function Home() {
         setLoading(true);
         const { data, error } = await supabase
             .from('BASE DE DATOS ETIQUETAS IMPRESAS')
-            .select('Código')
+            .select('Código, SKU, Cantidad, Producto')
             .eq('Código', manualCode)
             .single();
         setLoading(false);
@@ -558,6 +567,7 @@ export default function Home() {
             return;
         }
 
+        const { SKU, Cantidad, Producto } = data;
 
       let confirmed = true;
       if(!manualCode.startsWith('4')) {
@@ -565,7 +575,7 @@ export default function Home() {
       }
 
       if(confirmed) {
-          if(addCodeAndUpdateCounters(manualCode)) {
+          if(addCodeAndUpdateCounters(manualCode, { sku: SKU, cantidad: Cantidad, producto: Producto })) {
               manualCodeInput.value = '';
               manualCodeInput.focus();
           } else {
@@ -619,8 +629,8 @@ export default function Home() {
 
           const fileName = `${encargadoName}-${etiquetas}-${areaName}-${fechaFormateada}-${timeString}.csv`;
           const BOM = "\uFEFF";
-          const headers = "CODIGO MEL,FECHA DE ESCANEO,HORA DE ESCANEO,ENCARGADO,AREA QUE REGISTRA\n";
-          let csvRows = scannedData.map(row => [`="${row.code}"`, `"${row.fecha}"`, `"${row.hora}"`, `"${row.encargado.replace(/"/g, '""')}"`, `"${row.area.replace(/"/g, '""')}"`].join(',')).join('\n');
+          const headers = "CODIGO,FECHA,HORA,ENCARGADO,AREA,SKU,CANTIDAD,PRODUCTO\n";
+          let csvRows = scannedData.map(row => [`="${row.code}"`, `"${row.fecha}"`, `"${row.hora}"`, `"${row.encargado.replace(/"/g, '""')}"`, `"${row.area.replace(/"/g, '""')}"`, `"${row.sku || ''}"`, `"${row.cantidad || 0}"`, `"${(row.producto || '').replace(/"/g, '""')}"`].join(',')).join('\n');
           
           const blob = new Blob([BOM + headers + csvRows], { type: 'text/csv;charset=utf-t' });
           const link = document.createElement("a");
@@ -714,85 +724,88 @@ export default function Home() {
         </Head>
 
         <main className="text-starbucks-dark flex items-center justify-center p-4">
-            <div className="w-full max-w-2xl mx-auto bg-starbucks-white rounded-xl shadow-2xl p-4 md:p-6 space-y-4">
+            <div className="w-full max-w-4xl mx-auto bg-starbucks-white rounded-xl shadow-2xl p-4 md:p-6 space-y-4">
                 <header className="text-center">
                     <Image src="https://media0.giphy.com/media/v1.Y2lkPTc5MGI3NjExbnQ4MGZzdXYzYWo1cXRiM3I1cjNoNjd4cjdia202ZXcwNjJ6YjdvbiZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/QQO6BH98nhigF8FLsb/giphy.gif" alt="Scanner Logo" width={80} height={80} className="mx-auto h-20 w-auto mb-2" />
                     <h1 className="text-xl md:text-2xl font-bold text-starbucks-green">Asignar Empaquetado</h1>
                     <p className="text-gray-600 text-sm md:text-base mt-1">Asigna un producto a un miembro del personal.</p>
                 </header>
 
-                <div className="space-y-4">
-                    <div>
-                        <label htmlFor="encargado" className="block text-sm font-bold text-starbucks-dark mb-1">Nombre del Encargado:</label>
-                        <Select onValueChange={setEncargado} value={encargado} disabled={scannerActive}>
-                            <SelectTrigger className="form-input">
-                                <SelectValue placeholder="Selecciona un encargado" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {encargadosList.map((enc) => (
-                                    <SelectItem key={enc.name} value={enc.name}>
-                                        {enc.name}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    </div>
-                    
-                    <div>
-                        <label className="block text-sm font-bold text-starbucks-dark mb-1">Método de Escaneo:</label>
-                        <div className="grid grid-cols-2 gap-2">
-                            <button onClick={() => setSelectedScannerMode('camara')} className={`area-btn w-full px-4 py-3 text-sm rounded-md shadow-sm focus:outline-none ${selectedScannerMode === 'camara' ? 'scanner-mode-selected' : ''}`} disabled={scannerActive}>CÁMARA</button>
-                            <button onClick={() => setSelectedScannerMode('fisico')} className={`area-btn w-full px-4 py-3 text-sm rounded-md shadow-sm focus:outline-none ${selectedScannerMode === 'fisico' ? 'scanner-mode-selected' : ''}`} disabled={scannerActive}>ESCÁNER FÍSICO</button>
+                <div className="grid md:grid-cols-2 gap-4">
+                    <div className="space-y-4">
+                        <div>
+                            <label htmlFor="encargado" className="block text-sm font-bold text-starbucks-dark mb-1">Nombre del Encargado:</label>
+                            <Select onValueChange={setEncargado} value={encargado} disabled={scannerActive}>
+                                <SelectTrigger className="form-input">
+                                    <SelectValue placeholder="Selecciona un encargado" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {encargadosList.map((enc) => (
+                                        <SelectItem key={enc.name} value={enc.name}>
+                                            {enc.name}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        
+                        <div>
+                            <label className="block text-sm font-bold text-starbucks-dark mb-1">Método de Escaneo:</label>
+                            <div className="grid grid-cols-2 gap-2">
+                                <button onClick={() => setSelectedScannerMode('camara')} className={`area-btn w-full px-4 py-3 text-sm rounded-md shadow-sm focus:outline-none ${selectedScannerMode === 'camara' ? 'scanner-mode-selected' : ''}`} disabled={scannerActive}>CÁMARA</button>
+                                <button onClick={() => setSelectedScannerMode('fisico')} className={`area-btn w-full px-4 py-3 text-sm rounded-md shadow-sm focus:outline-none ${selectedScannerMode === 'fisico' ? 'scanner-mode-selected' : ''}`} disabled={scannerActive}>ESCÁNER FÍSICO</button>
+                            </div>
                         </div>
                     </div>
-                </div>
 
-                <div className="bg-starbucks-cream p-4 rounded-lg">
-                    <div className="scanner-container relative">
-                        <div id="reader" ref={readerRef} style={{ display: selectedScannerMode === 'camara' && scannerActive ? 'block' : 'none' }}></div>
-                        {scannerActive && selectedScannerMode === 'camara' && <div id="laser-line"></div>}
-                        <input type="text" id="physical-scanner-input" ref={physicalScannerInputRef} className="hidden-input" autoComplete="off" />
-                        {selectedScannerMode === 'camara' && !scannerActive && (
-                            <div className="text-center p-8 border-2 border-dashed border-gray-300 rounded-lg">
-                                <p className="text-gray-500">La cámara está desactivada.</p>
-                            </div>
-                        )}
-                    </div>
-                    
-                    {isMobile && scannerActive && selectedScannerMode === 'camara' && cameraCapabilities && (
-                        <div id="camera-controls" className="flex items-center gap-4 mt-4 p-2 rounded-lg bg-gray-200">
-                            {cameraCapabilities.torch && (
-                                <Button variant="ghost" size="icon" onClick={() => setIsFlashOn(prev => !prev)} className={isFlashOn ? 'bg-yellow-400' : ''}>
-                                    <Zap className="h-5 w-5" />
-                                </Button>
-                            )}
-                            {cameraCapabilities.zoom && (
-                                <div className="flex-1 flex items-center gap-2">
-                                    <ZoomIn className="h-5 w-5" />
-                                    <input
-                                        id="zoom-slider"
-                                        type="range"
-                                        min={cameraCapabilities.zoom.min}
-                                        max={cameraCapabilities.zoom.max}
-                                        step={cameraCapabilities.zoom.step}
-                                        value={zoom}
-                                        onChange={(e) => setZoom(parseFloat(e.target.value))}
-                                        className="w-full"
-                                    />
+                    <div className="bg-starbucks-cream p-4 rounded-lg">
+                        <div className="scanner-container relative">
+                            <div id="reader" ref={readerRef} style={{ display: selectedScannerMode === 'camara' && scannerActive ? 'block' : 'none' }}></div>
+                            {scannerActive && selectedScannerMode === 'camara' && <div id="laser-line"></div>}
+                            <input type="text" id="physical-scanner-input" ref={physicalScannerInputRef} className="hidden-input" autoComplete="off" />
+                            {selectedScannerMode === 'camara' && !scannerActive && (
+                                <div className="text-center p-8 border-2 border-dashed border-gray-300 rounded-lg">
+                                    <p className="text-gray-500">La cámara está desactivada.</p>
                                 </div>
                             )}
                         </div>
-                    )}
-                    
-                    <div id="scanner-controls" className="mt-4 flex flex-wrap gap-2 justify-center">
-                        <button onClick={startScanner} disabled={scannerActive || !encargado} className={`px-4 py-2 text-white font-semibold rounded-lg shadow-md transition-colors duration-200 text-sm ${scannerActive || !encargado ? 'bg-gray-400' : 'bg-blue-600 hover:bg-blue-700'}`}>Iniciar</button>
-                        <button onClick={stopScanner} disabled={!scannerActive} className={`px-4 py-2 text-white font-semibold rounded-lg shadow-md transition-colors duration-200 text-sm ${!scannerActive ? 'bg-gray-400' : 'bg-red-600 hover:bg-red-700'}`}>Detener</button>
-                    </div>
+                        
+                        {isMobile && scannerActive && selectedScannerMode === 'camara' && cameraCapabilities && (
+                            <div id="camera-controls" className="flex items-center gap-4 mt-4 p-2 rounded-lg bg-gray-200">
+                                {cameraCapabilities.torch && (
+                                    <Button variant="ghost" size="icon" onClick={() => setIsFlashOn(prev => !prev)} className={isFlashOn ? 'bg-yellow-400' : ''}>
+                                        <Zap className="h-5 w-5" />
+                                    </Button>
+                                )}
+                                {cameraCapabilities.zoom && (
+                                    <div className="flex-1 flex items-center gap-2">
+                                        <ZoomIn className="h-5 w-5" />
+                                        <input
+                                            id="zoom-slider"
+                                            type="range"
+                                            min={cameraCapabilities.zoom.min}
+                                            max={cameraCapabilities.zoom.max}
+                                            step={cameraCapabilities.zoom.step}
+                                            value={zoom}
+                                            onChange={(e) => setZoom(parseFloat(e.target.value))}
+                                            className="w-full"
+                                        />
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                        
+                        <div id="scanner-controls" className="mt-4 flex flex-wrap gap-2 justify-center">
+                            <button onClick={startScanner} disabled={scannerActive || !encargado} className={`px-4 py-2 text-white font-semibold rounded-lg shadow-md transition-colors duration-200 text-sm ${scannerActive || !encargado ? 'bg-gray-400' : 'bg-blue-600 hover:bg-blue-700'}`}>Iniciar</button>
+                            <button onClick={stopScanner} disabled={!scannerActive} className={`px-4 py-2 text-white font-semibold rounded-lg shadow-md transition-colors duration-200 text-sm ${!scannerActive ? 'bg-gray-400' : 'bg-red-600 hover:bg-red-700'}`}>Detener</button>
+                        </div>
 
-                     <div id="physical-scanner-status" className="mt-4 text-center p-2 rounded-md bg-starbucks-accent text-white" style={{ display: scannerActive && selectedScannerMode === 'fisico' ? 'block' : 'none' }}>
-                        Escáner físico listo.
+                        <div id="physical-scanner-status" className="mt-4 text-center p-2 rounded-md bg-starbucks-accent text-white" style={{ display: scannerActive && selectedScannerMode === 'fisico' ? 'block' : 'none' }}>
+                            Escáner físico listo.
+                        </div>
                     </div>
                 </div>
+
 
                 <div id="result-container" className="space-y-4">
                     <div id="message" className={`p-3 rounded-lg text-center font-semibold text-base transition-all duration-300 ${messageClasses[message.type]}`}>
@@ -867,6 +880,9 @@ export default function Home() {
                                 <thead className="bg-starbucks-cream sticky top-0">
                                     <tr>
                                         <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">CODIGO</th>
+                                        <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">PRODUCTO</th>
+                                        <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">SKU</th>
+                                        <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">CANT</th>
                                         <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">HORA</th>
                                         <th scope="col" className="px-4 py-2 text-center text-xs font-medium text-starbucks-dark uppercase tracking-wider">ACCION</th>
                                     </tr>
@@ -875,6 +891,9 @@ export default function Home() {
                                     {scannedData.map((data: ScannedItem) => (
                                         <tr key={data.code}>
                                             <td className="px-4 py-3 whitespace-nowrap font-mono text-sm">{data.code}</td>
+                                            <td className="px-4 py-3 whitespace-nowrap text-sm">{data.producto}</td>
+                                            <td className="px-4 py-3 whitespace-nowrap text-sm">{data.sku}</td>
+                                            <td className="px-4 py-3 whitespace-nowrap text-sm">{data.cantidad}</td>
                                             <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{data.hora}</td>
                                             <td className="px-4 py-3 whitespace-nowrap text-sm text-center">
                                                 <button className="delete-btn text-red-500 hover:text-red-700 font-semibold text-xs" onClick={() => deleteRow(data.code)}>Borrar</button>
