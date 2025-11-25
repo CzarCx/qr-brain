@@ -27,6 +27,7 @@ type ScannedItem = {
   sku: string | null;
   cantidad: number | null;
   producto: string | null;
+  empresa: string | null;
 };
 
 type PersonalScanItem = {
@@ -139,7 +140,7 @@ export default function Home() {
     setIngresarDatosEnabled(false);
   };
 
-  const addCodeAndUpdateCounters = useCallback((codeToAdd: string, details: { sku: string | null; cantidad: number | null; producto: string | null; }) => {
+  const addCodeAndUpdateCounters = useCallback((codeToAdd: string, details: { sku: string | null; cantidad: number | null; producto: string | null; empresa: string | null; }) => {
     const finalCode = codeToAdd.trim();
 
     if (scannedCodesRef.current.has(finalCode)) {
@@ -188,6 +189,7 @@ export default function Home() {
       sku: details.sku,
       cantidad: details.cantidad,
       producto: details.producto,
+      empresa: details.empresa,
     };
     
     setScannedData(prevData => [newData, ...prevData].sort((a, b) => new Date(`1970/01/01T${b.hora}`).valueOf() - new Date(`1970/01/01T${a.hora}`).valueOf()));
@@ -289,7 +291,7 @@ export default function Home() {
     setLoading(true);
     const { data, error } = await supabase
         .from('BASE DE DATOS ETIQUETAS IMPRESAS')
-        .select('Código, SKU, Cantidad, Producto')
+        .select('Código, SKU, Cantidad, Producto, EMPRESA')
         .eq('Código', finalCode)
         .single();
     setLoading(false);
@@ -304,7 +306,7 @@ export default function Home() {
         return;
     }
 
-    const { SKU, Cantidad, Producto } = data;
+    const { SKU, Cantidad, Producto, EMPRESA } = data;
 
     const isBarcode = decodedResult.result?.format?.formatName !== 'QR_CODE';
     let confirmed = true;
@@ -318,7 +320,7 @@ export default function Home() {
     }
 
     if (confirmed) {
-      addCodeAndUpdateCounters(finalCode, { sku: SKU, cantidad: Cantidad, producto: Producto });
+      addCodeAndUpdateCounters(finalCode, { sku: SKU, cantidad: Cantidad, producto: Producto, empresa: EMPRESA });
     } else {
       showAppMessage('Escaneo cancelado.', 'info');
     }
@@ -450,7 +452,7 @@ export default function Home() {
     setLoading(true);
     const { data, error } = await supabase
         .from('BASE DE DATOS ETIQUETAS IMPRESAS')
-        .select('Código, SKU, Cantidad, Producto')
+        .select('Código, SKU, Cantidad, Producto, EMPRESA')
         .eq('Código', finalCode)
         .single();
     setLoading(false);
@@ -465,10 +467,10 @@ export default function Home() {
         return;
     }
 
-    const { SKU, Cantidad, Producto } = data;
+    const { SKU, Cantidad, Producto, EMPRESA } = data;
 
     if(finalCode.startsWith('4') && finalCode.length === 11) {
-        addCodeAndUpdateCounters(finalCode, { sku: SKU, cantidad: Cantidad, producto: Producto });
+        addCodeAndUpdateCounters(finalCode, { sku: SKU, cantidad: Cantidad, producto: Producto, empresa: EMPRESA });
         return;
     }
     
@@ -482,7 +484,7 @@ export default function Home() {
     }
 
     if (confirmed) {
-        addCodeAndUpdateCounters(finalCode, { sku: SKU, cantidad: Cantidad, producto: Producto });
+        addCodeAndUpdateCounters(finalCode, { sku: SKU, cantidad: Cantidad, producto: Producto, empresa: EMPRESA });
     } else {
         showAppMessage('Escaneo cancelado.', 'info');
     }
@@ -552,7 +554,7 @@ export default function Home() {
         setLoading(true);
         const { data, error } = await supabase
             .from('BASE DE DATOS ETIQUETAS IMPRESAS')
-            .select('Código, SKU, Cantidad, Producto')
+            .select('Código, SKU, Cantidad, Producto, EMPRESA')
             .eq('Código', manualCode)
             .single();
         setLoading(false);
@@ -567,7 +569,7 @@ export default function Home() {
             return;
         }
 
-        const { SKU, Cantidad, Producto } = data;
+        const { SKU, Cantidad, Producto, EMPRESA } = data;
 
       let confirmed = true;
       if(!manualCode.startsWith('4')) {
@@ -575,7 +577,7 @@ export default function Home() {
       }
 
       if(confirmed) {
-          if(addCodeAndUpdateCounters(manualCode, { sku: SKU, cantidad: Cantidad, producto: Producto })) {
+          if(addCodeAndUpdateCounters(manualCode, { sku: SKU, cantidad: Cantidad, producto: Producto, empresa: EMPRESA })) {
               manualCodeInput.value = '';
               manualCodeInput.focus();
           } else {
@@ -629,8 +631,8 @@ export default function Home() {
 
           const fileName = `${encargadoName}-${etiquetas}-${areaName}-${fechaFormateada}-${timeString}.csv`;
           const BOM = "\uFEFF";
-          const headers = "CODIGO,FECHA,HORA,ENCARGADO,AREA,SKU,CANTIDAD,PRODUCTO\n";
-          let csvRows = scannedData.map(row => [`="${row.code}"`, `"${row.fecha}"`, `"${row.hora}"`, `"${row.encargado.replace(/"/g, '""')}"`, `"${row.area.replace(/"/g, '""')}"`, `"${row.sku || ''}"`, `"${row.cantidad || 0}"`, `"${(row.producto || '').replace(/"/g, '""')}"`].join(',')).join('\n');
+          const headers = "CODIGO,FECHA,HORA,ENCARGADO,AREA,SKU,CANTIDAD,PRODUCTO,EMPRESA\n";
+          let csvRows = scannedData.map(row => [`="${row.code}"`, `"${row.fecha}"`, `"${row.hora}"`, `"${row.encargado.replace(/"/g, '""')}"`, `"${row.area.replace(/"/g, '""')}"`, `"${row.sku || ''}"`, `"${row.cantidad || 0}"`, `"${(row.producto || '').replace(/"/g, '""')}"`, `"${(row.empresa || '').replace(/"/g, '""')}"`].join(',')).join('\n');
           
           const blob = new Blob([BOM + headers + csvRows], { type: 'text/csv;charset=utf-t' });
           const link = document.createElement("a");
@@ -883,6 +885,7 @@ export default function Home() {
                                         <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">PRODUCTO</th>
                                         <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">SKU</th>
                                         <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">CANT</th>
+                                        <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">EMPRESA</th>
                                         <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">HORA</th>
                                         <th scope="col" className="px-4 py-2 text-center text-xs font-medium text-starbucks-dark uppercase tracking-wider">ACCION</th>
                                     </tr>
@@ -894,6 +897,7 @@ export default function Home() {
                                             <td className="px-4 py-3 whitespace-nowrap text-sm">{data.producto}</td>
                                             <td className="px-4 py-3 whitespace-nowrap text-sm">{data.sku}</td>
                                             <td className="px-4 py-3 whitespace-nowrap text-sm">{data.cantidad}</td>
+                                            <td className="px-4 py-3 whitespace-nowrap text-sm">{data.empresa}</td>
                                             <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{data.hora}</td>
                                             <td className="px-4 py-3 whitespace-nowrap text-sm text-center">
                                                 <button className="delete-btn text-red-500 hover:text-red-700 font-semibold text-xs" onClick={() => deleteRow(data.code)}>Borrar</button>
@@ -927,5 +931,7 @@ export default function Home() {
     </>
   );
 }
+
+    
 
     
