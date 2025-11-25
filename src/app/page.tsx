@@ -100,6 +100,7 @@ export default function Home() {
   const MIN_SCAN_INTERVAL = 500;
 
   useEffect(() => {
+    setIsMounted(true);
     const checkDbConnection = async () => {
       const { error } = await supabase.from('BASE DE DATOS ETIQUETAS IMPRESAS').select('Código').limit(1);
       if (error) {
@@ -214,68 +215,68 @@ export default function Home() {
     setLoading(true);
     showAppMessage('Asociando códigos y consultando base de datos...', 'info');
   
-    const newPersonalScansPromises = pendingScans.map(async (item) => {
-      let sku: string | null = '';
-      let producto: string | null = '';
-      let cantidad: number | null = 0;
-      let empresa: string | null = '';
-      let venta: string | null = '';
-  
-      if (!item.sku || !item.producto || !item.cantidad || !item.empresa || !item.venta) {
-          try {
-            const { data, error } = await supabase
-              .from('BASE DE DATOS ETIQUETAS IMPRESAS')
-              .select('SKU, Producto, Cantidad, EMPRESA, Venta')
-              .eq('Código', item.code)
-              .single();
-    
-            if (error && error.code !== 'PGRST116') {
-              throw error;
-            }
-    
-            if (data) {
-              sku = data.SKU || '';
-              producto = data.Producto || '';
-              cantidad = data.Cantidad || 0;
-              empresa = data.EMPRESA || '';
-              venta = data.Venta || '';
-            } else {
-              showAppMessage(`Código ${item.code} no encontrado. Se añade sin detalles.`, 'info');
-            }
-          } catch (e: any) {
-            console.error(`Error al buscar el código ${item.code}:`, e.message);
-            showAppMessage(`Error al buscar ${item.code}: ${e.message}`, 'duplicate');
-          }
-      } else {
-        sku = item.sku;
-        producto = item.producto;
-        cantidad = item.cantidad;
-        empresa = item.empresa;
-        venta = item.venta;
-      }
-  
-      return {
-        code: item.code,
-        sku: sku,
-        personal: name, 
-        encargado: item.encargado,
-        product: producto,
-        quantity: cantidad,
-        organization: empresa,
-        venta: venta,
-        date: new Date().toISOString(),
-      };
-    });
-  
     try {
-      const newPersonalScans = await Promise.all(newPersonalScansPromises);
+        const newPersonalScansPromises = pendingScans.map(async (item) => {
+        let sku: string | null = '';
+        let producto: string | null = '';
+        let cantidad: number | null = 0;
+        let empresa: string | null = '';
+        let venta: string | null = '';
+    
+        if (!item.sku || !item.producto || !item.cantidad || !item.empresa || !item.venta) {
+            try {
+                const { data, error } = await supabase
+                .from('BASE DE DATOS ETIQUETAS IMPRESAS')
+                .select('SKU, Producto, Cantidad, EMPRESA, Venta')
+                .eq('Código', item.code)
+                .single();
+        
+                if (error && error.code !== 'PGRST116') {
+                throw error;
+                }
+        
+                if (data) {
+                sku = data.SKU || '';
+                producto = data.Producto || '';
+                cantidad = data.Cantidad || 0;
+                empresa = data.EMPRESA || '';
+                venta = data.Venta || '';
+                } else {
+                showAppMessage(`Código ${item.code} no encontrado. Se añade sin detalles.`, 'info');
+                }
+            } catch (e: any) {
+                console.error(`Error al buscar el código ${item.code}:`, e.message);
+                showAppMessage(`Error al buscar ${item.code}: ${e.message}`, 'duplicate');
+            }
+        } else {
+            sku = item.sku;
+            producto = item.producto;
+            cantidad = item.cantidad;
+            empresa = item.empresa;
+            venta = item.venta;
+        }
+    
+        return {
+            code: item.code,
+            sku: sku,
+            personal: name, 
+            encargado: item.encargado,
+            product: producto,
+            quantity: cantidad,
+            organization: empresa,
+            venta: venta,
+            date: new Date().toISOString(),
+        };
+        });
   
-      setPersonalScans(prev => [...prev, ...newPersonalScans].sort((a, b) => a.code.localeCompare(b.code)));
-      setScannedData([]);
-      scannedCodesRef.current.clear();
-      setMelCodesCount(0);
-      setOtherCodesCount(0);
-      showAppMessage(`Se asociaron ${newPersonalScans.length} códigos a ${name}.`, 'success');
+        const newPersonalScans = await Promise.all(newPersonalScansPromises);
+    
+        setPersonalScans(prev => [...prev, ...newPersonalScans].sort((a, b) => a.code.localeCompare(b.code)));
+        setScannedData([]);
+        scannedCodesRef.current.clear();
+        setMelCodesCount(0);
+        setOtherCodesCount(0);
+        showAppMessage(`Se asociaron ${newPersonalScans.length} códigos a ${name}.`, 'success');
     } catch (e: any) {
       showAppMessage(`Error al procesar los códigos: ${e.message}`, 'duplicate');
     } finally {
@@ -312,40 +313,43 @@ export default function Home() {
     if (finalCode === lastSuccessfullyScannedCodeRef.current) return;
     
     setLoading(true);
-    const { data, error } = await supabase
-        .from('BASE DE DATOS ETIQUETAS IMPRESAS')
-        .select('Código, SKU, Cantidad, Producto, EMPRESA, Venta')
-        .eq('Código', finalCode)
-        .single();
-    setLoading(false);
+    try {
+        const { data, error } = await supabase
+            .from('BASE DE DATOS ETIQUETAS IMPRESAS')
+            .select('Código, SKU, Cantidad, Producto, EMPRESA, Venta')
+            .eq('Código', finalCode)
+            .single();
 
-    if (error && error.code !== 'PGRST116') {
-        showAppMessage(`Error de base de datos: ${error.message}`, 'duplicate');
-        return;
-    }
+        if (error && error.code !== 'PGRST116') {
+            showAppMessage(`Error de base de datos: ${error.message}`, 'duplicate');
+            return;
+        }
 
-    if (!data) {
-        showAppMessage(`Error: Código ${finalCode} no encontrado en la base de datos.`, 'duplicate');
-        return;
-    }
+        if (!data) {
+            showAppMessage(`Error: Código ${finalCode} no encontrado en la base de datos.`, 'duplicate');
+            return;
+        }
 
-    const { SKU, Cantidad, Producto, EMPRESA, Venta } = data;
+        const { SKU, Cantidad, Producto, EMPRESA, Venta } = data;
 
-    const isBarcode = decodedResult.result?.format?.formatName !== 'QR_CODE';
-    let confirmed = true;
+        const isBarcode = decodedResult.result?.format?.formatName !== 'QR_CODE';
+        let confirmed = true;
 
-    if (isBarcode && finalCode.startsWith('4') && finalCode.length === 11) {
-        confirmed = true;
-    } else {
-        const title = isBarcode ? 'Advertencia' : 'Confirmar Código';
-        const message = isBarcode ? 'Este no es un código MEL, ¿desea agregar?' : 'Se ha detectado el siguiente código. ¿Desea agregarlo al registro?';
-        confirmed = await showConfirmationDialog(title, message, finalCode);
-    }
+        if (isBarcode && finalCode.startsWith('4') && finalCode.length === 11) {
+            confirmed = true;
+        } else {
+            const title = isBarcode ? 'Advertencia' : 'Confirmar Código';
+            const message = isBarcode ? 'Este no es un código MEL, ¿desea agregar?' : 'Se ha detectado el siguiente código. ¿Desea agregarlo al registro?';
+            confirmed = await showConfirmationDialog(title, message, finalCode);
+        }
 
-    if (confirmed) {
-      addCodeAndUpdateCounters(finalCode, { sku: SKU, cantidad: Cantidad, producto: Producto, empresa: EMPRESA, venta: Venta });
-    } else {
-      showAppMessage('Escaneo cancelado.', 'info');
+        if (confirmed) {
+        addCodeAndUpdateCounters(finalCode, { sku: SKU, cantidad: Cantidad, producto: Producto, empresa: EMPRESA, venta: Venta });
+        } else {
+        showAppMessage('Escaneo cancelado.', 'info');
+        }
+    } finally {
+        setLoading(false);
     }
   }, [scannerActive, addCodeAndUpdateCounters, associateNameToScans, scannedData]);
 
@@ -372,10 +376,6 @@ export default function Home() {
     }
   }, [zoom, isFlashOn, scannerActive, selectedScannerMode, isMobile, applyCameraConstraints]);
   
-  useEffect(() => {
-    setIsMounted(true);
-  }, []);
-
   useEffect(() => {
     if (!isMounted || !readerRef.current) return;
   
@@ -467,43 +467,46 @@ export default function Home() {
     if (finalCode === lastSuccessfullyScannedCodeRef.current) return;
 
     setLoading(true);
-    const { data, error } = await supabase
-        .from('BASE DE DATOS ETIQUETAS IMPRESAS')
-        .select('Código, SKU, Cantidad, Producto, EMPRESA, Venta')
-        .eq('Código', finalCode)
-        .single();
-    setLoading(false);
+    try {
+        const { data, error } = await supabase
+            .from('BASE DE DATOS ETIQUETAS IMPRESAS')
+            .select('Código, SKU, Cantidad, Producto, EMPRESA, Venta')
+            .eq('Código', finalCode)
+            .single();
+        
+        if (error && error.code !== 'PGRST116') {
+            showAppMessage(`Error de base de datos: ${error.message}`, 'duplicate');
+            return;
+        }
 
-    if (error && error.code !== 'PGRST116') {
-        showAppMessage(`Error de base de datos: ${error.message}`, 'duplicate');
-        return;
-    }
+        if (!data) {
+            showAppMessage(`Error: Código ${finalCode} no encontrado en la base de datos.`, 'duplicate');
+            return;
+        }
 
-    if (!data) {
-        showAppMessage(`Error: Código ${finalCode} no encontrado en la base de datos.`, 'duplicate');
-        return;
-    }
+        const { SKU, Cantidad, Producto, EMPRESA, Venta } = data;
 
-    const { SKU, Cantidad, Producto, EMPRESA, Venta } = data;
+        if(finalCode.startsWith('4') && finalCode.length === 11) {
+            addCodeAndUpdateCounters(finalCode, { sku: SKU, cantidad: Cantidad, producto: Producto, empresa: EMPRESA, venta: Venta });
+            return;
+        }
+        
+        const isQrCodeLike = finalCode.length < 10 || finalCode.length > 14;
+        let confirmed = true;
 
-    if(finalCode.startsWith('4') && finalCode.length === 11) {
-        addCodeAndUpdateCounters(finalCode, { sku: SKU, cantidad: Cantidad, producto: Producto, empresa: EMPRESA, venta: Venta });
-        return;
-    }
-    
-    const isQrCodeLike = finalCode.length < 10 || finalCode.length > 14;
-    let confirmed = true;
+        if (isQrCodeLike || !finalCode.startsWith('4')) {
+            const title = isQrCodeLike ? 'Confirmar Código' : 'Advertencia';
+            const message = isQrCodeLike ? 'Se ha detectado el siguiente código. ¿Desea agregarlo al registro?': 'Este no es un código MEL, ¿desea agregar?';
+            confirmed = await showConfirmationDialog(title, message, finalCode);
+        }
 
-    if (isQrCodeLike || !finalCode.startsWith('4')) {
-        const title = isQrCodeLike ? 'Confirmar Código' : 'Advertencia';
-        const message = isQrCodeLike ? 'Se ha detectado el siguiente código. ¿Desea agregarlo al registro?': 'Este no es un código MEL, ¿desea agregar?';
-        confirmed = await showConfirmationDialog(title, message, finalCode);
-    }
-
-    if (confirmed) {
-        addCodeAndUpdateCounters(finalCode, { sku: SKU, cantidad: Cantidad, producto: Producto, empresa: EMPRESA, venta: Venta });
-    } else {
-        showAppMessage('Escaneo cancelado.', 'info');
+        if (confirmed) {
+            addCodeAndUpdateCounters(finalCode, { sku: SKU, cantidad: Cantidad, producto: Producto, empresa: EMPRESA, venta: Venta });
+        } else {
+            showAppMessage('Escaneo cancelado.', 'info');
+        }
+    } finally {
+        setLoading(false);
     }
   };
 
@@ -566,14 +569,14 @@ export default function Home() {
 
       const manualCode = manualCodeInput.value.trim();
       if (!manualCode) return showAppMessage('Por favor, ingresa un código para agregar.', 'duplicate');
-
-        setLoading(true);
+      
+      setLoading(true);
+      try {
         const { data, error } = await supabase
             .from('BASE DE DATOS ETIQUETAS IMPRESAS')
             .select('Código, SKU, Cantidad, Producto, EMPRESA, Venta')
             .eq('Código', manualCode)
             .single();
-        setLoading(false);
 
         if (error && error.code !== 'PGRST116') { 
             showAppMessage(`Error de base de datos: ${error.message}`, 'duplicate');
@@ -587,20 +590,23 @@ export default function Home() {
 
         const { SKU, Cantidad, Producto, EMPRESA, Venta } = data;
 
-      let confirmed = true;
-      if(!manualCode.startsWith('4')) {
-          confirmed = await showConfirmationDialog('Advertencia', 'Este no es un código MEL, ¿desea agregar?', manualCode);
-      }
+        let confirmed = true;
+        if(!manualCode.startsWith('4')) {
+            confirmed = await showConfirmationDialog('Advertencia', 'Este no es un código MEL, ¿desea agregar?', manualCode);
+        }
 
-      if(confirmed) {
-          if(addCodeAndUpdateCounters(manualCode, { sku: SKU, cantidad: Cantidad, producto: Producto, empresa: EMPRESA, venta: Venta })) {
-              manualCodeInput.value = '';
-              manualCodeInput.focus();
-          } else {
-              manualCodeInput.select();
-          }
-      } else {
-          showAppMessage('Ingreso cancelado.', 'info');
+        if(confirmed) {
+            if(addCodeAndUpdateCounters(manualCode, { sku: SKU, cantidad: Cantidad, producto: Producto, empresa: EMPRESA, venta: Venta })) {
+                manualCodeInput.value = '';
+                manualCodeInput.focus();
+            } else {
+                manualCodeInput.select();
+            }
+        } else {
+            showAppMessage('Ingreso cancelado.', 'info');
+        }
+      } finally {
+          setLoading(false);
       }
   };
   

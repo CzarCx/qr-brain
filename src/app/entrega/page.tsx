@@ -59,6 +59,7 @@ export default function Home() {
   const MIN_SCAN_INTERVAL = 1500; // 1.5 seconds
 
    useEffect(() => {
+    setIsMounted(true);
     const fetchEncargados = async () => {
         const { data, error } = await supabaseDB2
             .from('personal_name')
@@ -162,7 +163,6 @@ export default function Home() {
   };
 
   useEffect(() => {
-    setIsMounted(true);
     const input = physicalScannerInputRef.current;
     
     if (selectedScannerMode === 'fisico' && scannerActive && input) {
@@ -480,3 +480,5 @@ export default function Home() {
     </>
   );
 }
+
+    
