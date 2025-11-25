@@ -91,6 +91,19 @@ export default function Home() {
   const MIN_SCAN_INTERVAL = 500;
 
   useEffect(() => {
+    const checkDbConnection = async () => {
+      const { error } = await supabase.from('BASE DE DATOS ETIQUETAS IMPRESAS').select('Código').limit(1);
+      if (error) {
+        showAppMessage('Error de conexión a la base de datos.', 'duplicate');
+        console.error("Database connection error:", error);
+      } else {
+        showAppMessage('Conexión a la base de datos exitosa.', 'success');
+      }
+    };
+    checkDbConnection();
+  }, []);
+
+  useEffect(() => {
     const fetchEncargados = async () => {
         const { data, error } = await supabaseDB2
             .from('personal_name')
@@ -126,12 +139,7 @@ export default function Home() {
 
   const addCodeAndUpdateCounters = useCallback((codeToAdd: string) => {
     const finalCode = codeToAdd.trim();
-    if (finalCode.startsWith('4') && finalCode.length !== 11) {
-      alert(
-        'Error de Escaneo: El código que inicia con 4 debe tener exactamente 11 dígitos. Intente nuevamente.'
-      );
-      return false;
-    }
+
     if (scannedCodesRef.current.has(finalCode)) {
       showAppMessage(`DUPLICADO: ${finalCode}`, 'duplicate');
       return false;
@@ -270,12 +278,27 @@ export default function Home() {
       return;
     }
 
-    const isOnlyDigits = /^\d+$/.test(finalCode);
-    if (finalCode.length > 30 && isOnlyDigits) {
-      finalCode = finalCode.slice(-12);
+    if (finalCode === lastSuccessfullyScannedCodeRef.current) return;
+    
+    // Validate code exists in the database
+    setLoading(true);
+    const { data, error } = await supabase
+        .from('BASE DE DATOS ETIQUETAS IMPRESAS')
+        .select('Código')
+        .eq('Código', finalCode)
+        .single();
+    setLoading(false);
+
+    if (error && error.code !== 'PGRST116') { // PGRST116 = no rows found
+        showAppMessage(`Error de base de datos: ${error.message}`, 'duplicate');
+        return;
     }
 
-    if (finalCode === lastSuccessfullyScannedCodeRef.current) return;
+    if (!data) {
+        showAppMessage(`Error: Código ${finalCode} no encontrado en la base de datos.`, 'duplicate');
+        return;
+    }
+
 
     const isBarcode = decodedResult.result?.format?.formatName !== 'QR_CODE';
     let confirmed = true;
@@ -418,6 +441,25 @@ export default function Home() {
     
     if (finalCode === lastSuccessfullyScannedCodeRef.current) return;
 
+    // Validate code exists in the database
+    setLoading(true);
+    const { data, error } = await supabase
+        .from('BASE DE DATOS ETIQUETAS IMPRESAS')
+        .select('Código')
+        .eq('Código', finalCode)
+        .single();
+    setLoading(false);
+
+    if (error && error.code !== 'PGRST116') { // PGRST116 = no rows found
+        showAppMessage(`Error de base de datos: ${error.message}`, 'duplicate');
+        return;
+    }
+
+    if (!data) {
+        showAppMessage(`Error: Código ${finalCode} no encontrado en la base de datos.`, 'duplicate');
+        return;
+    }
+
     if(finalCode.startsWith('4') && finalCode.length === 11) {
         addCodeAndUpdateCounters(finalCode);
         return;
@@ -552,6 +594,26 @@ export default function Home() {
 
       const manualCode = manualCodeInput.value.trim();
       if (!manualCode) return showAppMessage('Por favor, ingresa un código para agregar.', 'duplicate');
+
+      // Validate code exists in the database
+        setLoading(true);
+        const { data, error } = await supabase
+            .from('BASE DE DATOS ETIQUETAS IMPRESAS')
+            .select('Código')
+            .eq('Código', manualCode)
+            .single();
+        setLoading(false);
+
+        if (error && error.code !== 'PGRST116') { // PGRST116 = no rows found
+            showAppMessage(`Error de base de datos: ${error.message}`, 'duplicate');
+            return;
+        }
+
+        if (!data) {
+            showAppMessage(`Error: Código ${manualCode} no encontrado en la base de datos.`, 'duplicate');
+            return;
+        }
+
 
       let confirmed = true;
       if(!manualCode.startsWith('4')) {
