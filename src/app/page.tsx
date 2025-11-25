@@ -711,7 +711,7 @@ export default function Home() {
         quantity: item.quantity,
         status: 'ASIGNADO',
         organization: item.organization,
-        venta: item.venta,
+        sales_num: item.venta,
         date: item.date,
       }));
 
