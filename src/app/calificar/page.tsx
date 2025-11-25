@@ -353,7 +353,7 @@ const handleMassQualify = async () => {
         setMassScannedCodes([]); // Clear the list
         massScannedCodesRef.current.clear();
 
-    } catch (e: any) => {
+    } catch (e: any) {
         console.error('Error en la calificación masiva:', e);
         const errorMessage = e.message || JSON.stringify(e);
         alert(`Error al calificar masivamente: ${errorMessage}`);
@@ -627,3 +627,5 @@ const handleMassQualify = async () => {
     </>
   );
 }
+
+    
