@@ -208,7 +208,7 @@ export default function Home() {
       esti_time: null,
     };
     
-    setScannedData(prevData => [newData, ...prevData].sort((a, b) => new Date(`1970/01/01T${b.hora}`).valueOf() - new Date(`1970/01/01T${a.hora}`).valueOf()));
+    setScannedData(prevData => [...prevData, newData].sort((a, b) => new Date(`1970/01/01T${a.hora}`).valueOf() - new Date(`1970/01/01T${b.hora}`).valueOf()));
 
     invalidateCSV();
     return true;
@@ -800,6 +800,62 @@ export default function Home() {
       info: 'scan-info'
   };
 
+  const renderPendingRecords = () => {
+    let lastFinishTime: Date | null = null;
+    
+    return scannedData.map((data: ScannedItem, index: number) => {
+        let startTime: Date;
+        if (index === 0) {
+            const [day, month, year] = data.fecha.split('/');
+            const [hours, minutes, seconds] = data.hora.split(':');
+            startTime = new Date(`${year}-${month}-${day}T${hours}:${minutes}:${seconds}`);
+        } else {
+            startTime = lastFinishTime!;
+        }
+
+        let horaFin: Date | null = null;
+        if (!isNaN(startTime.getTime()) && data.esti_time) {
+            horaFin = new Date(startTime.getTime() + data.esti_time * 60000);
+        }
+
+        lastFinishTime = horaFin || startTime;
+
+        const horaInicioStr = !isNaN(startTime.getTime())
+            ? startTime.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })
+            : 'N/A';
+            
+        const horaFinStr = horaFin
+            ? horaFin.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })
+            : 'N/A';
+
+        return (
+        <tr key={data.code}>
+            <td className="px-4 py-3 whitespace-nowrap font-mono text-sm">{data.code}</td>
+            <td className="px-4 py-3 whitespace-nowrap text-sm">{data.producto}</td>
+            <td className="px-4 py-3 whitespace-nowrap text-sm">{data.sku}</td>
+            <td className="px-4 py-3 whitespace-nowrap text-sm">{data.cantidad}</td>
+            <td className="px-4 py-3 whitespace-nowrap text-sm">{data.empresa}</td>
+            <td className="px-4 py-3 whitespace-nowrap text-sm">{data.venta}</td>
+            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{data.hora}</td>
+            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{horaInicioStr}</td>
+            <td className="px-4 py-3 whitespace-nowrap text-sm">
+                <Input
+                    type="number"
+                    value={data.esti_time ?? ''}
+                    onChange={(e) => handleTimeChange(data.code, e.target.value)}
+                    className="form-input w-24"
+                    placeholder="min"
+                />
+            </td>
+            <td className="px-4 py-3 whitespace-nowrap text-sm">{horaFinStr}</td>
+            <td className="px-4 py-3 whitespace-nowrap text-sm text-center">
+                <button className="delete-btn text-red-500 hover:text-red-700 font-semibold text-xs" onClick={() => deleteRow(data.code)}>Borrar</button>
+            </td>
+        </tr>
+      );
+    })
+  };
+
   return (
     <>
         <Head>
@@ -1003,45 +1059,7 @@ export default function Home() {
                                     </tr>
                                 </thead>
                                 <tbody id="scanned-list" className="bg-starbucks-white divide-y divide-gray-200">
-                                    {scannedData.map((data: ScannedItem) => {
-                                        let horaFin = 'N/A';
-                                        if (data.esti_time && data.fecha && data.hora) {
-                                            const [day, month, year] = data.fecha.split('/');
-                                            const [hours, minutes, seconds] = data.hora.split(':');
-                                            const startDate = new Date(`${year}-${month}-${day}T${hours}:${minutes}:${seconds}`);
-                                            
-                                            if (!isNaN(startDate.getTime())) {
-                                                const endDate = new Date(startDate.getTime() + data.esti_time * 60000);
-                                                horaFin = endDate.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
-                                            }
-                                        }
-
-                                        return (
-                                        <tr key={data.code}>
-                                            <td className="px-4 py-3 whitespace-nowrap font-mono text-sm">{data.code}</td>
-                                            <td className="px-4 py-3 whitespace-nowrap text-sm">{data.producto}</td>
-                                            <td className="px-4 py-3 whitespace-nowrap text-sm">{data.sku}</td>
-                                            <td className="px-4 py-3 whitespace-nowrap text-sm">{data.cantidad}</td>
-                                            <td className="px-4 py-3 whitespace-nowrap text-sm">{data.empresa}</td>
-                                            <td className="px-4 py-3 whitespace-nowrap text-sm">{data.venta}</td>
-                                            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{data.hora}</td>
-                                            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{data.hora}</td>
-                                            <td className="px-4 py-3 whitespace-nowrap text-sm">
-                                                <Input
-                                                    type="number"
-                                                    value={data.esti_time ?? ''}
-                                                    onChange={(e) => handleTimeChange(data.code, e.target.value)}
-                                                    className="form-input w-24"
-                                                    placeholder="min"
-                                                />
-                                            </td>
-                                            <td className="px-4 py-3 whitespace-nowrap text-sm">{horaFin}</td>
-                                            <td className="px-4 py-3 whitespace-nowrap text-sm text-center">
-                                                <button className="delete-btn text-red-500 hover:text-red-700 font-semibold text-xs" onClick={() => deleteRow(data.code)}>Borrar</button>
-                                            </td>
-                                        </tr>
-                                    );
-                                })}
+                                    {renderPendingRecords()}
                                 </tbody>
                             </table>
                         </div>
@@ -1069,3 +1087,4 @@ export default function Home() {
     </>
   );
 }
+
