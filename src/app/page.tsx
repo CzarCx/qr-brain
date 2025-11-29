@@ -997,11 +997,25 @@ export default function Home() {
                                         <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">Venta</th>
                                         <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">HORA</th>
                                         <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">TIEMPO ESTIMADO</th>
+                                        <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">HORA FIN</th>
                                         <th scope="col" className="px-4 py-2 text-center text-xs font-medium text-starbucks-dark uppercase tracking-wider">ACCION</th>
                                     </tr>
                                 </thead>
                                 <tbody id="scanned-list" className="bg-starbucks-white divide-y divide-gray-200">
-                                    {scannedData.map((data: ScannedItem) => (
+                                    {scannedData.map((data: ScannedItem) => {
+                                        let horaFin = 'N/A';
+                                        if (data.esti_time && data.fecha && data.hora) {
+                                            const [day, month, year] = data.fecha.split('/');
+                                            const [hours, minutes, seconds] = data.hora.split(':');
+                                            const startDate = new Date(`${year}-${month}-${day}T${hours}:${minutes}:${seconds}`);
+                                            
+                                            if (!isNaN(startDate.getTime())) {
+                                                const endDate = new Date(startDate.getTime() + data.esti_time * 60000);
+                                                horaFin = endDate.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
+                                            }
+                                        }
+
+                                        return (
                                         <tr key={data.code}>
                                             <td className="px-4 py-3 whitespace-nowrap font-mono text-sm">{data.code}</td>
                                             <td className="px-4 py-3 whitespace-nowrap text-sm">{data.producto}</td>
@@ -1019,12 +1033,13 @@ export default function Home() {
                                                     placeholder="min"
                                                 />
                                             </td>
-
+                                            <td className="px-4 py-3 whitespace-nowrap text-sm">{horaFin}</td>
                                             <td className="px-4 py-3 whitespace-nowrap text-sm text-center">
                                                 <button className="delete-btn text-red-500 hover:text-red-700 font-semibold text-xs" onClick={() => deleteRow(data.code)}>Borrar</button>
                                             </td>
                                         </tr>
-                                    ))}
+                                    );
+                                })}
                                 </tbody>
                             </table>
                         </div>
@@ -1055,5 +1070,6 @@ export default function Home() {
 
 
 
+    
     
     
