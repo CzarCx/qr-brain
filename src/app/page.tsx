@@ -14,7 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Button } from '@/components/ui/button';
-import { Zap, ZoomIn } from 'lucide-react';
+import { Zap, ZoomIn, UserPlus } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
 
 
@@ -62,6 +62,8 @@ export default function Home() {
   const [lastScanned, setLastScanned] = useState<string | null>(null);
   const [encargado, setEncargado] = useState('');
   const [encargadosList, setEncargadosList] = useState<Encargado[]>([]);
+  const [personalList, setPersonalList] = useState<Encargado[]>([]);
+  const [selectedPersonal, setSelectedPersonal] = useState('');
   const [scannedData, setScannedData] = useState<ScannedItem[]>([]);
   const [personalScans, setPersonalScans] = useState<PersonalScanItem[]>([]);
   const [melCodesCount, setMelCodesCount] = useState(0);
@@ -114,19 +116,20 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    const fetchEncargados = async () => {
+    const fetchPersonal = async (rol: string, setter: React.Dispatch<React.SetStateAction<Encargado[]>>) => {
         const { data, error } = await supabaseDB2
             .from('personal_name')
             .select('name')
-            .eq('rol', 'barra');
+            .eq('rol', rol);
 
         if (error) {
-            console.error('Error fetching encargados:', error);
+            console.error(`Error fetching ${rol}:`, error);
         } else {
-            setEncargadosList(data || []);
+            setter(data || []);
         }
     };
-    fetchEncargados();
+    fetchPersonal('barra', setEncargadosList);
+    fetchPersonal('barra', setPersonalList);
   }, []);
 
   const showAppMessage = (text: string, type: 'success' | 'duplicate' | 'info') => {
@@ -206,7 +209,7 @@ export default function Home() {
     return true;
   }, [encargado]);
 
-  const associateNameToScans = async (name: string, pendingScans: ScannedItem[]) => {
+  const associateNameToScans = useCallback(async (name: string, pendingScans: ScannedItem[]) => {
     if (pendingScans.length === 0) {
       showAppMessage(`${name} escaneado, pero no había códigos pendientes.`, 'info');
       return;
@@ -282,6 +285,19 @@ export default function Home() {
     } finally {
       setLoading(false);
     }
+  }, []);
+
+  const handleManualAssociate = () => {
+    if (!selectedPersonal) {
+        showAppMessage('Por favor, selecciona un miembro del personal.', 'duplicate');
+        return;
+    }
+    if (scannedData.length === 0) {
+        showAppMessage('No hay etiquetas pendientes para asociar.', 'info');
+        return;
+    }
+    associateNameToScans(selectedPersonal, scannedData);
+    setSelectedPersonal(''); // Reset dropdown
   };
   
 
@@ -905,7 +921,28 @@ export default function Home() {
                             </div>
                         </div>
 
-                        <div className="table-container border border-gray-200 rounded-lg">
+                        <div className="p-4 bg-starbucks-cream rounded-lg mt-4 space-y-2">
+                            <label className="block text-sm font-bold text-starbucks-dark">Asociar Pendientes a Personal:</label>
+                            <div className="flex gap-2">
+                                <Select onValueChange={setSelectedPersonal} value={selectedPersonal}>
+                                    <SelectTrigger className="form-input">
+                                        <SelectValue placeholder="Selecciona personal..." />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {personalList.map((p) => (
+                                            <SelectItem key={p.name} value={p.name}>
+                                                {p.name}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                                <Button onClick={handleManualAssociate} className="bg-starbucks-accent hover:bg-starbucks-green text-white">
+                                    <UserPlus className="mr-2 h-4 w-4" /> Asociar
+                                </Button>
+                            </div>
+                        </div>
+
+                        <div className="table-container border border-gray-200 rounded-lg mt-4">
                             <table className="w-full min-w-full divide-y divide-gray-200">
                                 <thead className="bg-starbucks-cream sticky top-0">
                                     <tr>
