@@ -14,6 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Button } from '@/components/ui/button';
+import { Input } from "@/components/ui/input";
 import { Zap, ZoomIn, UserPlus } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
 
@@ -29,6 +30,7 @@ type ScannedItem = {
   producto: string | null;
   empresa: string | null;
   venta: string | null;
+  esti_time?: number | null;
 };
 
 type PersonalScanItem = {
@@ -201,6 +203,7 @@ export default function Home() {
       producto: details.producto,
       empresa: details.empresa,
       venta: details.venta,
+      esti_time: null,
     };
     
     setScannedData(prevData => [newData, ...prevData].sort((a, b) => new Date(`1970/01/01T${b.hora}`).valueOf() - new Date(`1970/01/01T${a.hora}`).valueOf()));
@@ -641,6 +644,16 @@ export default function Home() {
     }
   };
 
+  const handleTimeChange = (code: string, value: string) => {
+    const time = value === '' ? null : Number(value);
+    setScannedData(prevData =>
+      prevData.map(item =>
+        item.code === code ? { ...item, esti_time: time } : item
+      )
+    );
+    invalidateCSV();
+  };
+
   const exportCsv = async () => {
       if(scannedData.length === 0) return showAppMessage('No hay datos para exportar.', 'duplicate');
       
@@ -669,8 +682,20 @@ export default function Home() {
 
           const fileName = `${encargadoName}-${etiquetas}-${areaName}-${fechaFormateada}-${timeString}.csv`;
           const BOM = "\uFEFF";
-          const headers = "CODIGO,FECHA,HORA,ENCARGADO,AREA,SKU,CANTIDAD,PRODUCTO,EMPRESA,VENTA\n";
-          let csvRows = scannedData.map(row => [`="${row.code}"`, `"${row.fecha}"`, `"${row.hora}"`, `"${row.encargado.replace(/"/g, '""')}"`, `"${row.area.replace(/"/g, '""')}"`, `"${row.sku || ''}"`, `"${row.cantidad || 0}"`, `"${(row.producto || '').replace(/"/g, '""')}"`, `"${(row.empresa || '').replace(/"/g, '""')}"`, `"${(row.venta || '').replace(/"/g, '""')}"`].join(',')).join('\n');
+          const headers = "CODIGO,FECHA,HORA,ENCARGADO,AREA,SKU,CANTIDAD,PRODUCTO,EMPRESA,VENTA,TIEMPO ESTIMADO\n";
+          let csvRows = scannedData.map(row => [
+              `="${row.code}"`,
+              `"${row.fecha}"`,
+              `"${row.hora}"`,
+              `"${row.encargado.replace(/"/g, '""')}"`,
+              `"${row.area.replace(/"/g, '""')}"`,
+              `"${row.sku || ''}"`,
+              `"${row.cantidad || 0}"`,
+              `"${(row.producto || '').replace(/"/g, '""')}"`,
+              `"${(row.empresa || '').replace(/"/g, '""')}"`,
+              `"${(row.venta || '').replace(/"/g, '""')}"`,
+              `"${row.esti_time || ''}"`
+          ].join(',')).join('\n');
           
           const blob = new Blob([BOM + headers + csvRows], { type: 'text/csv;charset=utf-t' });
           const link = document.createElement("a");
@@ -700,6 +725,7 @@ export default function Home() {
           hora_escaneo: item.hora,
           encargado: item.encargado,
           area: item.area,
+          esti_time: item.esti_time,
         })));
 
         if (error) throw error;
@@ -953,6 +979,7 @@ export default function Home() {
                                         <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">EMPRESA</th>
                                         <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">Venta</th>
                                         <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">HORA</th>
+                                        <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">TIEMPO ESTIMADO</th>
                                         <th scope="col" className="px-4 py-2 text-center text-xs font-medium text-starbucks-dark uppercase tracking-wider">ACCION</th>
                                     </tr>
                                 </thead>
@@ -966,6 +993,15 @@ export default function Home() {
                                             <td className="px-4 py-3 whitespace-nowrap text-sm">{data.empresa}</td>
                                             <td className="px-4 py-3 whitespace-nowrap text-sm">{data.venta}</td>
                                             <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{data.hora}</td>
+                                            <td className="px-4 py-3 whitespace-nowrap text-sm">
+                                                <Input
+                                                    type="number"
+                                                    value={data.esti_time ?? ''}
+                                                    onChange={(e) => handleTimeChange(data.code, e.target.value)}
+                                                    className="form-input w-24"
+                                                    placeholder="min"
+                                                />
+                                            </td>
                                             <td className="px-4 py-3 whitespace-nowrap text-sm text-center">
                                                 <button className="delete-btn text-red-500 hover:text-red-700 font-semibold text-xs" onClick={() => deleteRow(data.code)}>Borrar</button>
                                             </td>
@@ -999,4 +1035,3 @@ export default function Home() {
   );
 }
 
-    
