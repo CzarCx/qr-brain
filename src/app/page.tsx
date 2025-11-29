@@ -995,7 +995,8 @@ export default function Home() {
                                         <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">CANT</th>
                                         <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">EMPRESA</th>
                                         <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">Venta</th>
-                                        <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">HORA</th>
+                                        <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">HORA DE ASIGNACION</th>
+                                        <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">HORA INICIO</th>
                                         <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">TIEMPO ESTIMADO</th>
                                         <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">HORA FIN</th>
                                         <th scope="col" className="px-4 py-2 text-center text-xs font-medium text-starbucks-dark uppercase tracking-wider">ACCION</th>
@@ -1023,6 +1024,7 @@ export default function Home() {
                                             <td className="px-4 py-3 whitespace-nowrap text-sm">{data.cantidad}</td>
                                             <td className="px-4 py-3 whitespace-nowrap text-sm">{data.empresa}</td>
                                             <td className="px-4 py-3 whitespace-nowrap text-sm">{data.venta}</td>
+                                            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{data.hora}</td>
                                             <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{data.hora}</td>
                                             <td className="px-4 py-3 whitespace-nowrap text-sm">
                                                 <Input
@@ -1067,9 +1069,3 @@ export default function Home() {
     </>
   );
 }
-
-
-
-    
-    
-    
