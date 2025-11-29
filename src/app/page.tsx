@@ -43,6 +43,7 @@ type PersonalScanItem = {
   organization: string | null;
   venta: string | null;
   date: string;
+  esti_time?: number | null;
 };
 
 type Encargado = {
@@ -272,6 +273,7 @@ export default function Home() {
             organization: empresa,
             venta: venta,
             date: new Date().toISOString(),
+            esti_time: item.esti_time,
         };
         });
   
@@ -381,19 +383,6 @@ export default function Home() {
       }]
     }).catch(e => console.error("Failed to apply constraints", e));
   }, [zoom, isFlashOn, isMobile]);
-  
-  useEffect(() => {
-    if (isMobile && scannerActive && selectedScannerMode === 'camara' && html5QrCodeRef.current?.isScanning) {
-      const videoElement = document.getElementById('reader')?.querySelector('video');
-      if (videoElement && videoElement.srcObject) {
-        const stream = videoElement.srcObject as MediaStream;
-        const track = stream.getVideoTracks()[0];
-        if (track) {
-          applyCameraConstraints(track);
-        }
-      }
-    }
-  }, [zoom, isFlashOn, scannerActive, selectedScannerMode, isMobile, applyCameraConstraints]);
   
   useEffect(() => {
     if (!isMounted || !readerRef.current) return;
@@ -685,7 +674,7 @@ export default function Home() {
           const headers = "CODIGO,FECHA,HORA,ENCARGADO,AREA,SKU,CANTIDAD,PRODUCTO,EMPRESA,VENTA,TIEMPO ESTIMADO\n";
           let csvRows = scannedData.map(row => [
               `="${row.code}"`,
-              `"${row.fecha}"`,
+              `="${row.fecha}"`,
               `"${row.hora}"`,
               `"${row.encargado.replace(/"/g, '""')}"`,
               `"${row.area.replace(/"/g, '""')}"`,
@@ -761,6 +750,7 @@ export default function Home() {
         organization: item.organization,
         sales_num: item.venta,
         date: item.date,
+        esti_time: item.esti_time,
       }));
 
       const { error } = await supabaseDB2.from('personal').insert(dataToInsert);
@@ -1002,6 +992,7 @@ export default function Home() {
                                                     placeholder="min"
                                                 />
                                             </td>
+
                                             <td className="px-4 py-3 whitespace-nowrap text-sm text-center">
                                                 <button className="delete-btn text-red-500 hover:text-red-700 font-semibold text-xs" onClick={() => deleteRow(data.code)}>Borrar</button>
                                             </td>
@@ -1035,3 +1026,6 @@ export default function Home() {
   );
 }
 
+
+
+    
