@@ -44,6 +44,7 @@ type PersonalScanItem = {
   venta: string | null;
   date: string;
   esti_time?: number | null;
+  date_esti?: string | null;
 };
 
 type Encargado = {
@@ -62,7 +63,7 @@ const isLikelyName = (text: string): boolean => {
 export default function Home() {
   const [isMounted, setIsMounted] = useState(false);
   const [message, setMessage] = useState({text: 'Esperando para escanear...', type: 'info' as 'info' | 'success' | 'duplicate'});
-  const [lastScanned, setLastScanned] = useState<string | null>(null);
+  const [lastScannedCode, setLastScannedCode] = useState<string | null>(null);
   const [encargado, setEncargado] = useState('');
   const [encargadosList, setEncargadosList] = useState<Encargado[]>([]);
   const [personalList, setPersonalList] = useState<Encargado[]>([]);
@@ -229,6 +230,7 @@ export default function Home() {
         let cantidad: number | null = 0;
         let empresa: string | null = '';
         let venta: string | null = '';
+        let date_esti: string | null = null;
     
         if (!item.sku || !item.producto || !item.cantidad || !item.empresa || !item.venta) {
             try {
@@ -262,6 +264,17 @@ export default function Home() {
             empresa = item.empresa;
             venta = item.venta;
         }
+
+        if (item.esti_time && item.fecha && item.hora) {
+          const [day, month, year] = item.fecha.split('/');
+          const [hours, minutes, seconds] = item.hora.split(':');
+          const startDate = new Date(`${year}-${month}-${day}T${hours}:${minutes}:${seconds}`);
+          
+          if (!isNaN(startDate.getTime())) {
+            const endDate = new Date(startDate.getTime() + item.esti_time * 60000);
+            date_esti = endDate.toISOString();
+          }
+        }
     
         return {
             code: item.code,
@@ -274,6 +287,7 @@ export default function Home() {
             venta: venta,
             date: new Date().toISOString(),
             esti_time: item.esti_time,
+            date_esti: date_esti,
         };
         });
   
@@ -305,19 +319,19 @@ export default function Home() {
     setSelectedPersonal(''); // Reset dropdown
   };
   
-
   const showConfirmationDialog = (title: string, message: string, code: string): Promise<boolean> => {
       return new Promise((resolve) => {
           setConfirmation({ isOpen: true, title, message, code, resolve });
       });
   };
 
-  const onScanSuccess = useCallback(async (decodedText: string, decodedResult: any) => {
-    setLastScanned(decodedText);
-
+  const onScanSuccess = useCallback((decodedText: string, decodedResult: any) => {
     if (!scannerActive || Date.now() - lastScanTimeRef.current < MIN_SCAN_INTERVAL) return;
     lastScanTimeRef.current = Date.now();
+    setLastScannedCode(decodedText);
+  }, [scannerActive]);
 
+  const processScan = useCallback(async (decodedText: string) => {
     let finalCode = decodedText;
     try {
       const parsedJson = JSON.parse(decodedText);
@@ -353,7 +367,7 @@ export default function Home() {
 
         const { SKU, Cantidad, Producto, EMPRESA, Venta } = data;
 
-        const isBarcode = decodedResult.result?.format?.formatName !== 'QR_CODE';
+        const isBarcode = finalCode.length > 5;
         let confirmed = true;
 
         if (isBarcode && finalCode.startsWith('4') && finalCode.length === 11) {
@@ -365,14 +379,22 @@ export default function Home() {
         }
 
         if (confirmed) {
-        addCodeAndUpdateCounters(finalCode, { sku: SKU, cantidad: Cantidad, producto: Producto, empresa: EMPRESA, venta: Venta });
+          addCodeAndUpdateCounters(finalCode, { sku: SKU, cantidad: Cantidad, producto: Producto, empresa: EMPRESA, venta: Venta });
         } else {
-        showAppMessage('Escaneo cancelado.', 'info');
+          showAppMessage('Escaneo cancelado.', 'info');
         }
     } finally {
         setLoading(false);
     }
-  }, [scannerActive, addCodeAndUpdateCounters, associateNameToScans, scannedData]);
+  }, [addCodeAndUpdateCounters, associateNameToScans, scannedData]);
+
+  useEffect(() => {
+    if(lastScannedCode) {
+      processScan(lastScannedCode);
+      setLastScannedCode(null); // Reset after processing
+    }
+  }, [lastScannedCode, processScan]);
+
 
   const applyCameraConstraints = useCallback((track: MediaStreamTrack) => {
     if (!isMobile) return;
@@ -462,7 +484,7 @@ export default function Home() {
     };
   }, [scannerActive, selectedScannerMode]);
   
-  const processPhysicalScan = async (code: string) => {
+  const processPhysicalScan = useCallback(async (code: string) => {
     if(!scannerActive || (Date.now() - lastScanTimeRef.current) < MIN_SCAN_INTERVAL) return;
     lastScanTimeRef.current = Date.now();
 
@@ -516,7 +538,7 @@ export default function Home() {
     } finally {
         setLoading(false);
     }
-  };
+  }, [scannerActive, addCodeAndUpdateCounters]);
 
   const handlePhysicalScannerInput = (event: KeyboardEvent) => {
       if(event.key === 'Enter') {
@@ -751,6 +773,7 @@ export default function Home() {
         sales_num: item.venta,
         date: item.date,
         esti_time: item.esti_time,
+        date_esti: item.date_esti,
       }));
 
       const { error } = await supabaseDB2.from('personal').insert(dataToInsert);
@@ -912,6 +935,7 @@ export default function Home() {
                                         <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">Codigo</th>
                                         <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">Personal</th>
                                         <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">Producto</th>
+                                        <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">Hora Fin</th>
                                     </tr>
                                 </thead>
                                 <tbody className="bg-starbucks-white divide-y divide-gray-200">
@@ -920,6 +944,9 @@ export default function Home() {
                                             <td className="px-4 py-3 whitespace-nowrap font-mono text-sm">{data.code}</td>
                                             <td className="px-4 py-3 whitespace-nowrap text-sm">{data.personal}</td>
                                             <td className="px-4 py-3 whitespace-nowrap text-sm">{data.product}</td>
+                                            <td className="px-4 py-3 whitespace-nowrap text-sm">
+                                                {data.date_esti ? new Date(data.date_esti).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }) : 'N/A'}
+                                            </td>
                                         </tr>
                                     ))}
                                 </tbody>
@@ -1028,4 +1055,5 @@ export default function Home() {
 
 
 
+    
     
