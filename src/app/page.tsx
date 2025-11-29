@@ -45,6 +45,7 @@ type PersonalScanItem = {
   date: string;
   esti_time?: number | null;
   date_esti?: string | null;
+  date_ini?: string | null;
 };
 
 type Encargado = {
@@ -208,7 +209,9 @@ export default function Home() {
       esti_time: null,
     };
     
-    setScannedData(prevData => [...prevData, newData].sort((a, b) => new Date(`1970/01/01T${a.hora}`).valueOf() - new Date(`1970/01/01T${b.hora}`).valueOf()));
+    setScannedData(prevData => [...prevData].sort((a, b) => new Date(`1970/01/01T${a.hora}`).valueOf() - new Date(`1970/01/01T${b.hora}`).valueOf()));
+    setScannedData(prevData => [...prevData, newData]);
+
 
     invalidateCSV();
     return true;
@@ -224,71 +227,88 @@ export default function Home() {
     showAppMessage('Asociando códigos y consultando base de datos...', 'info');
   
     try {
-        const newPersonalScansPromises = pendingScans.map(async (item) => {
-        let sku: string | null = '';
-        let producto: string | null = '';
-        let cantidad: number | null = 0;
-        let empresa: string | null = '';
-        let venta: string | null = '';
-        let date_esti: string | null = null;
-    
-        if (!item.sku || !item.producto || !item.cantidad || !item.empresa || !item.venta) {
-            try {
-                const { data, error } = await supabase
-                .from('BASE DE DATOS ETIQUETAS IMPRESAS')
-                .select('SKU, Producto, Cantidad, EMPRESA, Venta')
-                .eq('Código', item.code)
-                .single();
+        const sortedScans = [...pendingScans].sort((a, b) => new Date(`1970/01/01T${a.hora}`).valueOf() - new Date(`1970/01/01T${b.hora}`).valueOf());
         
-                if (error && error.code !== 'PGRST116') {
-                throw error;
-                }
-        
-                if (data) {
-                sku = data.SKU || '';
-                producto = data.Producto || '';
-                cantidad = data.Cantidad || 0;
-                empresa = data.EMPRESA || '';
-                venta = data.Venta || '';
-                } else {
-                showAppMessage(`Código ${item.code} no encontrado. Se añade sin detalles.`, 'info');
-                }
-            } catch (e: any) {
-                console.error(`Error al buscar el código ${item.code}:`, e.message);
-                showAppMessage(`Error al buscar ${item.code}: ${e.message}`, 'duplicate');
-            }
-        } else {
-            sku = item.sku;
-            producto = item.producto;
-            cantidad = item.cantidad;
-            empresa = item.empresa;
-            venta = item.venta;
-        }
-
-        if (item.esti_time && item.fecha && item.hora) {
-          const [day, month, year] = item.fecha.split('/');
-          const [hours, minutes, seconds] = item.hora.split(':');
-          const startDate = new Date(`${year}-${month}-${day}T${hours}:${minutes}:${seconds}`);
+        let lastFinishTime: Date | null = null;
+        const newPersonalScansPromises = sortedScans.map(async (item, index) => {
+          let sku: string | null = '';
+          let producto: string | null = '';
+          let cantidad: number | null = 0;
+          let empresa: string | null = '';
+          let venta: string | null = '';
           
-          if (!isNaN(startDate.getTime())) {
-            const endDate = new Date(startDate.getTime() + item.esti_time * 60000);
-            date_esti = endDate.toISOString();
+          let date_ini: string | null = null;
+          let date_esti: string | null = null;
+
+          // Calculate start time
+          let startTime: Date;
+          if (index === 0) {
+              const [day, month, year] = item.fecha.split('/');
+              const [hours, minutes, seconds] = item.hora.split(':');
+              startTime = new Date(`${year}-${month}-${day}T${hours}:${minutes}:${seconds}`);
+          } else {
+              startTime = lastFinishTime!;
           }
-        }
-    
-        return {
-            code: item.code,
-            sku: sku,
-            personal: name, 
-            encargado: item.encargado,
-            product: producto,
-            quantity: cantidad,
-            organization: empresa,
-            venta: venta,
-            date: new Date().toISOString(),
-            esti_time: item.esti_time,
-            date_esti: date_esti,
-        };
+          if (!isNaN(startTime.getTime())) {
+            date_ini = startTime.toISOString();
+          }
+
+          // Calculate end time
+          if (!isNaN(startTime.getTime()) && item.esti_time) {
+              const endDate = new Date(startTime.getTime() + item.esti_time * 60000);
+              date_esti = endDate.toISOString();
+              lastFinishTime = endDate;
+          } else {
+              lastFinishTime = startTime;
+          }
+
+          if (!item.sku || !item.producto || !item.cantidad || !item.empresa || !item.venta) {
+              try {
+                  const { data, error } = await supabase
+                  .from('BASE DE DATOS ETIQUETAS IMPRESAS')
+                  .select('SKU, Producto, Cantidad, EMPRESA, Venta')
+                  .eq('Código', item.code)
+                  .single();
+          
+                  if (error && error.code !== 'PGRST116') {
+                  throw error;
+                  }
+          
+                  if (data) {
+                  sku = data.SKU || '';
+                  producto = data.Producto || '';
+                  cantidad = data.Cantidad || 0;
+                  empresa = data.EMPRESA || '';
+                  venta = data.Venta || '';
+                  } else {
+                  showAppMessage(`Código ${item.code} no encontrado. Se añade sin detalles.`, 'info');
+                  }
+              } catch (e: any) {
+                  console.error(`Error al buscar el código ${item.code}:`, e.message);
+                  showAppMessage(`Error al buscar ${item.code}: ${e.message}`, 'duplicate');
+              }
+          } else {
+              sku = item.sku;
+              producto = item.producto;
+              cantidad = item.cantidad;
+              empresa = item.empresa;
+              venta = item.venta;
+          }
+      
+          return {
+              code: item.code,
+              sku: sku,
+              personal: name, 
+              encargado: item.encargado,
+              product: producto,
+              quantity: cantidad,
+              organization: empresa,
+              venta: venta,
+              date: new Date().toISOString(),
+              esti_time: item.esti_time,
+              date_esti: date_esti,
+              date_ini: date_ini,
+          };
         });
   
         const newPersonalScans = await Promise.all(newPersonalScansPromises);
@@ -774,6 +794,7 @@ export default function Home() {
         date: item.date,
         esti_time: item.esti_time,
         date_esti: item.date_esti,
+        date_ini: item.date_ini,
       }));
 
       const { error } = await supabaseDB2.from('personal').insert(dataToInsert);
@@ -801,9 +822,10 @@ export default function Home() {
   };
 
   const renderPendingRecords = () => {
+    const sortedData = [...scannedData].sort((a, b) => new Date(`1970/01/01T${a.hora}`).valueOf() - new Date(`1970/01/01T${b.hora}`).valueOf());
     let lastFinishTime: Date | null = null;
     
-    return scannedData.map((data: ScannedItem, index: number) => {
+    return sortedData.map((data: ScannedItem, index: number) => {
         let startTime: Date;
         if (index === 0) {
             const [day, month, year] = data.fecha.split('/');
@@ -991,6 +1013,7 @@ export default function Home() {
                                         <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">Codigo</th>
                                         <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">Personal</th>
                                         <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">Producto</th>
+                                        <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">Hora Inicio</th>
                                         <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">Hora Fin</th>
                                     </tr>
                                 </thead>
@@ -1000,6 +1023,9 @@ export default function Home() {
                                             <td className="px-4 py-3 whitespace-nowrap font-mono text-sm">{data.code}</td>
                                             <td className="px-4 py-3 whitespace-nowrap text-sm">{data.personal}</td>
                                             <td className="px-4 py-3 whitespace-nowrap text-sm">{data.product}</td>
+                                            <td className="px-4 py-3 whitespace-nowrap text-sm">
+                                                {data.date_ini ? new Date(data.date_ini).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }) : 'N/A'}
+                                            </td>
                                             <td className="px-4 py-3 whitespace-nowrap text-sm">
                                                 {data.date_esti ? new Date(data.date_esti).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }) : 'N/A'}
                                             </td>
@@ -1088,3 +1114,4 @@ export default function Home() {
   );
 }
 
+    
