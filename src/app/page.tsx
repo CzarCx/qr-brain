@@ -813,8 +813,9 @@ export default function Home() {
     }
     setLoading(true);
     showAppMessage('Guardando registros de personal...', 'info');
-
+  
     try {
+      // 1. Insertar nuevos registros en la tabla 'personal'
       const dataToInsert = personalScans.map((item) => ({
         code: item.code,
         name: item.personal,
@@ -830,29 +831,35 @@ export default function Home() {
         date_esti: item.date_esti,
         date_ini: item.date_ini,
       }));
-
-      const { error } = await supabaseDB2.from('personal').insert(dataToInsert);
-
-      if (error) {
-        console.error("Supabase error:", error);
-        throw error;
+  
+      const { error: insertError } = await supabaseDB2.from('personal').insert(dataToInsert);
+  
+      if (insertError) {
+        console.error("Supabase insert error:", insertError);
+        throw insertError;
       }
-      
+  
+      showAppMessage(`¡Éxito! Se guardaron ${personalScans.length} registros de personal.`, 'success');
+  
+      // 2. Borrar registros de 'personal_prog'
       const namesToDelete = [...new Set(personalScans.map(item => item.personal))];
+      
       const { error: deleteError } = await supabaseDB2.from('personal_prog').delete().in('name', namesToDelete);
-
+  
       if (deleteError) {
+        // Lanza un error para ser atrapado por el bloque catch.
+        // De esta manera, el usuario sabe que el borrado falló.
         console.error("Supabase delete error:", deleteError);
-        showAppMessage(`Se guardaron los registros, pero hubo un error al limpiar la programación: ${deleteError.message}`, 'warning');
-      } else {
-        showAppMessage(`¡Éxito! Se guardaron ${personalScans.length} registros de personal.`, 'success');
+        throw deleteError;
       }
-
+  
+      showAppMessage('Registros guardados y programación limpiada exitosamente.', 'success');
       setPersonalScans([]);
-
+  
     } catch (error: any) {
-      console.error("Error al guardar datos de personal:", error);
-      showAppMessage(`Error al guardar: ${error.message}`, 'duplicate');
+      console.error("Error en handleSavePersonal:", error);
+      // El mensaje de error será más específico dependiendo de dónde ocurrió el fallo.
+      showAppMessage(`Error al procesar: ${error.message}`, 'duplicate');
     } finally {
       setLoading(false);
     }
@@ -1360,5 +1367,7 @@ export default function Home() {
   );
 }
 
+
+    
 
     
