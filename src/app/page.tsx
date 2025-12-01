@@ -863,12 +863,12 @@ export default function Home() {
       const dataToInsert = scannedData.map(item => ({
         code: item.code,
         sku: item.sku,
-        personal: selectedPersonal,
-        encargado: item.encargado,
+        name: selectedPersonal,
+        name_inc: item.encargado,
         product: item.producto,
         quantity: item.cantidad,
         organization: item.empresa,
-        venta: item.venta,
+        sales_num: item.venta,
         date: new Date().toISOString(),
         esti_time: item.esti_time,
         status: 'ASIGNADO',
@@ -909,6 +909,7 @@ export default function Home() {
 
       if (data.length === 0) {
         showAppMessage('No hay producción programada para cargar.', 'info');
+        setLoading(false);
         return;
       }
       
@@ -938,7 +939,24 @@ export default function Home() {
           };
       });
 
-      setPersonalScans(prev => [...prev, ...loadedScans].sort((a, b) => new Date(a.date_ini!).valueOf() - new Date(b.date_ini!).valueOf()));
+      // Mapeo para que coincida con PersonalScanItem
+      const newPersonalScans = loadedScans.map(item => ({
+        code: item.code,
+        sku: item.sku,
+        personal: item.name,
+        encargado: item.name_inc,
+        product: item.product,
+        quantity: item.quantity,
+        organization: item.organization,
+        venta: item.sales_num,
+        date: item.date,
+        esti_time: item.esti_time,
+        date_esti: item.date_esti,
+        date_ini: item.date_ini,
+      }));
+
+
+      setPersonalScans(prev => [...prev, ...newPersonalScans].sort((a, b) => new Date(a.date_ini!).valueOf() - new Date(b.date_ini!).valueOf()));
 
       // Borrar registros de la tabla de programación
       const idsToDelete = data.map(item => item.id);
