@@ -134,7 +134,7 @@ export default function Home() {
         }
     };
     fetchPersonal('barra', setEncargadosList);
-    fetchPersonal('barra', setPersonalList);
+    fetchPersonal('operativo', setPersonalList);
   }, []);
 
   const showAppMessage = (text: string, type: 'success' | 'duplicate' | 'info') => {
@@ -822,7 +822,7 @@ export default function Home() {
   };
 
   const renderPendingRecords = () => {
-    const sortedData = [...scannedData].sort((a, b) => new Date(`1970/01/01T${a.hora}`).valueOf() - new Date(`1970/01/01T${b.hora}`).valueOf());
+    const sortedData = [...scannedData].sort((a, b) => new Date(`1970/01/01 ${a.hora}`).valueOf() - new Date(`1970/01/01 ${b.hora}`).valueOf());
     let lastFinishTime: Date | null = null;
     
     return sortedData.map((data: ScannedItem, index: number) => {
@@ -1113,5 +1113,3 @@ export default function Home() {
     </>
   );
 }
-
-    
