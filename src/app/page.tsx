@@ -210,7 +210,7 @@ export default function Home() {
       esti_time: null,
     };
     
-    setScannedData(prevData => [...prevData].sort((a, b) => new Date(`1970/01/01T${a.hora}`).valueOf() - new Date(`1970/01/01T${b.hora}`).valueOf()));
+    setScannedData(prevData => [...prevData].sort((a, b) => new Date(`1970/01/01 ${a.hora}`).valueOf() - new Date(`1970/01/01 ${b.hora}`).valueOf()));
     setScannedData(prevData => [...prevData, newData]);
 
 
@@ -223,12 +223,16 @@ export default function Home() {
       showAppMessage(`${name} escaneado, pero no había códigos pendientes.`, 'info');
       return;
     }
+     if (pendingScans.some(item => item.esti_time === null || item.esti_time === undefined)) {
+      showAppMessage('Por favor, completa todos los campos de "Tiempo Estimado" antes de asociar.', 'duplicate');
+      return;
+    }
   
     setLoading(true);
     showAppMessage('Asociando códigos y consultando base de datos...', 'info');
   
     try {
-        const sortedScans = [...pendingScans].sort((a, b) => new Date(`1970/01/01T${a.hora}`).valueOf() - new Date(`1970/01/01T${b.hora}`).valueOf());
+        const sortedScans = [...pendingScans].sort((a, b) => new Date(`1970/01/01 ${a.hora}`).valueOf() - new Date(`1970/01/01 ${b.hora}`).valueOf());
         
         let lastFinishTime: Date | null = null;
         const newPersonalScansPromises = sortedScans.map(async (item, index) => {
@@ -334,6 +338,10 @@ export default function Home() {
     }
     if (scannedData.length === 0) {
         showAppMessage('No hay etiquetas pendientes para asociar.', 'info');
+        return;
+    }
+    if (scannedData.some(item => item.esti_time === null || item.esti_time === undefined)) {
+        showAppMessage('Por favor, completa todos los campos de "Tiempo Estimado" antes de asociar.', 'duplicate');
         return;
     }
     associateNameToScans(selectedPersonal, scannedData);
@@ -718,7 +726,7 @@ export default function Home() {
           let csvRows = scannedData.map(row => [
               `="${row.code}"`,
               `="${row.fecha}"`,
-              `"${row.hora}"`,
+              `="${row.hora}"`,
               `"${row.encargado.replace(/"/g, '""')}"`,
               `"${row.area.replace(/"/g, '""')}"`,
               `"${row.sku || ''}"`,
@@ -816,11 +824,21 @@ export default function Home() {
     }
   };
 
+  const handleClearPersonalAsignado = () => {
+    if (window.confirm('¿Estás seguro de que quieres limpiar la lista de personal asignado?')) {
+        setPersonalScans([]);
+        showAppMessage('La lista de personal asignado ha sido limpiada.', 'info');
+    }
+  };
+
   const messageClasses: any = {
       success: 'scan-success',
       duplicate: 'scan-duplicate',
       info: 'scan-info'
   };
+  
+  const isAssociationDisabled = scannedData.length > 0 && scannedData.some(item => item.esti_time === null || item.esti_time === undefined);
+
 
   const renderPendingRecords = () => {
     const sortedData = [...scannedData].sort((a, b) => new Date(`1970/01/01 ${a.hora}`).valueOf() - new Date(`1970/01/01 ${b.hora}`).valueOf());
@@ -1004,6 +1022,9 @@ export default function Home() {
                         <div className="flex justify-between items-center mb-2">
                            <h2 className="text-lg font-bold text-starbucks-dark">Personal Asignado</h2>
                             <div className="flex gap-2">
+                                <Button onClick={handleClearPersonalAsignado} variant="destructive" className="px-4 py-2 text-white font-semibold rounded-lg shadow-sm text-sm transition-colors duration-200">
+                                    Limpiar
+                                </Button>
                                 <button className="px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white font-semibold rounded-lg shadow-sm text-sm transition-colors duration-200">
                                     Cargar
                                 </button>
@@ -1062,10 +1083,13 @@ export default function Home() {
                                     placeholder="Selecciona o busca personal..."
                                     emptyMessage="No se encontró personal."
                                 />
-                                <Button onClick={handleManualAssociate} className="bg-starbucks-accent hover:bg-starbucks-green text-white">
+                                <Button onClick={handleManualAssociate} disabled={isAssociationDisabled} className="bg-starbucks-accent hover:bg-starbucks-green text-white">
                                     <UserPlus className="mr-2 h-4 w-4" /> Asociar
                                 </Button>
                             </div>
+                             {isAssociationDisabled && (
+                                <p className="text-xs text-red-600">Completa todos los campos de "Tiempo Estimado" para poder asociar.</p>
+                            )}
                         </div>
 
                         <div className="table-container border border-gray-200 rounded-lg mt-4">
@@ -1114,3 +1138,5 @@ export default function Home() {
     </>
   );
 }
+
+    
