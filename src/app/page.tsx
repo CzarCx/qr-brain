@@ -1022,9 +1022,9 @@ export default function Home() {
                         <div className="flex justify-between items-center mb-2">
                            <h2 className="text-lg font-bold text-starbucks-dark">Personal Asignado</h2>
                             <div className="flex gap-2">
-                                <Button onClick={handleClearPersonalAsignado} variant="destructive" className="px-4 py-2 text-white font-semibold rounded-lg shadow-sm text-sm transition-colors duration-200">
-                                    Limpiar
-                                </Button>
+                                <button className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg shadow-sm text-sm transition-colors duration-200">
+                                    Producción Programada
+                                </button>
                                 <button className="px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white font-semibold rounded-lg shadow-sm text-sm transition-colors duration-200">
                                     Cargar
                                 </button>
