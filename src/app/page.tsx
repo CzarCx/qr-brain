@@ -831,6 +831,98 @@ export default function Home() {
     }
   };
 
+  const handleProduccionProgramada = async () => {
+    if (personalScans.length === 0) {
+      showAppMessage('No hay personal asignado para programar.', 'info');
+      return;
+    }
+    setLoading(true);
+    showAppMessage('Guardando producción programada...', 'info');
+
+    try {
+      const dataToInsert = personalScans.map(item => ({
+        ...item,
+        date_ini: null, // Guardar sin fecha de inicio
+        date_esti: null, // Guardar sin fecha de fin
+      }));
+
+      const { error } = await supabaseDB2.from('personal_prog').insert(dataToInsert);
+
+      if (error) {
+        console.error("Supabase error:", error);
+        throw error;
+      }
+
+      showAppMessage(`¡Éxito! Se guardaron ${personalScans.length} registros en producción programada.`, 'success');
+      setPersonalScans([]); // Limpiar la tabla de la UI
+
+    } catch (error: any) {
+      console.error("Error al guardar producción programada:", error);
+      showAppMessage(`Error al guardar: ${error.message}`, 'duplicate');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCargarProgramada = async () => {
+    setLoading(true);
+    showAppMessage('Cargando producción programada...', 'info');
+
+    try {
+      const { data, error } = await supabaseDB2.from('personal_prog').select('*');
+
+      if (error) throw error;
+
+      if (data.length === 0) {
+        showAppMessage('No hay producción programada para cargar.', 'info');
+        return;
+      }
+      
+      let lastFinishTime: Date = new Date(); // Inicia con la hora actual
+      const loadedScans = data.sort((a,b) => new Date(a.date).valueOf() - new Date(b.date).valueOf())
+        .map((item, index) => {
+          let startTime: Date;
+          if (index === 0) {
+            startTime = new Date(); // La primera tarea inicia ahora
+          } else {
+            startTime = lastFinishTime; // Las siguientes inician cuando termina la anterior
+          }
+
+          let date_esti: string | null = null;
+          if (!isNaN(startTime.getTime()) && item.esti_time) {
+            const endDate = new Date(startTime.getTime() + item.esti_time * 60000);
+            date_esti = endDate.toISOString();
+            lastFinishTime = endDate;
+          } else {
+            lastFinishTime = startTime;
+          }
+          
+          return {
+            ...item,
+            date_ini: startTime.toISOString(),
+            date_esti: date_esti,
+          };
+      });
+
+      setPersonalScans(prev => [...prev, ...loadedScans].sort((a, b) => new Date(a.date_ini!).valueOf() - new Date(b.date_ini!).valueOf()));
+
+      // Borrar registros de la tabla de programación
+      const idsToDelete = data.map(item => item.id);
+      const { error: deleteError } = await supabaseDB2.from('personal_prog').delete().in('id', idsToDelete);
+
+      if (deleteError) throw deleteError;
+
+      showAppMessage(`Se cargaron ${data.length} registros programados.`, 'success');
+
+    } catch (error: any) {
+      console.error("Error al cargar producción programada:", error);
+      showAppMessage(`Error al cargar: ${error.message}`, 'duplicate');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+
   const messageClasses: any = {
       success: 'scan-success',
       duplicate: 'scan-duplicate',
@@ -1022,15 +1114,15 @@ export default function Home() {
                         <div className="flex justify-between items-center mb-2">
                            <h2 className="text-lg font-bold text-starbucks-dark">Personal Asignado</h2>
                             <div className="flex gap-2">
-                                <button className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg shadow-sm text-sm transition-colors duration-200">
-                                    Producción Programada
-                                </button>
-                                <button className="px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white font-semibold rounded-lg shadow-sm text-sm transition-colors duration-200">
+                                <Button onClick={handleCargarProgramada} className="px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white font-semibold rounded-lg shadow-sm text-sm transition-colors duration-200" disabled={loading}>
                                     Cargar
-                                </button>
-                                <button onClick={handleSavePersonal} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-sm text-sm transition-colors duration-200">
+                                </Button>
+                                <Button onClick={handleSavePersonal} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-sm text-sm transition-colors duration-200" disabled={loading}>
                                     Guardar
-                                </button>
+                                </Button>
+                                <Button onClick={handleClearPersonalAsignado} variant="destructive" className="px-4 py-2 font-semibold rounded-lg shadow-sm text-sm transition-colors duration-200" disabled={loading}>
+                                    Limpiar
+                                </Button>
                             </div>
                         </div>
                         <div className="table-container border border-gray-200 rounded-lg">
@@ -1085,6 +1177,9 @@ export default function Home() {
                                 />
                                 <Button onClick={handleManualAssociate} disabled={isAssociationDisabled} className="bg-starbucks-accent hover:bg-starbucks-green text-white">
                                     <UserPlus className="mr-2 h-4 w-4" /> Asociar
+                                </Button>
+                                 <Button onClick={handleProduccionProgramada} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg shadow-sm text-sm transition-colors duration-200" disabled={loading}>
+                                    Producción Programada
                                 </Button>
                             </div>
                              {isAssociationDisabled && (
