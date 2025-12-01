@@ -18,6 +18,15 @@ import { Input } from "@/components/ui/input";
 import { Zap, ZoomIn, UserPlus } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Combobox } from '@/components/ui/combobox';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
 
 
 type ScannedItem = {
@@ -89,12 +98,16 @@ export default function Home() {
   const [isFlashOn, setIsFlashOn] = useState(false);
   const [zoom, setZoom] = useState(1);
   const isMobile = useIsMobile();
+  const [isCargarModalOpen, setIsCargarModalOpen] = useState(false);
+  const [programadosPersonalList, setProgramadosPersonalList] = useState<{ name: string }[]>([]);
+  const [selectedPersonalParaCargar, setSelectedPersonalParaCargar] = useState('');
+  const [loadingProgramadosPersonal, setLoadingProgramadosPersonal] = useState(false);
 
 
   // Refs para elementos del DOM y la instancia del escáner
   const html5QrCodeRef = useRef<Html5Qrcode | null>(null);
   const physicalScannerInputRef = useRef<HTMLInputElement | null>(null);
-  const readerRef = useRef<HTMLDivElement>(null);
+  const readerRef = useRef<HTMLDivElement | null>(null);
 
   // Refs para valores que no necesitan re-renderizar el componente
   const lastScanTimeRef = useRef(Date.now());
@@ -898,22 +911,50 @@ export default function Home() {
     }
   };
 
+  const handleOpenCargarModal = async () => {
+    setIsCargarModalOpen(true);
+    setLoadingProgramadosPersonal(true);
+    try {
+        const { data, error } = await supabaseDB2
+            .from('personal_prog')
+            .select('name');
+
+        if (error) throw error;
+
+        // Get unique names
+        const uniqueNames = [...new Map(data.map(item => [item.name, item])).values()];
+        setProgramadosPersonalList(uniqueNames);
+
+    } catch (error: any) {
+        showAppMessage('Error al cargar la lista de personal programado.', 'duplicate');
+    } finally {
+        setLoadingProgramadosPersonal(false);
+    }
+};
+
   const handleCargarProgramada = async () => {
+      if (!selectedPersonalParaCargar) {
+        showAppMessage('Por favor, selecciona una persona para cargar su producción.', 'info');
+        return;
+    }
     setLoading(true);
     showAppMessage('Cargando producción programada...', 'info');
 
     try {
-      const { data, error } = await supabaseDB2.from('personal_prog').select('*');
+      const { data, error } = await supabaseDB2
+        .from('personal_prog')
+        .select('*')
+        .eq('name', selectedPersonalParaCargar);
 
       if (error) throw error;
 
       if (data.length === 0) {
-        showAppMessage('No hay producción programada para cargar.', 'info');
+        showAppMessage('No hay producción programada para cargar para esta persona.', 'info');
         setLoading(false);
         return;
       }
       
-      let lastFinishTime: Date = new Date(); // Inicia con la hora actual
+      let lastFinishTime: Date;
       const loadedScans = data.sort((a,b) => new Date(a.date).valueOf() - new Date(b.date).valueOf())
         .map((item, index) => {
           let startTime: Date;
@@ -964,7 +1005,9 @@ export default function Home() {
 
       if (deleteError) throw deleteError;
 
-      showAppMessage(`Se cargaron ${data.length} registros programados.`, 'success');
+      showAppMessage(`Se cargaron ${data.length} registros programados para ${selectedPersonalParaCargar}.`, 'success');
+      setIsCargarModalOpen(false);
+      setSelectedPersonalParaCargar('');
 
     } catch (error: any) {
       console.error("Error al cargar producción programada:", error);
@@ -1166,9 +1209,38 @@ export default function Home() {
                         <div className="flex justify-between items-center mb-2">
                            <h2 className="text-lg font-bold text-starbucks-dark">Personal Asignado</h2>
                             <div className="flex gap-2">
-                                <Button onClick={handleCargarProgramada} className="px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white font-semibold rounded-lg shadow-sm text-sm transition-colors duration-200" disabled={loading}>
-                                    Cargar
-                                </Button>
+                                <Dialog open={isCargarModalOpen} onOpenChange={setIsCargarModalOpen}>
+                                    <DialogTrigger asChild>
+                                        <Button onClick={handleOpenCargarModal} className="px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white font-semibold rounded-lg shadow-sm text-sm transition-colors duration-200" disabled={loading}>
+                                            Cargar
+                                        </Button>
+                                    </DialogTrigger>
+                                    <DialogContent>
+                                        <DialogHeader>
+                                            <DialogTitle>Cargar Producción Programada</DialogTitle>
+                                            <DialogDescription>
+                                                Selecciona el personal del cual quieres cargar la producción que fue previamente programada.
+                                            </DialogDescription>
+                                        </DialogHeader>
+                                        {loadingProgramadosPersonal ? <p>Cargando personal...</p> :
+                                            <Select onValueChange={setSelectedPersonalParaCargar} value={selectedPersonalParaCargar}>
+                                                <SelectTrigger>
+                                                    <SelectValue placeholder="Selecciona una persona" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    {programadosPersonalList.map((p) => (
+                                                        <SelectItem key={p.name} value={p.name}>{p.name}</SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                        }
+                                        <DialogFooter>
+                                            <Button onClick={handleCargarProgramada} disabled={loading || !selectedPersonalParaCargar}>
+                                                {loading ? 'Cargando...' : 'Cargar Producción'}
+                                            </Button>
+                                        </DialogFooter>
+                                    </DialogContent>
+                                </Dialog>
                                 <Button onClick={handleSavePersonal} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-sm text-sm transition-colors duration-200" disabled={loading}>
                                     Guardar
                                 </Button>
@@ -1287,3 +1359,4 @@ export default function Home() {
 }
 
 
+    
