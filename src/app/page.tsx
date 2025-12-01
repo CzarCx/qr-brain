@@ -815,7 +815,6 @@ export default function Home() {
     showAppMessage('Guardando registros de personal...', 'info');
   
     try {
-      // 1. Insertar nuevos registros en la tabla 'personal'
       const dataToInsert = personalScans.map((item) => ({
         code: item.code,
         name: item.personal,
@@ -835,21 +834,15 @@ export default function Home() {
       const { error: insertError } = await supabaseDB2.from('personal').insert(dataToInsert);
   
       if (insertError) {
-        console.error("Supabase insert error:", insertError);
         throw insertError;
       }
   
-      showAppMessage(`¡Éxito! Se guardaron ${personalScans.length} registros de personal.`, 'success');
-  
-      // 2. Borrar registros de 'personal_prog'
-      const namesToDelete = [...new Set(personalScans.map(item => item.personal))];
+      const codesToDelete = personalScans.map(item => item.code);
       
-      const { error: deleteError } = await supabaseDB2.from('personal_prog').delete().in('name', namesToDelete);
+      const { error: deleteError } = await supabaseDB2.from('personal_prog').delete().in('code', codesToDelete);
   
       if (deleteError) {
-        // Lanza un error para ser atrapado por el bloque catch.
-        // De esta manera, el usuario sabe que el borrado falló.
-        console.error("Supabase delete error:", deleteError);
+        showAppMessage(`Registros guardados, pero falló la limpieza de programados: ${deleteError.message}`, 'warning');
         throw deleteError;
       }
   
@@ -858,7 +851,6 @@ export default function Home() {
   
     } catch (error: any) {
       console.error("Error en handleSavePersonal:", error);
-      // El mensaje de error será más específico dependiendo de dónde ocurrió el fallo.
       showAppMessage(`Error al procesar: ${error.message}`, 'duplicate');
     } finally {
       setLoading(false);
