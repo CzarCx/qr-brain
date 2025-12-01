@@ -35,14 +35,14 @@ type ScannedItem = {
 };
 
 type PersonalScanItem = {
-  code: string;
+  code: string | number;
   sku: string | null;
   personal: string;
   encargado: string;
   product: string | null;
   quantity: number | null;
   organization: string | null;
-  venta: string | null;
+  venta: string | number | null;
   date: string;
   esti_time?: number | null;
   date_esti?: string | null;
@@ -1285,4 +1285,5 @@ export default function Home() {
     </>
   );
 }
+
 
