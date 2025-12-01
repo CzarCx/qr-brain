@@ -837,17 +837,18 @@ export default function Home() {
         throw insertError;
       }
   
-      const codesToDelete = personalScans.map(item => item.code);
+      const codesToDelete = personalScans.map(item => Number(item.code));
       
       const { error: deleteError } = await supabaseDB2.from('personal_prog').delete().in('code', codesToDelete);
   
       if (deleteError) {
+        // Log the detailed error to the console for debugging
+        console.error("Supabase delete error:", deleteError);
         showAppMessage(`Registros guardados, pero falló la limpieza de programados: ${deleteError.message}`, 'warning');
-        throw deleteError;
+      } else {
+        showAppMessage('Registros guardados y programación limpiada exitosamente.', 'success');
+        setPersonalScans([]);
       }
-  
-      showAppMessage('Registros guardados y programación limpiada exitosamente.', 'success');
-      setPersonalScans([]);
   
     } catch (error: any) {
       console.error("Error en handleSavePersonal:", error);
@@ -1363,3 +1364,4 @@ export default function Home() {
     
 
     
+
