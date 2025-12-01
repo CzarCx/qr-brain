@@ -1003,9 +1003,14 @@ export default function Home() {
                     <div>
                         <div className="flex justify-between items-center mb-2">
                            <h2 className="text-lg font-bold text-starbucks-dark">Personal Asignado</h2>
-                            <button onClick={handleSavePersonal} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-sm text-sm transition-colors duration-200">
-                                Guardar
-                            </button>
+                            <div className="flex gap-2">
+                                <button className="px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white font-semibold rounded-lg shadow-sm text-sm transition-colors duration-200">
+                                    Cargar
+                                </button>
+                                <button onClick={handleSavePersonal} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-sm text-sm transition-colors duration-200">
+                                    Guardar
+                                </button>
+                            </div>
                         </div>
                         <div className="table-container border border-gray-200 rounded-lg">
                             <table className="w-full min-w-full divide-y divide-gray-200">
