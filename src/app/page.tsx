@@ -861,14 +861,14 @@ export default function Home() {
 
     try {
       const dataToInsert = scannedData.map(item => ({
-        code: item.code,
+        code: Number(item.code),
         sku: item.sku,
         name: selectedPersonal,
         name_inc: item.encargado,
         product: item.producto,
         quantity: item.cantidad,
         organization: item.empresa,
-        sales_num: item.venta,
+        sales_num: Number(item.venta),
         date: new Date().toISOString(),
         esti_time: item.esti_time,
         status: 'ASIGNADO',
@@ -1286,4 +1286,3 @@ export default function Home() {
   );
 }
 
-    
