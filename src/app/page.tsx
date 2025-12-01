@@ -343,7 +343,7 @@ export default function Home() {
   
         const newPersonalScans = await Promise.all(newPersonalScansPromises);
     
-        setPersonalScans(prev => [...prev, ...newPersonalScans].sort((a, b) => a.code.localeCompare(b.code)));
+        setPersonalScans(prev => [...prev, ...newPersonalScans].sort((a, b) => new Date(a.date_ini!).valueOf() - new Date(b.date_ini!).valueOf()));
         setScannedData([]);
         scannedCodesRef.current.clear();
         setMelCodesCount(0);
@@ -837,8 +837,17 @@ export default function Home() {
         console.error("Supabase error:", error);
         throw error;
       }
+      
+      const namesToDelete = [...new Set(personalScans.map(item => item.personal))];
+      const { error: deleteError } = await supabaseDB2.from('personal_prog').delete().in('name', namesToDelete);
 
-      showAppMessage(`¡Éxito! Se guardaron ${personalScans.length} registros de personal.`, 'success');
+      if (deleteError) {
+        console.error("Supabase delete error:", deleteError);
+        showAppMessage(`Se guardaron los registros, pero hubo un error al limpiar la programación: ${deleteError.message}`, 'warning');
+      } else {
+        showAppMessage(`¡Éxito! Se guardaron ${personalScans.length} registros de personal.`, 'success');
+      }
+
       setPersonalScans([]);
 
     } catch (error: any) {
@@ -884,7 +893,7 @@ export default function Home() {
         sales_num: Number(item.venta),
         date: new Date().toISOString(),
         esti_time: item.esti_time,
-        status: 'ASIGNADO',
+        status: 'PROGRAMADO',
         date_ini: null,
         date_esti: null,
       }));
@@ -892,7 +901,6 @@ export default function Home() {
       const { error } = await supabaseDB2.from('personal_prog').insert(dataToInsert);
 
       if (error) {
-        console.error("Supabase error:", error);
         throw error;
       }
 
@@ -998,12 +1006,6 @@ export default function Home() {
 
 
       setPersonalScans(prev => [...prev, ...newPersonalScans].sort((a, b) => new Date(a.date_ini!).valueOf() - new Date(b.date_ini!).valueOf()));
-
-      // Borrar registros de la tabla de programación
-      const idsToDelete = data.map(item => item.id);
-      const { error: deleteError } = await supabaseDB2.from('personal_prog').delete().in('id', idsToDelete);
-
-      if (deleteError) throw deleteError;
 
       showAppMessage(`Se cargaron ${data.length} registros programados para ${selectedPersonalParaCargar}.`, 'success');
       setIsCargarModalOpen(false);
