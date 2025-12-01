@@ -17,6 +17,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from "@/components/ui/input";
 import { Zap, ZoomIn, UserPlus } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { Combobox } from '@/components/ui/combobox';
 
 
 type ScannedItem = {
@@ -827,12 +828,12 @@ export default function Home() {
     
     return sortedData.map((data: ScannedItem, index: number) => {
         let startTime: Date;
-        if (index === 0) {
+        if (index === 0 || !lastFinishTime) {
             const [day, month, year] = data.fecha.split('/');
             const [hours, minutes, seconds] = data.hora.split(':');
             startTime = new Date(`${year}-${month}-${day}T${hours}:${minutes}:${seconds}`);
         } else {
-            startTime = lastFinishTime!;
+            startTime = lastFinishTime;
         }
 
         let horaFin: Date | null = null;
@@ -1049,18 +1050,13 @@ export default function Home() {
                         <div className="p-4 bg-starbucks-cream rounded-lg mt-4 space-y-2">
                             <label className="block text-sm font-bold text-starbucks-dark">Asociar Pendientes a Personal:</label>
                             <div className="flex gap-2">
-                                <Select onValueChange={setSelectedPersonal} value={selectedPersonal}>
-                                    <SelectTrigger className="form-input">
-                                        <SelectValue placeholder="Selecciona personal..." />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {personalList.map((p) => (
-                                            <SelectItem key={p.name} value={p.name}>
-                                                {p.name}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
+                                <Combobox
+                                    options={personalList.map(p => ({ value: p.name, label: p.name }))}
+                                    value={selectedPersonal}
+                                    onValueChange={setSelectedPersonal}
+                                    placeholder="Selecciona o busca personal..."
+                                    emptyMessage="No se encontró personal."
+                                />
                                 <Button onClick={handleManualAssociate} className="bg-starbucks-accent hover:bg-starbucks-green text-white">
                                     <UserPlus className="mr-2 h-4 w-4" /> Asociar
                                 </Button>
