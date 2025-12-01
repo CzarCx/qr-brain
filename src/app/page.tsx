@@ -122,20 +122,32 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    const fetchPersonal = async (rol: string, setter: React.Dispatch<React.SetStateAction<Encargado[]>>) => {
+    const fetchPersonal = async () => {
         const { data, error } = await supabaseDB2
             .from('personal_name')
             .select('name')
-            .eq('rol', rol);
+            .eq('rol', 'operativo');
 
         if (error) {
-            console.error(`Error fetching ${rol}:`, error);
+            console.error(`Error fetching operativos:`, error);
         } else {
-            setter(data || []);
+            setPersonalList(data || []);
         }
     };
-    fetchPersonal('barra', setEncargadosList);
-    fetchPersonal('operativo', setPersonalList);
+    const fetchEncargados = async () => {
+        const { data, error } = await supabaseDB2
+            .from('personal_name')
+            .select('name')
+            .eq('rol', 'barra');
+
+        if (error) {
+            console.error(`Error fetching barra:`, error);
+        } else {
+            setEncargadosList(data || []);
+        }
+    };
+    fetchEncargados();
+    fetchPersonal();
   }, []);
 
   const showAppMessage = (text: string, type: 'success' | 'duplicate' | 'info') => {
@@ -832,18 +844,36 @@ export default function Home() {
   };
 
   const handleProduccionProgramada = async () => {
-    if (personalScans.length === 0) {
-      showAppMessage('No hay personal asignado para programar.', 'info');
+    if (scannedData.length === 0) {
+      showAppMessage('No hay registros pendientes para programar.', 'info');
+      return;
+    }
+    if (!selectedPersonal) {
+      showAppMessage('Por favor, selecciona un miembro del personal.', 'duplicate');
+      return;
+    }
+    if (scannedData.some(item => item.esti_time === null || item.esti_time === undefined)) {
+      showAppMessage('Por favor, completa todos los campos de "Tiempo Estimado" antes de programar.', 'duplicate');
       return;
     }
     setLoading(true);
     showAppMessage('Guardando producción programada...', 'info');
 
     try {
-      const dataToInsert = personalScans.map(item => ({
-        ...item,
-        date_ini: null, // Guardar sin fecha de inicio
-        date_esti: null, // Guardar sin fecha de fin
+      const dataToInsert = scannedData.map(item => ({
+        code: item.code,
+        sku: item.sku,
+        personal: selectedPersonal,
+        encargado: item.encargado,
+        product: item.producto,
+        quantity: item.cantidad,
+        organization: item.empresa,
+        venta: item.venta,
+        date: new Date().toISOString(),
+        esti_time: item.esti_time,
+        status: 'ASIGNADO',
+        date_ini: null,
+        date_esti: null,
       }));
 
       const { error } = await supabaseDB2.from('personal_prog').insert(dataToInsert);
@@ -853,8 +883,12 @@ export default function Home() {
         throw error;
       }
 
-      showAppMessage(`¡Éxito! Se guardaron ${personalScans.length} registros en producción programada.`, 'success');
-      setPersonalScans([]); // Limpiar la tabla de la UI
+      showAppMessage(`¡Éxito! Se guardaron ${scannedData.length} registros en producción programada.`, 'success');
+      setScannedData([]);
+      scannedCodesRef.current.clear();
+      setMelCodesCount(0);
+      setOtherCodesCount(0);
+      setSelectedPersonal('');
 
     } catch (error: any) {
       console.error("Error al guardar producción programada:", error);
@@ -1178,7 +1212,7 @@ export default function Home() {
                                 <Button onClick={handleManualAssociate} disabled={isAssociationDisabled} className="bg-starbucks-accent hover:bg-starbucks-green text-white">
                                     <UserPlus className="mr-2 h-4 w-4" /> Asociar
                                 </Button>
-                                 <Button onClick={handleProduccionProgramada} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg shadow-sm text-sm transition-colors duration-200" disabled={loading}>
+                                 <Button onClick={handleProduccionProgramada} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg shadow-sm text-sm transition-colors duration-200" disabled={loading || isAssociationDisabled}>
                                     Producción Programada
                                 </Button>
                             </div>
