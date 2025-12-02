@@ -1,3 +1,4 @@
+
 'use client';
 
 import Link from 'next/link';
@@ -20,37 +21,6 @@ const secondaryNavLinks = [
 
 export default function Navbar() {
   const pathname = usePathname();
-  const router = useRouter();
-
-  useEffect(() => {
-    const checkUser = async () => {
-      const { data: { session } } = await supabaseDB2.auth.getSession();
-      if (!session && pathname !== '/login') {
-        router.push('/login');
-      }
-    };
-
-    // We don't want to check for user on the login page itself
-    if (pathname !== '/login') {
-      checkUser();
-    }
-    
-    const { data: { subscription } } = supabaseDB2.auth.onAuthStateChange((event, session) => {
-      if (!session && pathname !== '/login') {
-        router.push('/login');
-      } else if (session && pathname === '/login') {
-        router.push('/');
-      }
-    });
-
-    return () => {
-      subscription.unsubscribe();
-    };
-  }, [pathname, router]);
-
-  if (pathname === '/login') {
-    return null; // Don't render navbar on login page
-  }
 
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 bg-starbucks-white shadow-md">

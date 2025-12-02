@@ -815,12 +815,6 @@ export default function Home() {
     showAppMessage('Guardando registros de personal...', 'info');
   
     try {
-      const { data: { user } } = await supabaseDB2.auth.getUser();
-      if (!user) {
-          throw new Error('No se pudo obtener el usuario. Por favor, inicia sesión de nuevo.');
-      }
-      const userId = user.id;
-
       const dataToInsert = personalScans.map((item) => ({
         code: item.code,
         name: item.personal,
@@ -835,28 +829,25 @@ export default function Home() {
         esti_time: item.esti_time,
         date_esti: item.date_esti,
         date_ini: item.date_ini,
-        user_id: userId,
       }));
   
       const { error: insertError } = await supabaseDB2.from('personal').insert(dataToInsert);
   
       if (insertError) {
-        console.error("Supabase insert error:", insertError);
         throw insertError;
       }
       
       const { error: deleteError } = await supabaseDB2
         .from('personal_prog')
         .delete()
-        .eq('user_id', userId);
+        .gt('id', 0); // Trick to delete all rows if no specific filter is better
   
       if (deleteError) {
-        console.error("Supabase delete error:", deleteError);
-        showAppMessage(`Registros guardados, pero falló la limpieza de programados: ${deleteError.message}`, 'warning');
-      } else {
-        showAppMessage('Registros guardados y programación limpiada exitosamente.', 'success');
-        setPersonalScans([]);
-      }
+        throw deleteError;
+      } 
+      
+      showAppMessage('Registros guardados y programación limpiada exitosamente.', 'success');
+      setPersonalScans([]);
   
     } catch (error: any) {
       console.error("Error en handleSavePersonal:", error);
@@ -890,12 +881,6 @@ export default function Home() {
     showAppMessage('Guardando producción programada...', 'info');
 
     try {
-      const { data: { user } } = await supabaseDB2.auth.getUser();
-      if (!user) {
-          throw new Error('No se pudo obtener el usuario. Por favor, inicia sesión de nuevo.');
-      }
-      const userId = user.id;
-
       const dataToInsert = scannedData.map(item => ({
         code: Number(item.code),
         sku: item.sku,
@@ -910,7 +895,6 @@ export default function Home() {
         status: 'PROGRAMADO',
         date_ini: null,
         date_esti: null,
-        user_id: userId,
       }));
 
       const { error } = await supabaseDB2.from('personal_prog').insert(dataToInsert);
@@ -1374,10 +1358,3 @@ export default function Home() {
     </>
   );
 }
-
-
-    
-
-    
-
-
