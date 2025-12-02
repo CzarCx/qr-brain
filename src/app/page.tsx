@@ -752,14 +752,14 @@ export default function Home() {
               `="${row.code}"`,
               `="${row.fecha}"`,
               `="${row.hora}"`,
-              `"${row.encargado.replace(/"/g, '""')}"`,
-              `"${row.area.replace(/"/g, '""')}"`,
-              `"${row.sku || ''}"`,
-              `"${row.cantidad || 0}"`,
-              `"${(row.producto || '').replace(/"/g, '""')}"`,
-              `"${(row.empresa || '').replace(/"/g, '""')}"`,
-              `"${(row.venta || '').replace(/"/g, '""')}"`,
-              `"${row.esti_time || ''}"`
+              `="${row.encargado.replace(/"/g, '""')}"`,
+              `="${row.area.replace(/"/g, '""')}"`,
+              `="${row.sku || ''}"`,
+              `="${row.cantidad || 0}"`,
+              `="${(row.producto || '').replace(/"/g, '""')}"`,
+              `="${(row.empresa || '').replace(/"/g, '""')}"`,
+              `="${(row.venta || '').replace(/"/g, '""')}"`,
+              `="${row.esti_time || ''}"`
           ].join(',')).join('\n');
           
           const blob = new Blob([BOM + headers + csvRows], { type: 'text/csv;charset=utf-t' });
@@ -806,7 +806,7 @@ export default function Home() {
     }
   };
 
-  const handleSavePersonal = async () => {
+ const handleSavePersonal = async () => {
     if (personalScans.length === 0) {
       showAppMessage('No hay datos de personal para guardar.', 'info');
       return;
@@ -832,19 +832,17 @@ export default function Home() {
       }));
   
       const { error: insertError } = await supabaseDB2.from('personal').insert(dataToInsert);
-  
-      if (insertError) {
-        throw insertError;
-      }
+      if (insertError) throw insertError;
       
-      const { error: deleteError } = await supabaseDB2
-        .from('personal_prog')
-        .delete()
-        .gt('id', 0); // Trick to delete all rows if no specific filter is better
-  
-      if (deleteError) {
-        throw deleteError;
-      } 
+      const namesToDelete = [...new Set(personalScans.map(item => item.personal))];
+      if (namesToDelete.length > 0) {
+        const { error: deleteError } = await supabaseDB2
+          .from('personal_prog')
+          .delete()
+          .in('name', namesToDelete);
+        
+        if (deleteError) throw deleteError;
+      }
       
       showAppMessage('Registros guardados y programación limpiada exitosamente.', 'success');
       setPersonalScans([]);
@@ -864,7 +862,7 @@ export default function Home() {
     }
   };
 
-  const handleProduccionProgramada = async () => {
+ const handleProduccionProgramada = async () => {
     if (scannedData.length === 0) {
       showAppMessage('No hay registros pendientes para programar.', 'info');
       return;
@@ -898,10 +896,7 @@ export default function Home() {
       }));
 
       const { error } = await supabaseDB2.from('personal_prog').insert(dataToInsert);
-
-      if (error) {
-        throw error;
-      }
+      if (error) throw error;
 
       showAppMessage(`¡Éxito! Se guardaron ${scannedData.length} registros en producción programada.`, 'success');
       setScannedData([]);
@@ -1175,7 +1170,7 @@ export default function Home() {
                 </div>
 
 
-                <div id="result-container" className="space-y-4">
+                <div className="space-y-4">
                     <div id="message" className={`p-3 rounded-lg text-center font-semibold text-base transition-all duration-300 ${messageClasses[message.type]}`}>
                         {message.text}
                     </div>
@@ -1358,3 +1353,5 @@ export default function Home() {
     </>
   );
 }
+
+    
