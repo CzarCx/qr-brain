@@ -710,12 +710,20 @@ export default function Home() {
   };
 
   const handleTimeChange = (code: string, value: string) => {
-    const time = value === '' ? null : Number(value);
-    setScannedData(prevData =>
-      prevData.map(item =>
-        item.code === code ? { ...item, esti_time: time } : item
-      )
-    );
+    const time = Number(value);
+    if (value === '' || time <= 0) {
+      setScannedData(prevData =>
+        prevData.map(item =>
+          item.code === code ? { ...item, esti_time: null } : item
+        )
+      );
+    } else {
+      setScannedData(prevData =>
+        prevData.map(item =>
+          item.code === code ? { ...item, esti_time: time } : item
+        )
+      );
+    }
     invalidateCSV();
   };
 
@@ -813,7 +821,7 @@ export default function Home() {
     }
     setLoading(true);
     showAppMessage('Guardando registros de personal...', 'info');
-  
+
     try {
       const dataToInsert = personalScans.map((item) => ({
         code: item.code,
@@ -830,23 +838,33 @@ export default function Home() {
         date_esti: item.date_esti,
         date_ini: item.date_ini,
       }));
-  
+
+      // Insertar los nuevos registros
       const { error: insertError } = await supabaseDB2.from('personal').insert(dataToInsert);
-      if (insertError) throw insertError;
-      
+      if (insertError) {
+        console.error("Error en insert:", insertError);
+        throw new Error(`Error al guardar en 'personal': ${insertError.message}`);
+      }
+
+      // Obtener los nombres únicos de las personas cuyos datos se guardaron
       const namesToDelete = [...new Set(personalScans.map(item => item.personal))];
+
       if (namesToDelete.length > 0) {
+        // Borrar los registros de 'personal_prog' por nombre
         const { error: deleteError } = await supabaseDB2
           .from('personal_prog')
           .delete()
           .in('name', namesToDelete);
         
-        if (deleteError) throw deleteError;
+        if (deleteError) {
+          console.error("Error en delete:", deleteError);
+          throw new Error(`Error al limpiar 'personal_prog': ${deleteError.message}`);
+        }
       }
       
       showAppMessage('Registros guardados y programación limpiada exitosamente.', 'success');
       setPersonalScans([]);
-  
+
     } catch (error: any) {
       console.error("Error en handleSavePersonal:", error);
       showAppMessage(`Error al procesar: ${error.message}`, 'duplicate');
@@ -1069,6 +1087,7 @@ export default function Home() {
                     onChange={(e) => handleTimeChange(data.code, e.target.value)}
                     className="form-input w-24"
                     placeholder="min"
+                    min="1"
                 />
             </td>
             <td className="px-4 py-3 whitespace-nowrap text-sm">{horaFinStr}</td>
