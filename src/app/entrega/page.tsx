@@ -429,7 +429,7 @@ export default function Home() {
                             <TableHeader className="sticky top-0 bg-starbucks-cream">
                                 <TableRow>
                                     <TableHead>Código</TableHead>
-                                    <TableHead>Empaquetado por</TableHead>
+                                    <TableHead>Producto</TableHead>
                                     <TableHead className="text-right">Acción</TableHead>
                                 </TableRow>
                             </TableHeader>
@@ -437,7 +437,7 @@ export default function Home() {
                                 {deliveryList.length > 0 ? deliveryList.map((item) => (
                                     <TableRow key={item.code}>
                                         <TableCell className="font-mono text-xs">{item.code}</TableCell>
-                                        <TableCell className="text-xs">{item.name || 'N/A'}</TableCell>
+                                        <TableCell className="text-xs">{item.product || 'N/A'}</TableCell>
                                         <TableCell className="text-right">
                                             <Button variant="ghost" size="icon" onClick={() => removeFromList(item.code)} className="text-red-500 hover:text-red-700 h-8 w-8">
                                                 <Trash2 className="h-4 w-4" />
