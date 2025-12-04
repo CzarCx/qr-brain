@@ -363,6 +363,46 @@ export default function Home() {
                     </div>
                 </div>
 
+                 <div>
+                     <div className="flex flex-col sm:flex-row justify-between items-center mb-2 gap-2">
+                        <h2 className="text-lg font-bold text-starbucks-dark">Para Entrega ({deliveryList.length})</h2>
+                        <Button onClick={handleUpdateStatusToDelivered} disabled={loading || deliveryList.length === 0} className="bg-green-600 hover:bg-green-700 w-full sm:w-auto">
+                           <PackageCheck className="mr-2 h-4 w-4" /> Entregar
+                        </Button>
+                    </div>
+
+                    <div className="table-container border border-gray-200 rounded-lg max-h-60 overflow-auto">
+                        <Table>
+                            <TableHeader className="sticky top-0 bg-starbucks-cream">
+                                <TableRow>
+                                    <TableHead>Código</TableHead>
+                                    <TableHead>Producto</TableHead>
+                                    <TableHead className="text-right">Acción</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {deliveryList.length > 0 ? deliveryList.map((item) => (
+                                    <TableRow key={item.code}>
+                                        <TableCell className="font-mono text-xs">{item.code}</TableCell>
+                                        <TableCell className="text-xs">{item.product || 'N/A'}</TableCell>
+                                        <TableCell className="text-right">
+                                            <Button variant="ghost" size="icon" onClick={() => removeFromList(item.code)} className="text-red-500 hover:text-red-700 h-8 w-8">
+                                                <Trash2 className="h-4 w-4" />
+                                            </Button>
+                                        </TableCell>
+                                    </TableRow>
+                                )) : (
+                                    <TableRow>
+                                        <TableCell colSpan={3} className="text-center text-gray-500 py-8">
+                                            No hay paquetes en la lista.
+                                        </TableCell>
+                                    </TableRow>
+                                )}
+                            </TableBody>
+                        </Table>
+                    </div>
+                </div>
+
                 <div className="bg-starbucks-cream p-4 rounded-lg">
                     <div className="scanner-container relative">
                         <div id="reader" ref={readerRef} style={{ display: selectedScannerMode === 'camara' && scannerActive ? 'block' : 'none' }}></div>
@@ -415,46 +455,6 @@ export default function Home() {
                         {message.text}
                     </div>
                 </div>
-                
-                <div>
-                     <div className="flex flex-col sm:flex-row justify-between items-center mb-2 gap-2">
-                        <h2 className="text-lg font-bold text-starbucks-dark">Para Entrega ({deliveryList.length})</h2>
-                        <Button onClick={handleUpdateStatusToDelivered} disabled={loading || deliveryList.length === 0} className="bg-green-600 hover:bg-green-700 w-full sm:w-auto">
-                           <PackageCheck className="mr-2 h-4 w-4" /> Entregar
-                        </Button>
-                    </div>
-
-                    <div className="table-container border border-gray-200 rounded-lg max-h-60 overflow-auto">
-                        <Table>
-                            <TableHeader className="sticky top-0 bg-starbucks-cream">
-                                <TableRow>
-                                    <TableHead>Código</TableHead>
-                                    <TableHead>Producto</TableHead>
-                                    <TableHead className="text-right">Acción</TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {deliveryList.length > 0 ? deliveryList.map((item) => (
-                                    <TableRow key={item.code}>
-                                        <TableCell className="font-mono text-xs">{item.code}</TableCell>
-                                        <TableCell className="text-xs">{item.product || 'N/A'}</TableCell>
-                                        <TableCell className="text-right">
-                                            <Button variant="ghost" size="icon" onClick={() => removeFromList(item.code)} className="text-red-500 hover:text-red-700 h-8 w-8">
-                                                <Trash2 className="h-4 w-4" />
-                                            </Button>
-                                        </TableCell>
-                                    </TableRow>
-                                )) : (
-                                    <TableRow>
-                                        <TableCell colSpan={3} className="text-center text-gray-500 py-8">
-                                            No hay paquetes en la lista.
-                                        </TableCell>
-                                    </TableRow>
-                                )}
-                            </TableBody>
-                        </Table>
-                    </div>
-                </div>
             </div>
 
             {loading && <div id="loading-overlay" style={{display: 'flex'}}>
@@ -480,5 +480,3 @@ export default function Home() {
     </>
   );
 }
-
-    
