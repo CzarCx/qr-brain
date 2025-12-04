@@ -597,6 +597,7 @@ const handleMassQualify = async () => {
                                 <TableRow>
                                     <TableHead>Código</TableHead>
                                     <TableHead>Producto</TableHead>
+                                    <TableHead>Empaquetado por</TableHead>
                                     <TableHead className="text-right">Acción</TableHead>
                                 </TableRow>
                             </TableHeader>
@@ -605,6 +606,7 @@ const handleMassQualify = async () => {
                                     <TableRow key={item.code}>
                                         <TableCell className="font-mono text-xs">{item.code}</TableCell>
                                         <TableCell className="text-xs">{item.product || 'N/A'}</TableCell>
+                                        <TableCell className="text-xs">{item.name || 'N/A'}</TableCell>
                                         <TableCell className="text-right">
                                             <Button variant="ghost" size="icon" onClick={() => removeFromMassList(item.code)} className="text-red-500 hover:text-red-700 h-8 w-8">
                                                 <Trash2 className="h-4 w-4" />
@@ -613,7 +615,7 @@ const handleMassQualify = async () => {
                                     </TableRow>
                                 )) : (
                                      <TableRow>
-                                        <TableCell colSpan={3} className="text-center text-gray-500 py-8">
+                                        <TableCell colSpan={4} className="text-center text-gray-500 py-8">
                                             No hay códigos en la lista.
                                         </TableCell>
                                     </TableRow>
