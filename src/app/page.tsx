@@ -102,6 +102,7 @@ export default function Home() {
   const [programadosPersonalList, setProgramadosPersonalList] = useState<{ name: string }[]>([]);
   const [selectedPersonalParaCargar, setSelectedPersonalParaCargar] = useState('');
   const [loadingProgramadosPersonal, setLoadingProgramadosPersonal] = useState(false);
+  const [currentTime, setCurrentTime] = useState(new Date());
 
 
   // Refs para elementos del DOM y la instancia del escáner
@@ -119,6 +120,13 @@ export default function Home() {
   const APPS_SCRIPT_URL =
     'https://script.google.com/macros/s/AKfycbwxN5n-iE0pi3JlOkImBgWD3-qptWsJxdyMJjXbRySgGvi7jqIsU9Puo7p2uvu5BioIbQ/exec';
   const MIN_SCAN_INTERVAL = 500;
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     setIsMounted(true);
@@ -273,9 +281,7 @@ export default function Home() {
           // Calculate start time
           let startTime: Date;
           if (index === 0) {
-              const [day, month, year] = item.fecha.split('/');
-              const [hours, minutes, seconds] = item.hora.split(':');
-              startTime = new Date(`${year}-${month}-${day}T${hours}:${minutes}:${seconds}`);
+              startTime = new Date();
           } else {
               startTime = lastFinishTime!;
           }
@@ -354,7 +360,7 @@ export default function Home() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [currentTime]);
 
   const handleManualAssociate = () => {
     if (!selectedPersonal) {
@@ -824,7 +830,7 @@ export default function Home() {
 
     try {
       const dataToInsert = personalScans.map((item) => ({
-        code: item.code,
+        code: Number(item.code),
         name: item.personal,
         name_inc: item.encargado,
         sku: item.sku,
@@ -1047,12 +1053,10 @@ export default function Home() {
     
     return sortedData.map((data: ScannedItem, index: number) => {
         let startTime: Date;
-        if (index === 0 || !lastFinishTime) {
-            const [day, month, year] = data.fecha.split('/');
-            const [hours, minutes, seconds] = data.hora.split(':');
-            startTime = new Date(`${year}-${month}-${day}T${hours}:${minutes}:${seconds}`);
+        if (index === 0) {
+            startTime = currentTime;
         } else {
-            startTime = lastFinishTime;
+            startTime = lastFinishTime!;
         }
 
         let horaFin: Date | null = null;
