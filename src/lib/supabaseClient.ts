@@ -14,15 +14,15 @@ if (!supabaseAnonKey) {
 export const supabase = createClient(supabaseUrl, supabaseAnonKey)
 
 // Separate client for the second database
-const supabaseUrl2 = process.env.NEXT_PUBLIC_SUPABASE_URL_2
-const supabaseAnonKey2 = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY_2
+const supabaseUrl2 = process.env.NEXT_PUBLIC_SUPABASE_URL_2 || ''
+const supabaseAnonKey2 = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY_2 || ''
 
 if (!supabaseUrl2) {
-  throw new Error('Missing Supabase URL 2. Make sure it is set in your .env.local file');
+  console.warn('Warning: Missing Supabase URL 2. Make sure it is set in your environment variables.');
 }
 
 if (!supabaseAnonKey2) {
-  throw new Error('Missing Supabase Anon Key 2. Make sure it is set in your .env.local file');
+  console.warn('Warning: Missing Supabase Anon Key 2. Make sure it is set in your environment variables.');
 }
 
 export const supabaseDB2 = createClient(supabaseUrl2, supabaseAnonKey2);
