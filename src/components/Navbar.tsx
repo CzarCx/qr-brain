@@ -40,9 +40,10 @@ export default function Navbar() {
                     key={link.href}
                     href={link.href}
                     className={cn(
-                      'flex flex-col items-center justify-center gap-1 px-2 py-2 rounded-md text-xs font-medium transition-colors w-20 sm:w-24',
+                      'flex flex-col items-center justify-center gap-1 px-2 py-2 rounded-md text-xs font-medium w-20 sm:w-24',
+                      'transform transition-transform duration-200 ease-in-out hover:scale-110',
                       isActive
-                        ? 'bg-starbucks-green text-white'
+                        ? 'bg-starbucks-green text-white scale-105'
                         : 'text-starbucks-dark hover:bg-starbucks-cream hover:text-starbucks-dark'
                     )}
                   >
