@@ -540,11 +540,15 @@ export default function Home() {
         });
       }
     } else {
-      cleanup();
+      if (html5QrCodeRef.current) {
+        cleanup();
+      }
     }
   
     return () => {
-      cleanup();
+      if (html5QrCodeRef.current) {
+        cleanup();
+      }
     };
   }, [scannerActive, selectedScannerMode, onScanSuccess, isMounted, isMobile]);
 
@@ -1528,9 +1532,5 @@ export default function Home() {
     </>
   );
 }
-
-
-
-    
 
     

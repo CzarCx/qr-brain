@@ -245,17 +245,21 @@ export default function Home() {
         });
       }
     } else {
-      cleanup().then(() => {
-        if(isMobile) {
-            setCameraCapabilities(null);
-            setIsFlashOn(false);
-            setZoom(1);
-        }
-      });
+      if (html5QrCodeRef.current) {
+        cleanup().then(() => {
+          if(isMobile) {
+              setCameraCapabilities(null);
+              setIsFlashOn(false);
+              setZoom(1);
+          }
+        });
+      }
     }
 
     return () => {
-      cleanup();
+      if (html5QrCodeRef.current) {
+        cleanup();
+      }
     };
   }, [scannerActive, selectedScannerMode, onScanSuccess, isMounted, isMobile]);
 
@@ -341,7 +345,7 @@ export default function Home() {
                     <div>
                         <label htmlFor="encargado" className="block text-sm font-bold text-starbucks-dark mb-1">Nombre del Encargado:</label>
                          <Select onValueChange={setEncargado} value={encargado} disabled={scannerActive}>
-                            <SelectTrigger className="bg-transparent hover:bg-gray-50">
+                            <SelectTrigger className="bg-transparent hover:bg-gray-50 border border-input">
                                 <SelectValue placeholder="Selecciona un encargado" />
                             </SelectTrigger>
                             <SelectContent>
@@ -481,3 +485,5 @@ export default function Home() {
     </>
   );
 }
+
+    

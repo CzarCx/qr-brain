@@ -247,17 +247,21 @@ export default function ScannerPage() {
         });
       }
     } else {
-      cleanup().then(() => {
-        if(isMobile) {
-            setCameraCapabilities(null);
-            setIsFlashOn(false);
-            setZoom(1);
-        }
-      });
+      if (html5QrCodeRef.current) {
+        cleanup().then(() => {
+          if(isMobile) {
+              setCameraCapabilities(null);
+              setIsFlashOn(false);
+              setZoom(1);
+          }
+        });
+      }
     }
 
     return () => {
-      cleanup();
+      if (html5QrCodeRef.current) {
+        cleanup();
+      }
     };
   }, [scannerActive, selectedScannerMode, onScanSuccess, isMobile, isMounted]);
 
@@ -526,12 +530,12 @@ const handleMassQualify = async () => {
                              </DialogTrigger>
                              <DialogContent className="sm:max-w-[425px]">
                                  <DialogHeader>
-                                 <DialogTitle>Calificar Empaquetado</DialogTitle>
-                                  <DialogDescription className="text-center pt-2">
-                                    ¿Cómo calificarías la calidad del empaquetado de?
-                                    <br />
-                                    <span className="font-bold text-lg text-starbucks-green">{lastScannedResult.name}</span>
-                                  </DialogDescription>
+                                  <DialogTitle>Calificar Empaquetado</DialogTitle>
+                                   <DialogDescription className="text-center pt-2">
+                                     ¿Cómo calificarías la calidad del empaquetado de?
+                                     <br />
+                                     <span className="font-bold text-2xl text-starbucks-green block mt-2">{lastScannedResult.name}</span>
+                                   </DialogDescription>
                                  </DialogHeader>
                                  <div className="grid gap-4 py-4">
                                  {lastScannedResult.status === 'REPORTADO' && (
@@ -636,3 +640,5 @@ const handleMassQualify = async () => {
     </>
   );
 }
+
+    
