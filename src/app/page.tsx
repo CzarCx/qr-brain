@@ -1371,7 +1371,7 @@ export default function Home() {
                         
                         <div className="table-container border border-gray-200 rounded-lg">
                             <table className="w-full min-w-full divide-y divide-gray-200">
-                                <thead className="bg-starbucks-cream sticky top-0">
+                                <thead className="bg-starbucks-cream sticky top-0 z-10">
                                     <tr>
                                         <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">Codigo</th>
                                         <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">Personal</th>
@@ -1441,7 +1441,7 @@ export default function Home() {
 
                         <div className="table-container border border-gray-200 rounded-lg mt-4">
                             <table className="w-full min-w-full divide-y divide-gray-200">
-                                <thead className="bg-starbucks-cream sticky top-0">
+                                <thead className="bg-starbucks-cream sticky top-0 z-10">
                                     <tr>
                                         <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">CODIGO</th>
                                         <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">TIEMPO ESTIMADO</th>
