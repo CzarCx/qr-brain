@@ -103,6 +103,7 @@ export default function Home() {
   const [selectedPersonalParaCargar, setSelectedPersonalParaCargar] = useState('');
   const [loadingProgramadosPersonal, setLoadingProgramadosPersonal] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
+  const [selectedBulkPersonal, setSelectedBulkPersonal] = useState('');
 
 
   // Refs para elementos del DOM y la instancia del escáner
@@ -821,19 +822,16 @@ export default function Home() {
 
           const fileName = `${encargadoName}-${etiquetas}-${areaName}-${fechaFormateada}-${timeString}.csv`;
           const BOM = "\uFEFF";
-          const headers = "CODIGO,FECHA,HORA,ENCARGADO,AREA,SKU,CANTIDAD,PRODUCTO,EMPRESA,VENTA,TIEMPO ESTIMADO\n";
+          const headers = "CODIGO,TIEMPO ESTIMADO,PRODUCTO,SKU,CANTIDAD,EMPRESA,VENTA,HORA DE ASIGNACION\n";
           let csvRows = scannedData.map(row => [
               `="${row.code}"`,
-              `="${row.fecha}"`,
-              `="${row.hora}"`,
-              `="${row.encargado.replace(/"/g, '""')}"`,
-              `="${row.area.replace(/"/g, '""')}"`,
+              `="${row.esti_time || ''}"`,
+              `="${(row.producto || '').replace(/"/g, '""')}"`,
               `="${row.sku || ''}"`,
               `="${row.cantidad || 0}"`,
-              `="${(row.producto || '').replace(/"/g, '""')}"`,
               `="${(row.empresa || '').replace(/"/g, '""')}"`,
               `="${(row.venta || '').replace(/"/g, '""')}"`,
-              `="${row.esti_time || ''}"`
+              `="${row.hora}"`
           ].join(',')).join('\n');
           
           const blob = new Blob([BOM + headers + csvRows], { type: 'text/csv;charset=utf-t' });
@@ -1105,6 +1103,23 @@ export default function Home() {
     );
     showAppMessage(`Se actualizó el personal para el código ${code}.`, 'info');
   };
+  
+  const handleBulkPersonalChange = () => {
+    if (!selectedBulkPersonal) {
+        showAppMessage('Por favor, selecciona una persona para el cambio masivo.', 'info');
+        return;
+    }
+    if (personalScans.length === 0) {
+        showAppMessage('No hay registros en la lista para cambiar.', 'info');
+        return;
+    }
+
+    setPersonalScans(prevScans => 
+        prevScans.map(scan => ({ ...scan, personal: selectedBulkPersonal }))
+    );
+    showAppMessage(`Todos los registros han sido asignados a ${selectedBulkPersonal}.`, 'success');
+    setSelectedBulkPersonal('');
+  };
 
 
   const messageClasses: any = {
@@ -1294,9 +1309,9 @@ export default function Home() {
                     </div>
 
                     <div>
-                        <div className="flex justify-between items-center mb-2">
+                        <div className="flex flex-wrap justify-between items-center mb-2 gap-4">
                            <h2 className="text-lg font-bold text-starbucks-dark">Personal Asignado</h2>
-                            <div className="flex gap-2">
+                            <div className="flex gap-2 items-center">
                                 <Dialog open={isCargarModalOpen} onOpenChange={setIsCargarModalOpen}>
                                     <DialogTrigger asChild>
                                         <Button onClick={handleOpenCargarModal} className="px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white font-semibold rounded-lg shadow-sm text-sm transition-colors duration-200" disabled={loading}>
@@ -1337,6 +1352,23 @@ export default function Home() {
                                 </Button>
                             </div>
                         </div>
+
+                         <div className="p-4 bg-gray-100 rounded-lg mb-4 space-y-2 md:space-y-0 md:flex md:items-center md:justify-between md:gap-4">
+                            <label className="block text-sm font-bold text-starbucks-dark">Cambiar todos a:</label>
+                            <div className="flex-grow md:max-w-xs">
+                                <Combobox
+                                    options={personalList.map(p => ({ value: p.name, label: p.name }))}
+                                    value={selectedBulkPersonal}
+                                    onValueChange={setSelectedBulkPersonal}
+                                    placeholder="Selecciona personal..."
+                                    emptyMessage="No se encontró personal."
+                                />
+                            </div>
+                            <Button onClick={handleBulkPersonalChange} disabled={!selectedBulkPersonal || personalScans.length === 0} className="w-full md:w-auto bg-teal-600 hover:bg-teal-700 text-white">
+                                Cambiar Todos
+                            </Button>
+                        </div>
+                        
                         <div className="table-container border border-gray-200 rounded-lg">
                             <table className="w-full min-w-full divide-y divide-gray-200">
                                 <thead className="bg-starbucks-cream sticky top-0">
@@ -1453,5 +1485,3 @@ export default function Home() {
     </>
   );
 }
-
-    
