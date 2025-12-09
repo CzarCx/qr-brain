@@ -910,19 +910,20 @@ export default function Home() {
         throw new Error(`Error al guardar en 'personal': ${insertError.message}`);
       }
 
-      // Obtener los nombres únicos de las personas cuyos datos se guardaron
-      const namesToDelete = [...new Set(personalScans.map(item => item.personal))];
+      // Obtener los números de venta únicos para borrar de la tabla de programación
+      const salesNumbersToDelete = [...new Set(personalScans.map(item => item.venta).filter(Boolean))];
 
-      if (namesToDelete.length > 0) {
-        // Borrar los registros de 'personal_prog' por nombre
+      if (salesNumbersToDelete.length > 0) {
+        // Borrar los registros de 'personal_prog' por sales_num
         const { error: deleteError } = await supabaseDB2
           .from('personal_prog')
           .delete()
-          .in('name', namesToDelete);
+          .in('sales_num', salesNumbersToDelete as (string | number)[]);
         
         if (deleteError) {
           console.error("Error en delete:", deleteError);
-          throw new Error(`Error al limpiar 'personal_prog': ${deleteError.message}`);
+          // No lanzamos un error que bloquee, pero sí lo notificamos.
+          showAppMessage(`Registros guardados, pero hubo un error al limpiar 'personal_prog': ${deleteError.message}`, 'info');
         }
       }
       
@@ -1161,7 +1162,7 @@ export default function Home() {
         return (
         <tr key={data.code}>
             <td className="px-4 py-3 whitespace-nowrap font-mono text-sm">{data.code}</td>
-            <td className="px-4 py-3 whitespace-nowrap text-sm">
+             <td className="px-4 py-3 whitespace-nowrap text-sm">
                 <Input
                     type="number"
                     value={data.esti_time ?? ''}
@@ -1194,9 +1195,9 @@ export default function Home() {
     return sortedScans.map((data, index) => {
         let horaInicio: Date;
         if (index === 0) {
-            horaInicio = currentTime;
+            horaInicio = currentTime; // The first task's start time is now (real-time)
         } else {
-            horaInicio = lastFinishTime!;
+            horaInicio = lastFinishTime!; // Subsequent tasks start when the previous one ends
         }
 
         let horaFin: Date | null = null;
