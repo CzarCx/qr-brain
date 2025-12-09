@@ -1,6 +1,6 @@
 
 'use client';
-import React, {useEffect, useRef, useState, useCallback} from 'react';
+import React, {useEffect, useRef, useState, useCallback, useMemo} from 'react';
 import Head from 'next/head';
 import Image from 'next/image';
 import { Html5Qrcode, Html5QrcodeScannerState } from 'html5-qrcode';
@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/select"
 import { Button } from '@/components/ui/button';
 import { Input } from "@/components/ui/input";
-import { Zap, ZoomIn, UserPlus, PlusCircle } from 'lucide-react';
+import { Zap, ZoomIn, UserPlus, PlusCircle, Clock } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Combobox } from '@/components/ui/combobox';
 import {
@@ -1173,6 +1173,19 @@ export default function Home() {
   
   const isAssociationDisabled = scannedData.length > 0 && scannedData.some(item => item.esti_time === null || item.esti_time === undefined);
 
+  const totalEstimatedTime = useMemo(() => {
+    return scannedData.reduce((acc, item) => acc + (item.esti_time || 0), 0);
+  }, [scannedData]);
+
+  const formatTotalTime = (totalMinutes: number) => {
+    if (totalMinutes === 0) return null;
+    if (totalMinutes < 60) {
+        return `${totalMinutes} minuto(s)`;
+    }
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+    return `${hours} hora(s) ${minutes > 0 ? `y ${minutes} minuto(s)` : ''}`;
+  };
 
   const renderPendingRecords = () => {
     const sortedData = [...scannedData].sort((a, b) => new Date(`1970/01/01 ${a.hora}`).valueOf() - new Date(`1970/01/01 ${b.hora}`).valueOf());
@@ -1530,6 +1543,15 @@ export default function Home() {
                             )}
                         </div>
 
+                        {totalEstimatedTime > 0 && (
+                            <div className="mt-4 p-3 bg-blue-100 border border-blue-300 rounded-lg text-center">
+                                <p className="font-semibold text-blue-800 flex items-center justify-center gap-2">
+                                    <Clock className="h-5 w-5"/>
+                                    Tiempo Total Asignado: <span className="font-bold">{formatTotalTime(totalEstimatedTime)}</span>
+                                </p>
+                            </div>
+                        )}
+
                         <div className="table-container border border-gray-200 rounded-lg mt-4">
                             <table className="w-full min-w-full divide-y divide-gray-200">
                                 <thead className="bg-starbucks-cream sticky top-0 z-10">
@@ -1576,3 +1598,5 @@ export default function Home() {
     </>
   );
 }
+
+    
