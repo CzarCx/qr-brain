@@ -99,6 +99,21 @@ export default function Home() {
     oscillator.stop(context.currentTime + 0.1);
   };
 
+  const playWarningSound = () => {
+    const context = new (window.AudioContext || (window as any).webkitAudioContext)();
+    if (!context) return;
+    const oscillator = context.createOscillator();
+    const gainNode = context.createGain();
+    oscillator.type = 'sawtooth';
+    oscillator.frequency.setValueAtTime(440, context.currentTime); // A4
+    gainNode.gain.setValueAtTime(0.1, context.currentTime);
+    gainNode.gain.exponentialRampToValueAtTime(0.00001, context.currentTime + 0.2);
+    oscillator.connect(gainNode);
+    gainNode.connect(context.destination);
+    oscillator.start();
+    oscillator.stop(context.currentTime + 0.2);
+  };
+
   const onScanSuccess = useCallback(async (decodedText: string) => {
     if (loading || Date.now() - lastScanTimeRef.current < MIN_SCAN_INTERVAL) return;
 
@@ -106,7 +121,7 @@ export default function Home() {
     setLoading(true);
     showAppMessage('Procesando código...', 'info');
     if ('vibrate' in navigator) navigator.vibrate(100);
-    playBeep();
+    
 
     const finalCode = decodedText.trim();
 
@@ -128,10 +143,13 @@ export default function Home() {
         }
 
         if (!data) {
+            playWarningSound();
             showModalNotification('Código No Asignado', 'Esta etiqueta aún no ha sido registrada en el sistema.', 'destructive');
         } else if (data.status === 'REPORTADO') {
+            playWarningSound();
             showModalNotification('Paquete Reportado', 'Este paquete no está listo para ser enviado, tiene un reporte activo.', 'destructive');
         } else if (data.status === 'CALIFICADO') {
+            playBeep();
             const newItem: DeliveryItem = {
                 code: finalCode,
                 product: data.product,
@@ -141,6 +159,7 @@ export default function Home() {
             scannedCodesRef.current.add(finalCode);
             showAppMessage(`Paquete listo: ${finalCode}`, 'success');
         } else {
+             playWarningSound();
              showModalNotification('Paquete no Calificado', `Este paquete aún no ha sido calificado (Estado: ${data.status}).`);
         }
 
@@ -481,5 +500,7 @@ export default function Home() {
     </>
   );
 }
+
+    
 
     
