@@ -645,5 +645,3 @@ const handleMassQualify = async () => {
     </>
   );
 }
-
-    
