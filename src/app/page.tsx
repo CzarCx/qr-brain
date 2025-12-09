@@ -25,6 +25,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  DialogFooter,
 } from "@/components/ui/dialog"
 
 
@@ -156,7 +157,7 @@ export default function Home() {
         }
     };
     const fetchEncargados = async () => {
-        const { data, error } await supabaseDB2
+        const { data, error } = await supabaseDB2
             .from('personal_name')
             .select('name')
             .eq('rol', 'barra');
@@ -425,7 +426,7 @@ export default function Home() {
     
     setLoading(true);
     try {
-        const { data: personalData, error: personalError } await supabaseDB2
+        const { data: personalData, error: personalError } = await supabaseDB2
             .from('personal')
             .select('code, name, name_inc')
             .eq('code', finalCode)
@@ -544,10 +545,11 @@ export default function Home() {
             console.error("Error al iniciar la cámara:", err);
             if (String(err).includes('Cannot transition to a new state')) {
                 showAppMessage('Error al iniciar la cámara. Por favor, intenta de nuevo.', 'duplicate');
+                 setScannerActive(false);
             } else {
                 showAppMessage('Error al iniciar la cámara. Revisa los permisos.', 'duplicate');
+                 setScannerActive(false);
             }
-            setScannerActive(false); 
         });
       }
     } else {
@@ -734,7 +736,7 @@ export default function Home() {
             return;
         }
         
-        const { data, error } await supabase
+        const { data, error } = await supabase
             .from('BASE DE DATOS ETIQUETAS IMPRESAS')
             .select('Código, SKU, Cantidad, Producto, EMPRESA, Venta')
             .eq('Código', manualCode)
@@ -811,7 +813,7 @@ export default function Home() {
       if(scannedData.length === 0) return showAppMessage('No hay datos para exportar.', 'duplicate');
       
       try {
-          const response await fetch('https://worldtimeapi.org/api/timezone/America/Mexico_City');
+          const response = await fetch('https://worldtimeapi.org/api/timezone/America/Mexico_City');
           if (!response.ok) throw new Error(`Error en API de hora: ${response.status}`);
           const data = await response.json();
           const now = new Date(data.datetime);
@@ -1547,6 +1549,8 @@ export default function Home() {
     </>
   );
 }
+
+    
 
     
 
