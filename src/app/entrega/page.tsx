@@ -404,8 +404,8 @@ export default function Home() {
                     )}
 
                     <div id="scanner-controls" className="mt-4 flex flex-wrap gap-2 justify-center">
-                        <Button onClick={startScanner} disabled={scannerActive || loading || !encargado} className="bg-blue-600 hover:bg-blue-700 text-sm">Iniciar</Button>
-                        <Button onClick={stopScanner} variant="destructive" className="text-sm">Detener</Button>
+                        <Button onClick={startScanner} disabled={scannerActive || loading || !encargado} className="bg-blue-600 hover:bg-blue-700 text-sm disabled:bg-gray-400">Iniciar</Button>
+                        <Button onClick={stopScanner} variant="destructive" className="text-sm" disabled={!scannerActive || loading}>Detener</Button>
                     </div>
 
                     <div id="physical-scanner-status" className="mt-4 text-center p-2 rounded-md bg-starbucks-accent text-white text-sm" style={{ display: scannerActive && selectedScannerMode === 'fisico' ? 'block' : 'none' }}>

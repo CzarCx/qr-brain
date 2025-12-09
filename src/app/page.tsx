@@ -489,29 +489,30 @@ export default function Home() {
   
   useEffect(() => {
     if (!isMounted || !readerRef.current) return;
-  
+
     if (!html5QrCodeRef.current) {
       html5QrCodeRef.current = new Html5Qrcode(readerRef.current.id, false);
     }
     const qrCode = html5QrCodeRef.current;
-  
+
     const cleanup = () => {
-      if (qrCode && qrCode.isScanning) {
-        return qrCode.stop().catch(err => {
-          if (!String(err).includes('not started')) {
-            console.error("Fallo al detener el escáner:", err);
-          }
-        }).finally(() => {
-            if(isMobile) {
-              setCameraCapabilities(null);
-              setIsFlashOn(false);
-              setZoom(1);
-            }
-        });
-      }
-      return Promise.resolve();
+        if (qrCode && qrCode.isScanning) {
+            return qrCode.stop().catch(err => {
+                // Específicamente ignoramos el error de "not started", que puede ocurrir en condiciones de carrera
+                if (!String(err).includes('not started')) {
+                    console.error("Fallo al detener el escáner:", err);
+                }
+            }).finally(() => {
+              if (isMobile) {
+                setCameraCapabilities(null);
+                setIsFlashOn(false);
+                setZoom(1);
+              }
+            });
+        }
+        return Promise.resolve();
     };
-  
+
     if (scannerActive && selectedScannerMode === 'camara') {
       if (qrCode.getState() !== Html5QrcodeScannerState.SCANNING) {
         const config = {
@@ -522,18 +523,19 @@ export default function Home() {
         qrCode.start({ facingMode: "environment" }, config, onScanSuccess, (errorMessage) => {})
         .catch(err => {
             console.error("Error al iniciar la cámara:", err);
+            // Si el error es el de transición, manejalo de forma controlada.
             if (String(err).includes('Cannot transition to a new state')) {
                 showAppMessage('Error al iniciar la cámara. Por favor, intenta de nuevo.', 'duplicate');
             } else {
                 showAppMessage('Error al iniciar la cámara. Revisa los permisos.', 'duplicate');
             }
-            setScannerActive(false);
+            setScannerActive(false); // Forzar el estado a "detenido"
         });
       }
     } else {
       cleanup();
     }
-  
+
     return () => {
       cleanup();
     };
@@ -1300,8 +1302,12 @@ export default function Home() {
                         )}
                         
                         <div id="scanner-controls" className="mt-4 flex flex-wrap gap-2 justify-center">
-                            <button onClick={startScanner} disabled={scannerActive || !encargado} className={`px-4 py-2 text-white font-semibold rounded-lg shadow-md transition-colors duration-200 text-sm ${scannerActive || !encargado ? 'bg-gray-400' : 'bg-blue-600 hover:bg-blue-700'}`}>Iniciar</button>
-                            <button onClick={stopScanner} className={`px-4 py-2 text-white font-semibold rounded-lg shadow-md transition-colors duration-200 text-sm bg-red-600 hover:bg-red-700`}>Detener</button>
+                            <button onClick={startScanner} disabled={scannerActive || loading || !encargado} className="px-4 py-2 text-white font-semibold rounded-lg shadow-md transition-colors duration-200 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-sm">
+                                Iniciar
+                            </button>
+                            <button onClick={stopScanner} disabled={!scannerActive || loading} className="px-4 py-2 text-white font-semibold rounded-lg shadow-md transition-colors duration-200 bg-red-600 hover:bg-red-700 disabled:bg-gray-400 text-sm">
+                                Detener
+                            </button>
                         </div>
 
                         <div id="physical-scanner-status" className="mt-4 text-center p-2 rounded-md bg-starbucks-accent text-white" style={{ display: scannerActive && selectedScannerMode === 'fisico' ? 'block' : 'none' }}>
