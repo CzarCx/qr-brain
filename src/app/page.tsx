@@ -205,6 +205,21 @@ export default function Home() {
     oscillator.stop(context.currentTime + 0.1);
   };
 
+  const playErrorSound = () => {
+    const context = new (window.AudioContext || (window as any).webkitAudioContext)();
+    if (!context) return;
+    const oscillator = context.createOscillator();
+    const gainNode = context.createGain();
+    oscillator.type = 'square';
+    oscillator.frequency.setValueAtTime(110, context.currentTime); // A2 note
+    gainNode.gain.setValueAtTime(0.15, context.currentTime);
+    gainNode.gain.exponentialRampToValueAtTime(0.00001, context.currentTime + 0.2);
+    oscillator.connect(gainNode);
+    gainNode.connect(context.destination);
+    oscillator.start();
+    oscillator.stop(context.currentTime + 0.2);
+  };
+
   const addCodeAndUpdateCounters = useCallback((codeToAdd: string, details: { sku: string | null; cantidad: number | null; producto: string | null; empresa: string | null; venta: string | null; }) => {
     const finalCode = codeToAdd.trim();
 
@@ -463,6 +478,7 @@ export default function Home() {
 
         if (!data) {
             showAppMessage(`Error: Código ${finalCode} no encontrado en la base de datos.`, 'duplicate');
+            playErrorSound();
             setLoading(false);
             return;
         }
@@ -629,6 +645,7 @@ export default function Home() {
 
         if (!data) {
             showAppMessage(`Error: Código ${finalCode} no encontrado en la base de datos.`, 'duplicate');
+            playErrorSound();
             setLoading(false);
             return;
         }
@@ -750,6 +767,7 @@ export default function Home() {
 
         if (!data) {
             showAppMessage(`Error: Código ${manualCode} no encontrado en la base de datos.`, 'duplicate');
+            playErrorSound();
             setLoading(false);
             return;
         }
@@ -1549,6 +1567,8 @@ export default function Home() {
     </>
   );
 }
+
+    
 
     
 
