@@ -1089,9 +1089,7 @@ export default function Home() {
 
     } catch (e: any) {
       console.error("Error al cargar producción programada:", e);
-      if (e instanceof Error) {
-        showAppMessage(`Error al cargar: ${e.message}`, 'duplicate');
-      }
+      showAppMessage(`Error al cargar: ${e.message}`, 'duplicate');
     } finally {
       setLoading(false);
     }
@@ -1189,6 +1187,54 @@ export default function Home() {
     })
   };
 
+  const renderPersonalScans = () => {
+    const sortedScans = [...personalScans].sort((a, b) => new Date(a.date_ini!).valueOf() - new Date(b.date_ini!).valueOf());
+    let lastFinishTime: Date | null = null;
+    
+    return sortedScans.map((data, index) => {
+        let horaInicio: Date;
+        if (index === 0) {
+            horaInicio = currentTime;
+        } else {
+            horaInicio = lastFinishTime!;
+        }
+
+        let horaFin: Date | null = null;
+        if (!isNaN(horaInicio.getTime()) && data.esti_time) {
+            horaFin = new Date(horaInicio.getTime() + data.esti_time * 60000);
+        }
+        
+        lastFinishTime = horaFin || horaInicio;
+
+        const horaInicioStr = !isNaN(horaInicio.getTime()) 
+            ? horaInicio.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })
+            : 'N/A';
+        const horaFinStr = horaFin
+            ? horaFin.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })
+            : 'N/A';
+
+        return (
+            <tr key={`${data.code}-${index}`}>
+                <td className="px-4 py-3 whitespace-nowrap font-mono text-sm">{data.code}</td>
+                <td className="px-4 py-3 whitespace-nowrap text-sm">
+                    <Combobox
+                        options={personalList.map(p => ({ value: p.name, label: p.name }))}
+                        value={data.personal}
+                        onValueChange={(newPersonal) => handlePersonalChange(data.code, newPersonal)}
+                        placeholder="Selecciona personal..."
+                        emptyMessage="No se encontró personal."
+                        buttonClassName="bg-transparent border-0 hover:bg-gray-100"
+                    />
+                </td>
+                <td className="px-4 py-3 whitespace-nowrap text-sm">{data.product}</td>
+                <td className="px-4 py-3 whitespace-nowrap text-sm">{horaInicioStr}</td>
+                <td className="px-4 py-3 whitespace-nowrap text-sm">{horaFinStr}</td>
+            </tr>
+        );
+    });
+};
+
+
   return (
     <>
         <Head>
@@ -1208,7 +1254,7 @@ export default function Home() {
                         <div>
                             <label htmlFor="encargado" className="block text-sm font-bold text-starbucks-dark mb-1">Nombre del Encargado:</label>
                             <Select onValueChange={setEncargado} value={encargado} disabled={scannerActive}>
-                                <SelectTrigger className="bg-transparent hover:bg-gray-50">
+                                <SelectTrigger className="bg-transparent hover:bg-gray-50 border border-input">
                                     <SelectValue placeholder="Selecciona un encargado" />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -1300,7 +1346,7 @@ export default function Home() {
                 </div>
                 
                 <div className="space-y-4">
-                    <div className="p-4 bg-starbucks-cream rounded-lg">
+                     <div className="p-4 bg-starbucks-cream rounded-lg">
                         <label htmlFor="manual-code-input" className="block text-sm font-bold text-starbucks-dark mb-1">Ingreso Manual:</label>
                         <div className="relative mt-1 flex items-center rounded-lg border border-input bg-background focus-within:ring-2 focus-within:ring-ring">
                             <Input
@@ -1396,28 +1442,7 @@ export default function Home() {
                                     </tr>
                                 </thead>
                                 <tbody className="bg-starbucks-white divide-y divide-gray-200">
-                                    {personalScans.map((data: PersonalScanItem, index: number) => (
-                                        <tr key={`${data.code}-${index}`}>
-                                            <td className="px-4 py-3 whitespace-nowrap font-mono text-sm">{data.code}</td>
-                                            <td className="px-4 py-3 whitespace-nowrap text-sm">
-                                                <Combobox
-                                                    options={personalList.map(p => ({ value: p.name, label: p.name }))}
-                                                    value={data.personal}
-                                                    onValueChange={(newPersonal) => handlePersonalChange(data.code, newPersonal)}
-                                                    placeholder="Selecciona personal..."
-                                                    emptyMessage="No se encontró personal."
-                                                    buttonClassName="bg-transparent border-0 hover:bg-gray-100"
-                                                />
-                                            </td>
-                                            <td className="px-4 py-3 whitespace-nowrap text-sm">{data.product}</td>
-                                            <td className="px-4 py-3 whitespace-nowrap text-sm">
-                                                {data.date_ini ? new Date(data.date_ini).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }) : 'N/A'}
-                                            </td>
-                                            <td className="px-4 py-3 whitespace-nowrap text-sm">
-                                                {data.date_esti ? new Date(data.date_esti).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }) : 'N/A'}
-                                            </td>
-                                        </tr>
-                                    ))}
+                                    {renderPersonalScans()}
                                 </tbody>
                             </table>
                         </div>
