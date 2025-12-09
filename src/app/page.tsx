@@ -409,6 +409,23 @@ export default function Home() {
     
     setLoading(true);
     try {
+        // Check if code already exists in 'personal' table
+        const { data: personalData, error: personalError } = await supabaseDB2
+            .from('personal')
+            .select('code')
+            .eq('code', finalCode)
+            .single();
+
+        if (personalError && personalError.code !== 'PGRST116') {
+            showAppMessage(`Error al verificar el código en personal: ${personalError.message}`, 'duplicate');
+            return;
+        }
+
+        if (personalData) {
+            showAppMessage(`Error: El código ${finalCode} ya ha sido asignado.`, 'duplicate');
+            return;
+        }
+
         const { data, error } = await supabase
             .from('BASE DE DATOS ETIQUETAS IMPRESAS')
             .select('Código, SKU, Cantidad, Producto, EMPRESA, Venta')
@@ -558,6 +575,23 @@ export default function Home() {
 
     setLoading(true);
     try {
+        // Check if code already exists in 'personal' table
+        const { data: personalData, error: personalError } = await supabaseDB2
+            .from('personal')
+            .select('code')
+            .eq('code', finalCode)
+            .single();
+
+        if (personalError && personalError.code !== 'PGRST116') {
+            showAppMessage(`Error al verificar el código en personal: ${personalError.message}`, 'duplicate');
+            return;
+        }
+
+        if (personalData) {
+            showAppMessage(`Error: El código ${finalCode} ya ha sido asignado.`, 'duplicate');
+            return;
+        }
+
         const { data, error } = await supabase
             .from('BASE DE DATOS ETIQUETAS IMPRESAS')
             .select('Código, SKU, Cantidad, Producto, EMPRESA, Venta')
@@ -662,6 +696,23 @@ export default function Home() {
       
       setLoading(true);
       try {
+        // Check if code already exists in 'personal' table
+        const { data: personalData, error: personalError } = await supabaseDB2
+            .from('personal')
+            .select('code')
+            .eq('code', manualCode)
+            .single();
+
+        if (personalError && personalError.code !== 'PGRST116') {
+            showAppMessage(`Error al verificar el código en personal: ${personalError.message}`, 'duplicate');
+            return;
+        }
+
+        if (personalData) {
+            showAppMessage(`Error: El código ${manualCode} ya ha sido asignado.`, 'duplicate');
+            return;
+        }
+        
         const { data, error } = await supabase
             .from('BASE DE DATOS ETIQUETAS IMPRESAS')
             .select('Código, SKU, Cantidad, Producto, EMPRESA, Venta')
@@ -1378,4 +1429,5 @@ export default function Home() {
 }
 
     
+
 
