@@ -84,6 +84,20 @@ export default function Home() {
     setShowNotification(true);
   };
 
+  const playBeep = () => {
+    const context = new (window.AudioContext || (window as any).webkitAudioContext)();
+    if (!context) return;
+    const oscillator = context.createOscillator();
+    const gainNode = context.createGain();
+    oscillator.type = 'sine';
+    oscillator.frequency.setValueAtTime(880, context.currentTime); // A5 note
+    gainNode.gain.setValueAtTime(0.1, context.currentTime); // Volume
+    gainNode.gain.exponentialRampToValueAtTime(0.00001, context.currentTime + 0.1);
+    oscillator.connect(gainNode);
+    gainNode.connect(context.destination);
+    oscillator.start();
+    oscillator.stop(context.currentTime + 0.1);
+  };
 
   const onScanSuccess = useCallback(async (decodedText: string) => {
     if (loading || Date.now() - lastScanTimeRef.current < MIN_SCAN_INTERVAL) return;
@@ -92,6 +106,7 @@ export default function Home() {
     setLoading(true);
     showAppMessage('Procesando código...', 'info');
     if ('vibrate' in navigator) navigator.vibrate(100);
+    playBeep();
 
     const finalCode = decodedText.trim();
 
@@ -231,22 +246,6 @@ export default function Home() {
           qrbox: { width: 250, height: 250 },
         };
         qrCode.start({ facingMode: "environment" }, config, onScanSuccess, (e: any) => {})
-        .then(() => {
-            if (isMobile) {
-              const videoElement = document.getElementById('reader')?.querySelector('video');
-              if(videoElement && videoElement.srcObject) {
-                  const stream = videoElement.srcObject as MediaStream;
-                  const track = stream.getVideoTracks()[0];
-                  if (track) {
-                      const capabilities = track.getCapabilities();
-                      setCameraCapabilities(capabilities);
-                      if (capabilities.zoom) {
-                        setZoom(capabilities.zoom.min || 1);
-                      }
-                  }
-              }
-            }
-        })
         .catch(err => {
             console.error("Error al iniciar camara:", err);
             if (String(err).includes('Cannot transition to a new state')) {
@@ -405,7 +404,7 @@ export default function Home() {
 
                     <div id="scanner-controls" className="mt-4 flex flex-wrap gap-2 justify-center">
                         <Button onClick={startScanner} disabled={scannerActive || loading || !encargado} className="bg-blue-600 hover:bg-blue-700 text-sm disabled:bg-gray-400">Iniciar</Button>
-                        <Button onClick={stopScanner} variant="destructive" className="text-sm" disabled={!scannerActive || loading}>Detener</Button>
+                        <Button onClick={stopScanner} variant="destructive" className="text-sm" disabled={!scannerActive}>Detener</Button>
                     </div>
 
                     <div id="physical-scanner-status" className="mt-4 text-center p-2 rounded-md bg-starbucks-accent text-white text-sm" style={{ display: scannerActive && selectedScannerMode === 'fisico' ? 'block' : 'none' }}>
@@ -482,3 +481,5 @@ export default function Home() {
     </>
   );
 }
+
+    

@@ -22,7 +22,6 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -157,7 +156,7 @@ export default function Home() {
         }
     };
     const fetchEncargados = async () => {
-        const { data, error } = await supabaseDB2
+        const { data, error } await supabaseDB2
             .from('personal_name')
             .select('name')
             .eq('rol', 'barra');
@@ -190,6 +189,21 @@ export default function Home() {
     setIngresarDatosEnabled(false);
   };
 
+  const playBeep = () => {
+    const context = new (window.AudioContext || (window as any).webkitAudioContext)();
+    if (!context) return;
+    const oscillator = context.createOscillator();
+    const gainNode = context.createGain();
+    oscillator.type = 'sine';
+    oscillator.frequency.setValueAtTime(880, context.currentTime); // A5 note
+    gainNode.gain.setValueAtTime(0.1, context.currentTime); // Volume
+    gainNode.gain.exponentialRampToValueAtTime(0.00001, context.currentTime + 0.1);
+    oscillator.connect(gainNode);
+    gainNode.connect(context.destination);
+    oscillator.start();
+    oscillator.stop(context.currentTime + 0.1);
+  };
+
   const addCodeAndUpdateCounters = useCallback((codeToAdd: string, details: { sku: string | null; cantidad: number | null; producto: string | null; empresa: string | null; venta: string | null; }) => {
     const finalCode = codeToAdd.trim();
 
@@ -210,6 +224,7 @@ export default function Home() {
     showAppMessage(`Éxito: ${finalCode}`, 'success');
 
     if ('vibrate' in navigator) navigator.vibrate(200);
+    playBeep();
 
     const laserLine = document.getElementById('laser-line');
     if (laserLine) {
@@ -410,7 +425,7 @@ export default function Home() {
     
     setLoading(true);
     try {
-        const { data: personalData, error: personalError } = await supabaseDB2
+        const { data: personalData, error: personalError } await supabaseDB2
             .from('personal')
             .select('code, name, name_inc')
             .eq('code', finalCode)
@@ -503,7 +518,6 @@ export default function Home() {
     const cleanup = () => {
         if (qrCode && qrCode.isScanning) {
             return qrCode.stop().catch(err => {
-                // Específicamente ignoramos el error de "not started", que puede ocurrir en condiciones de carrera
                 if (!String(err).includes('not started')) {
                     console.error("Fallo al detener el escáner:", err);
                 }
@@ -528,13 +542,12 @@ export default function Home() {
         qrCode.start({ facingMode: "environment" }, config, onScanSuccess, (errorMessage) => {})
         .catch(err => {
             console.error("Error al iniciar la cámara:", err);
-             // Si el error es el de transición, manejalo de forma controlada.
             if (String(err).includes('Cannot transition to a new state')) {
                 showAppMessage('Error al iniciar la cámara. Por favor, intenta de nuevo.', 'duplicate');
             } else {
                 showAppMessage('Error al iniciar la cámara. Revisa los permisos.', 'duplicate');
             }
-            setScannerActive(false); // Forzar el estado a "detenido"
+            setScannerActive(false); 
         });
       }
     } else {
@@ -721,7 +734,7 @@ export default function Home() {
             return;
         }
         
-        const { data, error } = await supabase
+        const { data, error } await supabase
             .from('BASE DE DATOS ETIQUETAS IMPRESAS')
             .select('Código, SKU, Cantidad, Producto, EMPRESA, Venta')
             .eq('Código', manualCode)
@@ -798,7 +811,7 @@ export default function Home() {
       if(scannedData.length === 0) return showAppMessage('No hay datos para exportar.', 'duplicate');
       
       try {
-          const response = await fetch('https://worldtimeapi.org/api/timezone/America/Mexico_City');
+          const response await fetch('https://worldtimeapi.org/api/timezone/America/Mexico_City');
           if (!response.ok) throw new Error(`Error en API de hora: ${response.status}`);
           const data = await response.json();
           const now = new Date(data.datetime);
@@ -967,7 +980,7 @@ export default function Home() {
         sku: item.sku,
         name: selectedPersonal,
         name_inc: item.encargado,
-        product: item.producto,
+        product: item.product,
         quantity: item.cantidad,
         organization: item.empresa,
         sales_num: Number(item.venta),
@@ -1320,7 +1333,7 @@ export default function Home() {
                             <button onClick={startScanner} disabled={scannerActive || loading || !encargado} className="px-4 py-2 text-white font-semibold rounded-lg shadow-md transition-colors duration-200 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-sm">
                                 Iniciar
                             </button>
-                            <button onClick={stopScanner} disabled={!scannerActive || loading} className="px-4 py-2 text-white font-semibold rounded-lg shadow-md transition-colors duration-200 bg-red-600 hover:bg-red-700 disabled:bg-gray-400 text-sm">
+                            <button onClick={stopScanner} disabled={!scannerActive} className="px-4 py-2 text-white font-semibold rounded-lg shadow-md transition-colors duration-200 bg-red-600 hover:bg-red-700 disabled:bg-gray-400 text-sm">
                                 Detener
                             </button>
                         </div>
@@ -1534,5 +1547,7 @@ export default function Home() {
     </>
   );
 }
+
+    
 
     

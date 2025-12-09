@@ -99,6 +99,21 @@ export default function ScannerPage() {
     fetchEncargados();
   }, []);
 
+  const playBeep = () => {
+    const context = new (window.AudioContext || (window as any).webkitAudioContext)();
+    if (!context) return;
+    const oscillator = context.createOscillator();
+    const gainNode = context.createGain();
+    oscillator.type = 'sine';
+    oscillator.frequency.setValueAtTime(880, context.currentTime); // A5 note
+    gainNode.gain.setValueAtTime(0.1, context.currentTime); // Volume
+    gainNode.gain.exponentialRampToValueAtTime(0.00001, context.currentTime + 0.1);
+    oscillator.connect(gainNode);
+    gainNode.connect(context.destination);
+    oscillator.start();
+    oscillator.stop(context.currentTime + 0.1);
+  };
+
   const onScanSuccess = useCallback(async (decodedText: string) => {
     if (loading || Date.now() - lastScanTimeRef.current < MIN_SCAN_INTERVAL) return;
     
@@ -106,6 +121,7 @@ export default function ScannerPage() {
     setLoading(true);
     setMessage('Procesando código...');
     if ('vibrate' in navigator) navigator.vibrate(100);
+    playBeep();
 
     // Prevent duplicates in mass scanning mode
     if (scanMode === 'masivo' && massScannedCodesRef.current.has(decodedText)) {
@@ -212,7 +228,6 @@ export default function ScannerPage() {
     const cleanup = () => {
         if (qrCode && qrCode.isScanning) {
             return qrCode.stop().catch(err => {
-                // Específicamente ignoramos el error de "not started", que puede ocurrir en condiciones de carrera
                 if (!String(err).includes('not started')) {
                     console.error("Fallo al detener el escáner:", err);
                 }
@@ -234,22 +249,6 @@ export default function ScannerPage() {
           qrbox: { width: 250, height: 250 },
         };
         qrCode.start({ facingMode: "environment" }, config, onScanSuccess, (e: any) => {})
-        .then(() => {
-            if (isMobile) {
-              const videoElement = document.getElementById('reader')?.querySelector('video');
-              if(videoElement && videoElement.srcObject) {
-                  const stream = videoElement.srcObject as MediaStream;
-                  const track = stream.getVideoTracks()[0];
-                  if (track) {
-                      const capabilities = track.getCapabilities();
-                      setCameraCapabilities(capabilities);
-                      if (capabilities.zoom) {
-                        setZoom(capabilities.zoom.min || 1);
-                      }
-                  }
-              }
-            }
-        })
         .catch(err => {
             console.error("Error al iniciar camara:", err);
              // Si el error es el de transición, manejalo de forma controlada.
@@ -495,7 +494,7 @@ const handleMassQualify = async () => {
               <button onClick={() => { setScannerActive(true); setLastScannedResult(null); setMessage('Apunte la cámara a un código QR.'); }} disabled={scannerActive || loading || !encargado} className="px-4 py-2 text-white font-semibold rounded-lg shadow-md transition-colors duration-200 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-sm">
                 Iniciar
               </button>
-              <button onClick={() => window.location.reload()} disabled={!scannerActive || loading} className="px-4 py-2 text-white font-semibold rounded-lg shadow-md transition-colors duration-200 bg-red-600 hover:bg-red-700 disabled:bg-gray-400 text-sm">
+              <button onClick={() => window.location.reload()} disabled={!scannerActive} className="px-4 py-2 text-white font-semibold rounded-lg shadow-md transition-colors duration-200 bg-red-600 hover:bg-red-700 disabled:bg-gray-400 text-sm">
                 Detener
               </button>
             </div>
@@ -537,9 +536,8 @@ const handleMassQualify = async () => {
                                  <DialogHeader>
                                   <DialogTitle>Calificar Empaquetado</DialogTitle>
                                    <DialogDescription className="text-center pt-2">
-                                     ¿Cómo calificarías la calidad del empaquetado de?
-                                     <br />
-                                     <span className="font-bold text-2xl text-starbucks-green block mt-2">{lastScannedResult.name}</span>
+                                     ¿Cómo calificarías la calidad del empaquetado de
+                                     <span className="font-bold text-2xl text-starbucks-green block mt-2">{lastScannedResult.name}?</span>
                                    </DialogDescription>
                                  </DialogHeader>
                                  <div className="grid gap-4 py-4">
@@ -645,3 +643,5 @@ const handleMassQualify = async () => {
     </>
   );
 }
+
+    
