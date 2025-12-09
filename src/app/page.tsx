@@ -1088,10 +1088,10 @@ export default function Home() {
       setSelectedPersonalParaCargar('');
 
     } catch (e: any) {
+      console.error("Error al cargar producción programada:", e);
       if (e instanceof Error) {
         showAppMessage(`Error al cargar: ${e.message}`, 'duplicate');
       }
-      console.error("Error al cargar producción programada:", e);
     } finally {
       setLoading(false);
     }
@@ -1163,7 +1163,7 @@ export default function Home() {
         return (
         <tr key={data.code}>
             <td className="px-4 py-3 whitespace-nowrap font-mono text-sm">{data.code}</td>
-             <td className="px-4 py-3 whitespace-nowrap text-sm">
+            <td className="px-4 py-3 whitespace-nowrap text-sm">
                 <Input
                     type="number"
                     value={data.esti_time ?? ''}
@@ -1302,11 +1302,11 @@ export default function Home() {
                 <div className="space-y-4">
                     <div className="p-4 bg-starbucks-cream rounded-lg">
                         <label htmlFor="manual-code-input" className="block text-sm font-bold text-starbucks-dark mb-1">Ingreso Manual:</label>
-                        <div className="relative mt-1 flex items-center">
+                        <div className="relative mt-1 flex items-center rounded-lg border border-input bg-background focus-within:ring-2 focus-within:ring-ring">
                             <Input
                                 type="text"
                                 id="manual-code-input"
-                                className="w-full pr-12"
+                                className="w-full border-0 bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0"
                                 placeholder="Escriba el código..."
                                 onKeyDown={(e) => e.key === 'Enter' && handleManualAdd()}
                             />
@@ -1315,7 +1315,7 @@ export default function Home() {
                                 id="manual-add-btn"
                                 onClick={handleManualAdd}
                                 size="icon"
-                                className="absolute right-1 h-8 w-8 bg-starbucks-green hover:bg-starbucks-dark text-white rounded-md"
+                                className="h-8 w-8 bg-starbucks-green hover:bg-starbucks-dark text-white rounded-md mr-1"
                             >
                                 <PlusCircle className="h-5 w-5" />
                             </Button>
@@ -1503,3 +1503,6 @@ export default function Home() {
   );
 }
 
+
+
+    
