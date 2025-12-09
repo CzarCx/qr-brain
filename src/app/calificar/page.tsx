@@ -189,7 +189,7 @@ export default function ScannerPage() {
   }, [zoom, isFlashOn]);
   
   useEffect(() => {
-    if (isMobile && scannerActive && selectedScannerMode === 'camara' && html5QrCodeRef.current?.isScanning) {
+    if (isMobile && scannerActive && selectedScannerMode === 'camara' && html5QrCodeRef.current?.getState() === Html5QrcodeScannerState.SCANNING) {
       const videoElement = document.getElementById('reader')?.querySelector('video');
       if (videoElement && videoElement.srcObject) {
         const stream = videoElement.srcObject as MediaStream;
@@ -204,28 +204,35 @@ export default function ScannerPage() {
   useEffect(() => {
     if (!isMounted || !readerRef.current) return;
 
+    if (!html5QrCodeRef.current) {
+      html5QrCodeRef.current = new Html5Qrcode(readerRef.current.id, false);
+    }
+    const qrCode = html5QrCodeRef.current;
+
     const cleanup = () => {
-      if (html5QrCodeRef.current && html5QrCodeRef.current.isScanning) {
-        return html5QrCodeRef.current.stop().catch(err => {
-          if (!String(err).includes('not started')) {
-            console.error("Fallo al detener el escáner:", err);
-          }
-        });
-      }
-      return Promise.resolve();
+        if (qrCode && qrCode.getState() === Html5QrcodeScannerState.SCANNING) {
+            return qrCode.stop().catch(err => {
+                if (!String(err).includes('not started')) {
+                    console.error("Fallo al detener el escáner:", err);
+                }
+            }).finally(() => {
+              if (isMobile) {
+                setCameraCapabilities(null);
+                setIsFlashOn(false);
+                setZoom(1);
+              }
+            });
+        }
+        return Promise.resolve();
     };
 
     if (scannerActive && selectedScannerMode === 'camara') {
-      if (!html5QrCodeRef.current) {
-        html5QrCodeRef.current = new Html5Qrcode(readerRef.current.id, false);
-      }
-
-      if (html5QrCodeRef.current && !html5QrCodeRef.current.isScanning) {
+      if (qrCode.getState() !== Html5QrcodeScannerState.SCANNING) {
         const config = {
           fps: 5,
           qrbox: { width: 250, height: 250 },
         };
-        html5QrCodeRef.current.start({ facingMode: "environment" }, config, onScanSuccess, (e: any) => {}).then(() => {
+        qrCode.start({ facingMode: "environment" }, config, onScanSuccess, (e: any) => {}).then(() => {
             if (isMobile) {
               const videoElement = document.getElementById('reader')?.querySelector('video');
               if(videoElement && videoElement.srcObject) {
@@ -247,21 +254,11 @@ export default function ScannerPage() {
         });
       }
     } else {
-      if (html5QrCodeRef.current) {
-        cleanup().then(() => {
-          if(isMobile) {
-              setCameraCapabilities(null);
-              setIsFlashOn(false);
-              setZoom(1);
-          }
-        });
-      }
+      cleanup();
     }
 
     return () => {
-      if (html5QrCodeRef.current) {
-        cleanup();
-      }
+      cleanup();
     };
   }, [scannerActive, selectedScannerMode, onScanSuccess, isMobile, isMounted]);
 

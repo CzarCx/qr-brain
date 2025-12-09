@@ -3,7 +3,7 @@
 import {useEffect, useRef, useState, useCallback} from 'react';
 import Head from 'next/head';
 import Image from 'next/image';
-import { Html5Qrcode } from 'html5-qrcode';
+import { Html5Qrcode, Html5QrcodeScannerState } from 'html5-qrcode';
 import { supabase } from '@/lib/supabaseClient';
 import { supabaseDB2 } from '@/lib/supabaseClient';
 import {
@@ -490,9 +490,14 @@ export default function Home() {
   useEffect(() => {
     if (!isMounted || !readerRef.current) return;
   
+    if (!html5QrCodeRef.current) {
+      html5QrCodeRef.current = new Html5Qrcode(readerRef.current.id, false);
+    }
+    const qrCode = html5QrCodeRef.current;
+  
     const cleanup = () => {
-      if (html5QrCodeRef.current && html5QrCodeRef.current.isScanning) {
-        return html5QrCodeRef.current.stop().catch(err => {
+      if (qrCode && qrCode.getState() === Html5QrcodeScannerState.SCANNING) {
+        return qrCode.stop().catch(err => {
           if (!String(err).includes('not started')) {
             console.error("Fallo al detener el escáner:", err);
           }
@@ -508,17 +513,13 @@ export default function Home() {
     };
   
     if (scannerActive && selectedScannerMode === 'camara') {
-      if (!html5QrCodeRef.current) {
-        html5QrCodeRef.current = new Html5Qrcode(readerRef.current.id, false);
-      }
-  
-      if (html5QrCodeRef.current && !html5QrCodeRef.current.isScanning) {
+      if (qrCode.getState() !== Html5QrcodeScannerState.SCANNING) {
         const config = {
           fps: 10,
           qrbox: { width: 250, height: 250 },
           experimentalFeatures: { useBarCodeDetectorIfSupported: true },
         };
-        html5QrCodeRef.current.start({ facingMode: "environment" }, config, onScanSuccess, (errorMessage) => {}).then(() => {
+        qrCode.start({ facingMode: "environment" }, config, onScanSuccess, (errorMessage) => {}).then(() => {
             if (isMobile) {
               const videoElement = document.getElementById('reader')?.querySelector('video');
               if(videoElement && videoElement.srcObject) {
@@ -540,15 +541,11 @@ export default function Home() {
         });
       }
     } else {
-      if (html5QrCodeRef.current) {
-        cleanup();
-      }
+      cleanup();
     }
   
     return () => {
-      if (html5QrCodeRef.current) {
-        cleanup();
-      }
+      cleanup();
     };
   }, [scannerActive, selectedScannerMode, onScanSuccess, isMounted, isMobile]);
 
@@ -1092,9 +1089,9 @@ export default function Home() {
       setIsCargarModalOpen(false);
       setSelectedPersonalParaCargar('');
 
-    } catch (e: any) {
-      console.error("Error al cargar producción programada:", e);
-      showAppMessage(`Error al cargar: ${e.message}`, 'duplicate');
+    } catch (error: any) {
+      console.error("Error al cargar producción programada:", error);
+      showAppMessage(`Error al cargar: ${error.message}`, 'duplicate');
     } finally {
       setLoading(false);
     }
