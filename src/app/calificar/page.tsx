@@ -438,7 +438,7 @@ const handleMassQualify = async () => {
           </div>
           
           {scanMode === 'masivo' && (
-            <h2 className="text-lg font-bold text-starbucks-dark">Escaneados ({massScannedCodes.length})</h2>
+            <h2 className="text-lg font-bold text-center text-starbucks-dark">Escaneados ({massScannedCodes.length})</h2>
           )}
 
           <div className="bg-starbucks-cream p-4 rounded-lg">
