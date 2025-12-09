@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/select"
 import { Button } from '@/components/ui/button';
 import { Input } from "@/components/ui/input";
-import { Zap, ZoomIn, UserPlus } from 'lucide-react';
+import { Zap, ZoomIn, UserPlus, PlusCircle } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Combobox } from '@/components/ui/combobox';
 import {
@@ -1088,10 +1088,10 @@ export default function Home() {
       setSelectedPersonalParaCargar('');
 
     } catch (e: any) {
-      console.error("Error al cargar producción programada:", e);
       if (e instanceof Error) {
         showAppMessage(`Error al cargar: ${e.message}`, 'duplicate');
       }
+      console.error("Error al cargar producción programada:", e);
     } finally {
       setLoading(false);
     }
@@ -1163,12 +1163,12 @@ export default function Home() {
         return (
         <tr key={data.code}>
             <td className="px-4 py-3 whitespace-nowrap font-mono text-sm">{data.code}</td>
-            <td className="px-4 py-3 whitespace-nowrap text-sm">
+             <td className="px-4 py-3 whitespace-nowrap text-sm">
                 <Input
                     type="number"
                     value={data.esti_time ?? ''}
                     onChange={(e) => handleTimeChange(data.code, e.target.value)}
-                    className="form-input w-24"
+                    className="w-24 bg-transparent"
                     placeholder="min"
                     min="1"
                 />
@@ -1300,13 +1300,25 @@ export default function Home() {
                 </div>
                 
                 <div className="space-y-4">
-                     <div className="p-4 bg-starbucks-cream rounded-lg">
+                    <div className="p-4 bg-starbucks-cream rounded-lg">
                         <label htmlFor="manual-code-input" className="block text-sm font-bold text-starbucks-dark mb-1">Ingreso Manual:</label>
-                        <div className="mt-1 flex rounded-md shadow-sm">
-                            <input type="text" id="manual-code-input" className="form-input flex-1 block w-full rounded-none rounded-l-md" placeholder="Escriba el código..." onKeyDown={(e) => e.key === 'Enter' && handleManualAdd()}/>
-                            <button type="button" id="manual-add-btn" onClick={handleManualAdd} className="inline-flex items-center px-4 py-2 border border-l-0 border-green-600 rounded-r-md bg-green-600 text-white hover:bg-green-700 font-semibold text-sm">
-                                +
-                            </button>
+                        <div className="relative mt-1 flex items-center">
+                            <Input
+                                type="text"
+                                id="manual-code-input"
+                                className="w-full pr-12"
+                                placeholder="Escriba el código..."
+                                onKeyDown={(e) => e.key === 'Enter' && handleManualAdd()}
+                            />
+                            <Button
+                                type="button"
+                                id="manual-add-btn"
+                                onClick={handleManualAdd}
+                                size="icon"
+                                className="absolute right-1 h-8 w-8 bg-starbucks-green hover:bg-starbucks-dark text-white rounded-md"
+                            >
+                                <PlusCircle className="h-5 w-5" />
+                            </Button>
                         </div>
                     </div>
 
@@ -1490,3 +1502,4 @@ export default function Home() {
     </>
   );
 }
+
