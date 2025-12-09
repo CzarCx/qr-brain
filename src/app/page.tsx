@@ -418,11 +418,13 @@ export default function Home() {
 
         if (personalError && personalError.code !== 'PGRST116') {
             showAppMessage(`Error al verificar el código en personal: ${personalError.message}`, 'duplicate');
+            setLoading(false);
             return;
         }
 
         if (personalData) {
             showAppMessage(`Error: El código ${finalCode} ya ha sido asignado.`, 'duplicate');
+            setLoading(false);
             return;
         }
 
@@ -434,11 +436,13 @@ export default function Home() {
 
         if (error && error.code !== 'PGRST116') {
             showAppMessage(`Error de base de datos: ${error.message}`, 'duplicate');
+            setLoading(false);
             return;
         }
 
         if (!data) {
             showAppMessage(`Error: Código ${finalCode} no encontrado en la base de datos.`, 'duplicate');
+            setLoading(false);
             return;
         }
 
@@ -584,11 +588,13 @@ export default function Home() {
 
         if (personalError && personalError.code !== 'PGRST116') {
             showAppMessage(`Error al verificar el código en personal: ${personalError.message}`, 'duplicate');
+            setLoading(false);
             return;
         }
 
         if (personalData) {
             showAppMessage(`Error: El código ${finalCode} ya ha sido asignado.`, 'duplicate');
+            setLoading(false);
             return;
         }
 
@@ -600,11 +606,13 @@ export default function Home() {
         
         if (error && error.code !== 'PGRST116') {
             showAppMessage(`Error de base de datos: ${error.message}`, 'duplicate');
+            setLoading(false);
             return;
         }
 
         if (!data) {
             showAppMessage(`Error: Código ${finalCode} no encontrado en la base de datos.`, 'duplicate');
+            setLoading(false);
             return;
         }
 
@@ -705,11 +713,13 @@ export default function Home() {
 
         if (personalError && personalError.code !== 'PGRST116') {
             showAppMessage(`Error al verificar el código en personal: ${personalError.message}`, 'duplicate');
+            setLoading(false);
             return;
         }
 
         if (personalData) {
             showAppMessage(`Error: El código ${manualCode} ya ha sido asignado.`, 'duplicate');
+            setLoading(false);
             return;
         }
         
@@ -721,11 +731,13 @@ export default function Home() {
 
         if (error && error.code !== 'PGRST116') { 
             showAppMessage(`Error de base de datos: ${error.message}`, 'duplicate');
+            setLoading(false);
             return;
         }
 
         if (!data) {
             showAppMessage(`Error: Código ${manualCode} no encontrado en la base de datos.`, 'duplicate');
+            setLoading(false);
             return;
         }
 
@@ -1128,13 +1140,6 @@ export default function Home() {
         return (
         <tr key={data.code}>
             <td className="px-4 py-3 whitespace-nowrap font-mono text-sm">{data.code}</td>
-            <td className="px-4 py-3 whitespace-nowrap text-sm">{data.producto}</td>
-            <td className="px-4 py-3 whitespace-nowrap text-sm">{data.sku}</td>
-            <td className="px-4 py-3 whitespace-nowrap text-sm">{data.cantidad}</td>
-            <td className="px-4 py-3 whitespace-nowrap text-sm">{data.empresa}</td>
-            <td className="px-4 py-3 whitespace-nowrap text-sm">{data.venta}</td>
-            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{data.hora}</td>
-            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{horaInicioStr}</td>
             <td className="px-4 py-3 whitespace-nowrap text-sm">
                 <Input
                     type="number"
@@ -1145,6 +1150,13 @@ export default function Home() {
                     min="1"
                 />
             </td>
+            <td className="px-4 py-3 whitespace-nowrap text-sm">{data.producto}</td>
+            <td className="px-4 py-3 whitespace-nowrap text-sm">{data.sku}</td>
+            <td className="px-4 py-3 whitespace-nowrap text-sm">{data.cantidad}</td>
+            <td className="px-4 py-3 whitespace-nowrap text-sm">{data.empresa}</td>
+            <td className="px-4 py-3 whitespace-nowrap text-sm">{data.venta}</td>
+            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{data.hora}</td>
+            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{horaInicioStr}</td>
             <td className="px-4 py-3 whitespace-nowrap text-sm">{horaFinStr}</td>
             <td className="px-4 py-3 whitespace-nowrap text-sm text-center">
                 <button className="delete-btn text-red-500 hover:text-red-700 font-semibold text-xs" onClick={() => deleteRow(data.code)}>Borrar</button>
@@ -1386,6 +1398,7 @@ export default function Home() {
                                 <thead className="bg-starbucks-cream sticky top-0">
                                     <tr>
                                         <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">CODIGO</th>
+                                        <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">TIEMPO ESTIMADO</th>
                                         <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">PRODUCTO</th>
                                         <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">SKU</th>
                                         <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">CANT</th>
@@ -1393,7 +1406,6 @@ export default function Home() {
                                         <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">Venta</th>
                                         <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">HORA DE ASIGNACION</th>
                                         <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">HORA INICIO</th>
-                                        <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">TIEMPO ESTIMADO</th>
                                         <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">HORA FIN</th>
                                         <th scope="col" className="px-4 py-2 text-center text-xs font-medium text-starbucks-dark uppercase tracking-wider">ACCION</th>
                                     </tr>
@@ -1427,7 +1439,3 @@ export default function Home() {
     </>
   );
 }
-
-    
-
-
