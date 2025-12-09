@@ -449,6 +449,7 @@ export default function Home() {
 
         if (personalError && personalError.code !== 'PGRST116') {
             showAppMessage(`Error al verificar el código en personal: ${personalError.message}`, 'duplicate');
+            playErrorSound();
             setLoading(false);
             return;
         }
@@ -460,6 +461,7 @@ export default function Home() {
                 </>,
                 'duplicate'
             );
+            playErrorSound();
             setLoading(false);
             return;
         }
@@ -472,6 +474,7 @@ export default function Home() {
 
         if (error && error.code !== 'PGRST116') {
             showAppMessage(`Error de base de datos: ${error.message}`, 'duplicate');
+            playErrorSound();
             setLoading(false);
             return;
         }
@@ -616,6 +619,7 @@ export default function Home() {
 
         if (personalError && personalError.code !== 'PGRST116') {
             showAppMessage(`Error al verificar el código en personal: ${personalError.message}`, 'duplicate');
+            playErrorSound();
             setLoading(false);
             return;
         }
@@ -627,6 +631,7 @@ export default function Home() {
               </>,
               'duplicate'
             );
+            playErrorSound();
             setLoading(false);
             return;
         }
@@ -639,6 +644,7 @@ export default function Home() {
         
         if (error && error.code !== 'PGRST116') {
             showAppMessage(`Error de base de datos: ${error.message}`, 'duplicate');
+            playErrorSound();
             setLoading(false);
             return;
         }
@@ -738,6 +744,7 @@ export default function Home() {
 
         if (personalError && personalError.code !== 'PGRST116') {
             showAppMessage(`Error al verificar el código en personal: ${personalError.message}`, 'duplicate');
+            playErrorSound();
             setLoading(false);
             return;
         }
@@ -749,6 +756,7 @@ export default function Home() {
               </>,
               'duplicate'
             );
+            playErrorSound();
             setLoading(false);
             return;
         }
@@ -761,6 +769,7 @@ export default function Home() {
 
         if (error && error.code !== 'PGRST116') { 
             showAppMessage(`Error de base de datos: ${error.message}`, 'duplicate');
+            playErrorSound();
             setLoading(false);
             return;
         }
@@ -1567,6 +1576,8 @@ export default function Home() {
     </>
   );
 }
+
+    
 
     
 
