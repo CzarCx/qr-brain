@@ -1,6 +1,6 @@
 
 'use client';
-import {useEffect, useRef, useState, useCallback} from 'react';
+import React, {useEffect, useRef, useState, useCallback} from 'react';
 import Head from 'next/head';
 import Image from 'next/image';
 import { Html5Qrcode, Html5QrcodeScannerState } from 'html5-qrcode';
@@ -73,7 +73,7 @@ const isLikelyName = (text: string): boolean => {
 
 export default function Home() {
   const [isMounted, setIsMounted] = useState(false);
-  const [message, setMessage] = useState({text: 'Esperando para escanear...', type: 'info' as 'info' | 'success' | 'duplicate'});
+  const [message, setMessage] = useState<{text: React.ReactNode, type: 'info' | 'success' | 'duplicate'}>({text: 'Esperando para escanear...', type: 'info'});
   const [lastScannedCode, setLastScannedCode] = useState<string | null>(null);
   const [encargado, setEncargado] = useState('');
   const [encargadosList, setEncargadosList] = useState<Encargado[]>([]);
@@ -172,7 +172,7 @@ export default function Home() {
     fetchPersonal();
   }, []);
 
-  const showAppMessage = (text: string, type: 'success' | 'duplicate' | 'info') => {
+  const showAppMessage = (text: React.ReactNode, type: 'success' | 'duplicate' | 'info') => {
     setMessage({text, type});
   };
 
@@ -423,7 +423,12 @@ export default function Home() {
         }
 
         if (personalData) {
-            showAppMessage(`Error: El código ${finalCode} ya ha sido asignado a ${personalData.name} por ${personalData.name_inc}.`, 'duplicate');
+            showAppMessage(
+                <>
+                  El código {finalCode} ya fue asignado a <strong className="font-bold text-yellow-300">{personalData.name}</strong> por <strong className="font-bold text-yellow-300">{personalData.name_inc}</strong>.
+                </>,
+                'duplicate'
+            );
             setLoading(false);
             return;
         }
@@ -496,8 +501,9 @@ export default function Home() {
     const qrCode = html5QrCodeRef.current;
 
     const cleanup = () => {
-        if (qrCode && qrCode.getState() === Html5QrcodeScannerState.SCANNING) {
+        if (qrCode && qrCode.isScanning) {
             return qrCode.stop().catch(err => {
+                // Específicamente ignoramos el error de "not started", que puede ocurrir en condiciones de carrera
                 if (!String(err).includes('not started')) {
                     console.error("Fallo al detener el escáner:", err);
                 }
@@ -522,13 +528,13 @@ export default function Home() {
         qrCode.start({ facingMode: "environment" }, config, onScanSuccess, (errorMessage) => {})
         .catch(err => {
             console.error("Error al iniciar la cámara:", err);
+             // Si el error es el de transición, manejalo de forma controlada.
             if (String(err).includes('Cannot transition to a new state')) {
                 showAppMessage('Error al iniciar la cámara. Por favor, intenta de nuevo.', 'duplicate');
-                setScannerActive(false);
             } else {
                 showAppMessage('Error al iniciar la cámara. Revisa los permisos.', 'duplicate');
-                setScannerActive(false); 
             }
+            setScannerActive(false); // Forzar el estado a "detenido"
         });
       }
     } else {
@@ -584,7 +590,12 @@ export default function Home() {
         }
 
         if (personalData) {
-            showAppMessage(`Error: El código ${finalCode} ya ha sido asignado a ${personalData.name} por ${personalData.name_inc}.`, 'duplicate');
+            showAppMessage(
+              <>
+                El código {finalCode} ya fue asignado a <strong className="font-bold text-yellow-300">{personalData.name}</strong> por <strong className="font-bold text-yellow-300">{personalData.name_inc}</strong>.
+              </>,
+              'duplicate'
+            );
             setLoading(false);
             return;
         }
@@ -700,7 +711,12 @@ export default function Home() {
         }
 
         if (personalData) {
-            showAppMessage(`Error: El código ${manualCode} ya ha sido asignado a ${personalData.name} por ${personalData.name_inc}.`, 'duplicate');
+            showAppMessage(
+              <>
+                El código {manualCode} ya fue asignado a <strong className="font-bold text-yellow-300">{personalData.name}</strong> por <strong className="font-bold text-yellow-300">{personalData.name_inc}</strong>.
+              </>,
+              'duplicate'
+            );
             setLoading(false);
             return;
         }
@@ -881,7 +897,7 @@ export default function Home() {
         status: 'ASIGNADO',
         organization: item.organization,
         sales_num: Number(item.venta),
-        date: new Date().toISOString(),
+        date: item.date,
         esti_time: item.esti_time,
         date_esti: item.date_esti,
         date_ini: item.date_ini,
@@ -1518,3 +1534,5 @@ export default function Home() {
     </>
   );
 }
+
+    
