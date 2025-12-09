@@ -1391,6 +1391,7 @@ export default function Home() {
                                                     onValueChange={(newPersonal) => handlePersonalChange(data.code, newPersonal)}
                                                     placeholder="Selecciona personal..."
                                                     emptyMessage="No se encontró personal."
+                                                    buttonClassName="bg-transparent border-0 hover:bg-gray-100"
                                                 />
                                             </td>
                                             <td className="px-4 py-3 whitespace-nowrap text-sm">{data.product}</td>
@@ -1432,7 +1433,7 @@ export default function Home() {
                                 </Button>
                                  <Button onClick={handleProduccionProgramada} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg shadow-sm text-sm transition-colors duration-200" disabled={loading || isAssociationDisabled}>
                                     Producción Programada
-                                </Button>
+                                 </Button>
                             </div>
                              {isAssociationDisabled && (
                                 <p className="text-xs text-red-600">Completa todos los campos de "Tiempo Estimado" para poder asociar.</p>

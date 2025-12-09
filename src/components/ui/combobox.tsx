@@ -30,9 +30,10 @@ type ComboboxProps = {
     onValueChange: (value: string) => void
     placeholder?: string
     emptyMessage?: string
+    buttonClassName?: string
 }
 
-export function Combobox({ options, value, onValueChange, placeholder = "Select option...", emptyMessage = "No option found." }: ComboboxProps) {
+export function Combobox({ options, value, onValueChange, placeholder = "Select option...", emptyMessage = "No option found.", buttonClassName }: ComboboxProps) {
   const [open, setOpen] = React.useState(false)
 
   return (
@@ -42,7 +43,7 @@ export function Combobox({ options, value, onValueChange, placeholder = "Select 
           variant="outline"
           role="combobox"
           aria-expanded={open}
-          className="w-full justify-between"
+          className={cn("w-full justify-between", buttonClassName)}
         >
           {value
             ? options.find((option) => option.value === value)?.label
