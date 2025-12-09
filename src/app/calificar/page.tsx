@@ -406,7 +406,7 @@ const handleMassQualify = async () => {
               <div>
                   <label htmlFor="encargado" className="block text-sm font-bold text-starbucks-dark mb-1">Nombre del Encargado:</label>
                    <Select onValueChange={setEncargado} value={encargado} disabled={scannerActive}>
-                      <SelectTrigger className="bg-transparent hover:bg-gray-50">
+                      <SelectTrigger className="bg-transparent hover:bg-gray-50 border border-input">
                           <SelectValue placeholder="Selecciona un encargado" />
                       </SelectTrigger>
                       <SelectContent>
@@ -435,6 +435,10 @@ const handleMassQualify = async () => {
                   </div>
               </div>
           </div>
+          
+          {scanMode === 'masivo' && (
+            <h2 className="text-lg font-bold text-starbucks-dark">Escaneados ({massScannedCodes.length})</h2>
+          )}
 
           <div className="bg-starbucks-cream p-4 rounded-lg">
             <div className="scanner-container relative">
@@ -585,8 +589,7 @@ const handleMassQualify = async () => {
              {/* Mass Scan Results */}
              {scanMode === 'masivo' && (
                 <div className="space-y-4">
-                    <div className="flex flex-col sm:flex-row justify-between items-center gap-2">
-                        <h2 className="text-lg font-bold text-starbucks-dark">Escaneados ({massScannedCodes.length})</h2>
+                    <div className="flex flex-col sm:flex-row justify-end items-center gap-2">
                         <Button onClick={handleMassQualify} disabled={loading || massScannedCodes.length === 0} className="bg-green-600 hover:bg-green-700 w-full sm:w-auto">
                             {loading ? 'Calificando...' : 'Calificar Todos'}
                         </Button>
@@ -632,4 +635,5 @@ const handleMassQualify = async () => {
   );
 }
 
+    
     
