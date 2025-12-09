@@ -210,7 +210,7 @@ export default function ScannerPage() {
     const qrCode = html5QrCodeRef.current;
 
     const cleanup = () => {
-        if (qrCode && qrCode.getState() === Html5QrcodeScannerState.SCANNING) {
+        if (qrCode && qrCode.isScanning) {
             return qrCode.stop().catch(err => {
                 if (!String(err).includes('not started')) {
                     console.error("Fallo al detener el escáner:", err);
@@ -637,5 +637,3 @@ const handleMassQualify = async () => {
     </>
   );
 }
-
-    
