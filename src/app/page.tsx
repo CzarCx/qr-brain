@@ -897,7 +897,7 @@ export default function Home() {
         status: 'ASIGNADO',
         organization: item.organization,
         sales_num: item.venta,
-        date: item.date,
+        date: new Date().toISOString(),
         esti_time: item.esti_time,
         date_esti: item.date_esti,
         date_ini: item.date_ini,
@@ -1530,5 +1530,7 @@ export default function Home() {
 }
 
 
+
+    
 
     
