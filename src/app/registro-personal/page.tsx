@@ -83,7 +83,7 @@ export default function RegistroPersonal() {
             <div className="space-y-2">
               <Label htmlFor="rol" className="text-sm font-bold text-starbucks-dark">Rol:</Label>
               <Select onValueChange={setRol} value={rol} disabled={loading}>
-                <SelectTrigger id="rol" className="form-input">
+                <SelectTrigger id="rol" className="bg-transparent hover:bg-gray-50">
                   <SelectValue placeholder="Selecciona un rol" />
                 </SelectTrigger>
                 <SelectContent>

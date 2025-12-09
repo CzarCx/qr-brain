@@ -341,7 +341,7 @@ export default function Home() {
                     <div>
                         <label htmlFor="encargado" className="block text-sm font-bold text-starbucks-dark mb-1">Nombre del Encargado:</label>
                          <Select onValueChange={setEncargado} value={encargado} disabled={scannerActive}>
-                            <SelectTrigger className="form-input">
+                            <SelectTrigger className="bg-transparent hover:bg-gray-50">
                                 <SelectValue placeholder="Selecciona un encargado" />
                             </SelectTrigger>
                             <SelectContent>
