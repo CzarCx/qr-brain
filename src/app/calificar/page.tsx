@@ -212,6 +212,7 @@ export default function ScannerPage() {
     const cleanup = () => {
         if (qrCode && qrCode.isScanning) {
             return qrCode.stop().catch(err => {
+                // Específicamente ignoramos el error de "not started", que puede ocurrir en condiciones de carrera
                 if (!String(err).includes('not started')) {
                     console.error("Fallo al detener el escáner:", err);
                 }
@@ -232,7 +233,8 @@ export default function ScannerPage() {
           fps: 5,
           qrbox: { width: 250, height: 250 },
         };
-        qrCode.start({ facingMode: "environment" }, config, onScanSuccess, (e: any) => {}).then(() => {
+        qrCode.start({ facingMode: "environment" }, config, onScanSuccess, (e: any) => {})
+        .then(() => {
             if (isMobile) {
               const videoElement = document.getElementById('reader')?.querySelector('video');
               if(videoElement && videoElement.srcObject) {
@@ -247,10 +249,16 @@ export default function ScannerPage() {
                   }
               }
             }
-        }).catch(err => {
+        })
+        .catch(err => {
             console.error("Error al iniciar camara:", err);
-            setMessage('Error al iniciar la cámara. Revisa los permisos.');
-            setScannerActive(false);
+             // Si el error es el de transición, manejalo de forma controlada.
+            if (String(err).includes('Cannot transition to a new state')) {
+                setMessage('Error al iniciar la cámara. Por favor, intenta de nuevo.');
+            } else {
+                setMessage('Error al iniciar la cámara. Revisa los permisos.');
+            }
+            setScannerActive(false); // Forzar el estado a "detenido"
         });
       }
     } else {
@@ -637,3 +645,5 @@ const handleMassQualify = async () => {
     </>
   );
 }
+
+    

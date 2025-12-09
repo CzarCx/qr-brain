@@ -230,7 +230,8 @@ export default function Home() {
           fps: 5,
           qrbox: { width: 250, height: 250 },
         };
-        qrCode.start({ facingMode: "environment" }, config, onScanSuccess, (e: any) => {}).then(() => {
+        qrCode.start({ facingMode: "environment" }, config, onScanSuccess, (e: any) => {})
+        .then(() => {
             if (isMobile) {
               const videoElement = document.getElementById('reader')?.querySelector('video');
               if(videoElement && videoElement.srcObject) {
@@ -245,9 +246,14 @@ export default function Home() {
                   }
               }
             }
-        }).catch(err => {
+        })
+        .catch(err => {
             console.error("Error al iniciar camara:", err);
-            showAppMessage('Error al iniciar la cámara. Revisa los permisos.', 'error');
+            if (String(err).includes('Cannot transition to a new state')) {
+                showAppMessage('Error al iniciar la cámara. Por favor, intenta de nuevo.', 'error');
+            } else {
+                showAppMessage('Error al iniciar la cámara. Revisa los permisos.', 'error');
+            }
             setScannerActive(false);
         });
       }
@@ -482,3 +488,5 @@ export default function Home() {
     </>
   );
 }
+
+    

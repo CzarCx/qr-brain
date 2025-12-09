@@ -519,7 +519,8 @@ export default function Home() {
           qrbox: { width: 250, height: 250 },
           experimentalFeatures: { useBarCodeDetectorIfSupported: true },
         };
-        qrCode.start({ facingMode: "environment" }, config, onScanSuccess, (errorMessage) => {}).then(() => {
+        qrCode.start({ facingMode: "environment" }, config, onScanSuccess, (errorMessage) => {})
+        .then(() => {
             if (isMobile) {
               const videoElement = document.getElementById('reader')?.querySelector('video');
               if(videoElement && videoElement.srcObject) {
@@ -534,9 +535,14 @@ export default function Home() {
                   }
               }
             }
-        }).catch(err => {
+        })
+        .catch(err => {
             console.error("Error al iniciar la cámara:", err);
-            showAppMessage('Error al iniciar la cámara. Revisa los permisos.', 'duplicate');
+            if (String(err).includes('Cannot transition to a new state')) {
+                showAppMessage('Error al iniciar la cámara. Por favor, intenta de nuevo.', 'duplicate');
+            } else {
+                showAppMessage('Error al iniciar la cámara. Revisa los permisos.', 'duplicate');
+            }
             setScannerActive(false);
         });
       }
@@ -1471,7 +1477,7 @@ export default function Home() {
                                     onValueChange={setSelectedPersonal}
                                     placeholder="Selecciona o busca personal..."
                                     emptyMessage="No se encontró personal."
-                                    buttonClassName="bg-transparent border-input hover:bg-gray-100"
+                                    buttonClassName="bg-transparent border-input"
                                 />
                                 <Button onClick={handleManualAssociate} disabled={isAssociationDisabled} className="bg-starbucks-accent hover:bg-starbucks-green text-white">
                                     <UserPlus className="mr-2 h-4 w-4" /> Asociar
@@ -1531,3 +1537,5 @@ export default function Home() {
     </>
   );
 }
+
+    
