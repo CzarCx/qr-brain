@@ -409,7 +409,6 @@ export default function Home() {
     
     setLoading(true);
     try {
-        // Check if code already exists in 'personal' table
         const { data: personalData, error: personalError } = await supabaseDB2
             .from('personal')
             .select('code')
@@ -579,7 +578,6 @@ export default function Home() {
 
     setLoading(true);
     try {
-        // Check if code already exists in 'personal' table
         const { data: personalData, error: personalError } = await supabaseDB2
             .from('personal')
             .select('code')
@@ -597,7 +595,7 @@ export default function Home() {
             setLoading(false);
             return;
         }
-
+        
         const { data, error } = await supabase
             .from('BASE DE DATOS ETIQUETAS IMPRESAS')
             .select('Código, SKU, Cantidad, Producto, EMPRESA, Venta')
@@ -704,7 +702,6 @@ export default function Home() {
       
       setLoading(true);
       try {
-        // Check if code already exists in 'personal' table
         const { data: personalData, error: personalError } = await supabaseDB2
             .from('personal')
             .select('code')
@@ -1100,6 +1097,15 @@ export default function Home() {
     }
   };
 
+  const handlePersonalChange = (code: string | number, newPersonal: string) => {
+    setPersonalScans(prevScans => 
+        prevScans.map(scan => 
+            scan.code === code ? { ...scan, personal: newPersonal } : scan
+        )
+    );
+    showAppMessage(`Se actualizó el personal para el código ${code}.`, 'info');
+  };
+
 
   const messageClasses: any = {
       success: 'scan-success',
@@ -1346,7 +1352,15 @@ export default function Home() {
                                     {personalScans.map((data: PersonalScanItem) => (
                                         <tr key={data.code}>
                                             <td className="px-4 py-3 whitespace-nowrap font-mono text-sm">{data.code}</td>
-                                            <td className="px-4 py-3 whitespace-nowrap text-sm">{data.personal}</td>
+                                            <td className="px-4 py-3 whitespace-nowrap text-sm">
+                                                <Combobox
+                                                    options={personalList.map(p => ({ value: p.name, label: p.name }))}
+                                                    value={data.personal}
+                                                    onValueChange={(newPersonal) => handlePersonalChange(data.code, newPersonal)}
+                                                    placeholder="Selecciona personal..."
+                                                    emptyMessage="No se encontró personal."
+                                                />
+                                            </td>
                                             <td className="px-4 py-3 whitespace-nowrap text-sm">{data.product}</td>
                                             <td className="px-4 py-3 whitespace-nowrap text-sm">
                                                 {data.date_ini ? new Date(data.date_ini).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }) : 'N/A'}
@@ -1439,3 +1453,5 @@ export default function Home() {
     </>
   );
 }
+
+    
