@@ -1362,6 +1362,7 @@ export default function Home() {
                                     onValueChange={setSelectedBulkPersonal}
                                     placeholder="Selecciona personal..."
                                     emptyMessage="No se encontró personal."
+                                    buttonClassName="bg-transparent border-0 hover:bg-gray-100"
                                 />
                             </div>
                             <Button onClick={handleBulkPersonalChange} disabled={!selectedBulkPersonal || personalScans.length === 0} className="w-full md:w-auto bg-teal-600 hover:bg-teal-700 text-white">
@@ -1427,6 +1428,7 @@ export default function Home() {
                                     onValueChange={setSelectedPersonal}
                                     placeholder="Selecciona o busca personal..."
                                     emptyMessage="No se encontró personal."
+                                    buttonClassName="bg-transparent border-0 hover:bg-gray-100"
                                 />
                                 <Button onClick={handleManualAssociate} disabled={isAssociationDisabled} className="bg-starbucks-accent hover:bg-starbucks-green text-white">
                                     <UserPlus className="mr-2 h-4 w-4" /> Asociar
