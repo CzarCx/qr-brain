@@ -523,9 +523,9 @@ const handleMassQualify = async () => {
                              <DialogContent className="sm:max-w-[425px]">
                                  <DialogHeader>
                                  <DialogTitle>Calificar Empaquetado</DialogTitle>
-                                 <DialogDescription>
-                                     ¿Cómo calificarías la calidad del empaquetado?
-                                 </DialogDescription>
+                                  <DialogDescription>
+                                    ¿Cómo calificarías la calidad del empaquetado de <span className="font-semibold">{lastScannedResult.name}</span>?
+                                  </DialogDescription>
                                  </DialogHeader>
                                  <div className="grid gap-4 py-4">
                                  {lastScannedResult.status === 'REPORTADO' && (
