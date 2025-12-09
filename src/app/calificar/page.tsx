@@ -527,8 +527,10 @@ const handleMassQualify = async () => {
                              <DialogContent className="sm:max-w-[425px]">
                                  <DialogHeader>
                                  <DialogTitle>Calificar Empaquetado</DialogTitle>
-                                  <DialogDescription>
-                                    ¿Cómo calificarías la calidad del empaquetado de <span className="font-semibold">{lastScannedResult.name}</span>?
+                                  <DialogDescription className="text-center pt-2">
+                                    ¿Cómo calificarías la calidad del empaquetado de?
+                                    <br />
+                                    <span className="font-bold text-lg text-starbucks-green">{lastScannedResult.name}</span>
                                   </DialogDescription>
                                  </DialogHeader>
                                  <div className="grid gap-4 py-4">
@@ -634,6 +636,3 @@ const handleMassQualify = async () => {
     </>
   );
 }
-
-    
-    
