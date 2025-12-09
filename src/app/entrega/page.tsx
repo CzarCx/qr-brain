@@ -186,14 +186,15 @@ export default function Home() {
 
       if(event.key.length === 1) {
           bufferRef.current += event.key;
-          if(scanTimeoutRef.current) clearTimeout(scanTimeoutRef.current);
-          scanTimeoutRef.current = setTimeout(() => {
-              if(bufferRef.current.length > 0) {
-                  processPhysicalScan(bufferRef.current);
-                  bufferRef.current = '';
-              }
-          }, 150);
       }
+
+      if(scanTimeoutRef.current) clearTimeout(scanTimeoutRef.current);
+      scanTimeoutRef.current = setTimeout(() => {
+          if(bufferRef.current.length > 0) {
+              processPhysicalScan(bufferRef.current);
+              bufferRef.current = '';
+          }
+      }, 200);
   };
 
   useEffect(() => {
@@ -500,7 +501,3 @@ export default function Home() {
     </>
   );
 }
-
-    
-
-    

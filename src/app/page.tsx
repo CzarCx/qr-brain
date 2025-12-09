@@ -224,7 +224,8 @@ export default function Home() {
     const finalCode = codeToAdd.trim();
 
     if (scannedCodesRef.current.has(finalCode)) {
-      showAppMessage(`DUPLICADO: ${finalCode}`, 'duplicate');
+      showAppMessage(<>DUPLICADO: {finalCode}</>, 'duplicate');
+      playErrorSound();
       return false;
     }
 
@@ -455,13 +456,13 @@ export default function Home() {
         }
 
         if (personalData) {
+            playErrorSound();
             showAppMessage(
                 <>
                   El código {finalCode} ya fue asignado a <strong className="font-bold text-yellow-300">{personalData.name}</strong> por <strong className="font-bold text-yellow-300">{personalData.name_inc}</strong>.
                 </>,
                 'duplicate'
             );
-            playErrorSound();
             setLoading(false);
             return;
         }
@@ -480,7 +481,7 @@ export default function Home() {
         }
 
         if (!data) {
-            showAppMessage(`Error: Código ${finalCode} no encontrado en la base de datos.`, 'duplicate');
+            showAppMessage(`Código ${finalCode} no encontrado en la base de datos.`, 'duplicate');
             playErrorSound();
             setLoading(false);
             return;
@@ -580,19 +581,40 @@ export default function Home() {
     };
   }, [scannerActive, selectedScannerMode, onScanSuccess, isMounted, isMobile]);
 
+  const handlePhysicalScannerInput = (event: KeyboardEvent) => {
+      if(event.key === 'Enter') {
+          event.preventDefault();
+          if(bufferRef.current.length > 0) {
+              processPhysicalScan(bufferRef.current);
+              bufferRef.current = '';
+          }
+          return;
+      }
+
+      if(event.key.length === 1) {
+          bufferRef.current += event.key;
+      }
+
+      if(scanTimeoutRef.current) clearTimeout(scanTimeoutRef.current);
+      scanTimeoutRef.current = setTimeout(() => {
+          if(bufferRef.current.length > 0) {
+              processPhysicalScan(bufferRef.current);
+              bufferRef.current = '';
+          }
+      }, 200);
+  };
 
   useEffect(() => {
     const input = physicalScannerInputRef.current;
-    const downListener = (e: Event) => handlePhysicalScannerInput(e as KeyboardEvent);
     
     if (selectedScannerMode === 'fisico' && scannerActive && input) {
-      input.addEventListener('keydown', downListener);
+      input.addEventListener('keydown', handlePhysicalScannerInput);
       input.focus();
     }
     
     return () => {
       if (input) {
-        input.removeEventListener('keydown', downListener);
+        input.removeEventListener('keydown', handlePhysicalScannerInput);
       }
     };
   }, [scannerActive, selectedScannerMode]);
@@ -601,7 +623,7 @@ export default function Home() {
     if(!scannerActive || (Date.now() - lastScanTimeRef.current) < MIN_SCAN_INTERVAL) return;
     lastScanTimeRef.current = Date.now();
 
-    let finalCode = code.trim().replace(/[^0-9A-Za-z]/g, '');
+    let finalCode = code.trim().replace(/[^0-9A-Za-z-]/g, '');
     const patternMatch = finalCode.match(/^id(\d{11})tlm$/i);
     if (patternMatch) {
         finalCode = patternMatch[1];
@@ -625,13 +647,13 @@ export default function Home() {
         }
 
         if (personalData) {
+            playErrorSound();
             showAppMessage(
               <>
                 El código {finalCode} ya fue asignado a <strong className="font-bold text-yellow-300">{personalData.name}</strong> por <strong className="font-bold text-yellow-300">{personalData.name_inc}</strong>.
               </>,
               'duplicate'
             );
-            playErrorSound();
             setLoading(false);
             return;
         }
@@ -650,7 +672,7 @@ export default function Home() {
         }
 
         if (!data) {
-            showAppMessage(`Error: Código ${finalCode} no encontrado en la base de datos.`, 'duplicate');
+            showAppMessage(`Código ${finalCode} no encontrado en la base de datos.`, 'duplicate');
             playErrorSound();
             setLoading(false);
             return;
@@ -681,28 +703,6 @@ export default function Home() {
         setLoading(false);
     }
   }, [scannerActive, addCodeAndUpdateCounters]);
-
-  const handlePhysicalScannerInput = (event: KeyboardEvent) => {
-      if(event.key === 'Enter') {
-          event.preventDefault();
-          if(bufferRef.current.length > 0) {
-              processPhysicalScan(bufferRef.current);
-              bufferRef.current = '';
-          }
-          return;
-      }
-
-      if(event.key.length === 1) {
-          bufferRef.current += event.key;
-          if(scanTimeoutRef.current) clearTimeout(scanTimeoutRef.current);
-          scanTimeoutRef.current = setTimeout(() => {
-              if(bufferRef.current.length > 0) {
-                  processPhysicalScan(bufferRef.current);
-                  bufferRef.current = '';
-              }
-          }, 150);
-      }
-  };
   
   const startScanner = () => {
     if (!encargado.trim()) return showAppMessage('Por favor, ingresa el nombre del encargado.', 'duplicate');
@@ -750,13 +750,13 @@ export default function Home() {
         }
 
         if (personalData) {
+            playErrorSound();
             showAppMessage(
               <>
                 El código {manualCode} ya fue asignado a <strong className="font-bold text-yellow-300">{personalData.name}</strong> por <strong className="font-bold text-yellow-300">{personalData.name_inc}</strong>.
               </>,
               'duplicate'
             );
-            playErrorSound();
             setLoading(false);
             return;
         }
@@ -775,7 +775,7 @@ export default function Home() {
         }
 
         if (!data) {
-            showAppMessage(`Error: Código ${manualCode} no encontrado en la base de datos.`, 'duplicate');
+            showAppMessage(`Código ${manualCode} no encontrado en la base de datos.`, 'duplicate');
             playErrorSound();
             setLoading(false);
             return;
@@ -1576,13 +1576,3 @@ export default function Home() {
     </>
   );
 }
-
-    
-
-    
-
-    
-
-    
-
-    
