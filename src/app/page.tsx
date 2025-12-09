@@ -220,7 +220,7 @@ export default function Home() {
     oscillator.stop(context.currentTime + 0.2);
   };
 
-  const addCodeAndUpdateCounters = useCallback((codeToAdd: string, details: { sku: string | null; cantidad: number | null; producto: string | null; empresa: string | null; venta: string | null; }) => {
+  const addCodeAndUpdateCounters = useCallback(async (codeToAdd: string, details: { sku: string | null; cantidad: number | null; producto: string | null; empresa: string | null; venta: string | null; }) => {
     const finalCode = codeToAdd.trim();
 
     if (scannedCodesRef.current.has(finalCode)) {
@@ -228,6 +228,29 @@ export default function Home() {
       playErrorSound();
       return false;
     }
+    
+    let estimatedTime: number | null = null;
+    if (details.sku) {
+        try {
+            const { data: personalData, error: personalError } = await supabaseDB2
+                .from('personal')
+                .select('esti_time')
+                .eq('sku', details.sku)
+                .not('esti_time', 'is', null)
+                .limit(1)
+                .single();
+
+            if (personalError && personalError.code !== 'PGRST116') {
+                console.error("Error fetching estimated time:", personalError);
+            }
+            if (personalData) {
+                estimatedTime = personalData.esti_time;
+            }
+        } catch (e: any) {
+             console.error("Exception fetching estimated time:", e.message);
+        }
+    }
+
 
     scannedCodesRef.current.add(finalCode);
     lastSuccessfullyScannedCodeRef.current = finalCode;
@@ -273,7 +296,7 @@ export default function Home() {
       producto: details.producto,
       empresa: details.empresa,
       venta: details.venta,
-      esti_time: null,
+      esti_time: estimatedTime,
     };
     
     setScannedData(prevData => [...prevData].sort((a, b) => new Date(`1970/01/01 ${a.hora}`).valueOf() - new Date(`1970/01/01 ${b.hora}`).valueOf()));
@@ -789,7 +812,7 @@ export default function Home() {
         }
 
         if(confirmed) {
-            if(addCodeAndUpdateCounters(manualCode, { sku: SKU, cantidad: Cantidad, producto: Producto, empresa: EMPRESA, venta: Venta })) {
+            if(await addCodeAndUpdateCounters(manualCode, { sku: SKU, cantidad: Cantidad, producto: Producto, empresa: EMPRESA, venta: Venta })) {
                 manualCodeInput.value = '';
                 manualCodeInput.focus();
             } else {
