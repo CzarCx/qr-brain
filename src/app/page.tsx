@@ -1087,9 +1087,9 @@ export default function Home() {
       setIsCargarModalOpen(false);
       setSelectedPersonalParaCargar('');
 
-    } catch (error: any) {
-      console.error("Error al cargar producción programada:", error);
-      showAppMessage(`Error al cargar: ${error.message}`, 'duplicate');
+    } catch (e: any) {
+      console.error("Error al cargar producción programada:", e);
+      showAppMessage(`Error al cargar: ${e.message}`, 'duplicate');
     } finally {
       setLoading(false);
     }
@@ -1381,8 +1381,8 @@ export default function Home() {
                                     </tr>
                                 </thead>
                                 <tbody className="bg-starbucks-white divide-y divide-gray-200">
-                                    {personalScans.map((data: PersonalScanItem) => (
-                                        <tr key={data.code}>
+                                    {personalScans.map((data: PersonalScanItem, index: number) => (
+                                        <tr key={`${data.code}-${index}`}>
                                             <td className="px-4 py-3 whitespace-nowrap font-mono text-sm">{data.code}</td>
                                             <td className="px-4 py-3 whitespace-nowrap text-sm">
                                                 <Combobox
