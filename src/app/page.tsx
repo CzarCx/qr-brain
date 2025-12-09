@@ -412,7 +412,7 @@ export default function Home() {
     try {
         const { data: personalData, error: personalError } = await supabaseDB2
             .from('personal')
-            .select('code')
+            .select('code, name, name_inc')
             .eq('code', finalCode)
             .single();
 
@@ -423,7 +423,7 @@ export default function Home() {
         }
 
         if (personalData) {
-            showAppMessage(`Error: El código ${finalCode} ya ha sido asignado.`, 'duplicate');
+            showAppMessage(`Error: El código ${finalCode} ya ha sido asignado a ${personalData.name} por ${personalData.name_inc}.`, 'duplicate');
             setLoading(false);
             return;
         }
@@ -491,14 +491,13 @@ export default function Home() {
     if (!isMounted || !readerRef.current) return;
 
     if (!html5QrCodeRef.current) {
-      html5QrCodeRef.current = new Html5Qrcode(readerRef.current.id, false);
+        html5QrCodeRef.current = new Html5Qrcode(readerRef.current.id, false);
     }
     const qrCode = html5QrCodeRef.current;
 
     const cleanup = () => {
-        if (qrCode && qrCode.isScanning) {
+        if (qrCode && qrCode.getState() === Html5QrcodeScannerState.SCANNING) {
             return qrCode.stop().catch(err => {
-                // Específicamente ignoramos el error de "not started", que puede ocurrir en condiciones de carrera
                 if (!String(err).includes('not started')) {
                     console.error("Fallo al detener el escáner:", err);
                 }
@@ -523,13 +522,13 @@ export default function Home() {
         qrCode.start({ facingMode: "environment" }, config, onScanSuccess, (errorMessage) => {})
         .catch(err => {
             console.error("Error al iniciar la cámara:", err);
-            // Si el error es el de transición, manejalo de forma controlada.
             if (String(err).includes('Cannot transition to a new state')) {
                 showAppMessage('Error al iniciar la cámara. Por favor, intenta de nuevo.', 'duplicate');
+                setScannerActive(false);
             } else {
                 showAppMessage('Error al iniciar la cámara. Revisa los permisos.', 'duplicate');
+                setScannerActive(false); 
             }
-            setScannerActive(false); // Forzar el estado a "detenido"
         });
       }
     } else {
@@ -574,7 +573,7 @@ export default function Home() {
     try {
         const { data: personalData, error: personalError } = await supabaseDB2
             .from('personal')
-            .select('code')
+            .select('code, name, name_inc')
             .eq('code', finalCode)
             .single();
 
@@ -585,7 +584,7 @@ export default function Home() {
         }
 
         if (personalData) {
-            showAppMessage(`Error: El código ${finalCode} ya ha sido asignado.`, 'duplicate');
+            showAppMessage(`Error: El código ${finalCode} ya ha sido asignado a ${personalData.name} por ${personalData.name_inc}.`, 'duplicate');
             setLoading(false);
             return;
         }
@@ -690,7 +689,7 @@ export default function Home() {
       try {
         const { data: personalData, error: personalError } = await supabaseDB2
             .from('personal')
-            .select('code')
+            .select('code, name, name_inc')
             .eq('code', manualCode)
             .single();
 
@@ -701,7 +700,7 @@ export default function Home() {
         }
 
         if (personalData) {
-            showAppMessage(`Error: El código ${manualCode} ya ha sido asignado.`, 'duplicate');
+            showAppMessage(`Error: El código ${manualCode} ya ha sido asignado a ${personalData.name} por ${personalData.name_inc}.`, 'duplicate');
             setLoading(false);
             return;
         }
