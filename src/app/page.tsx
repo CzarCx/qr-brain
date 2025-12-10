@@ -647,9 +647,9 @@ export default function Home() {
   useEffect(() => {
     const input = physicalScannerInputRef.current;
     
-    if (selectedScannerMode === 'fisico' && scannerActive) {
-      input?.addEventListener('keydown', handlePhysicalScannerInput as any);
-      input?.focus();
+    if (selectedScannerMode === 'fisico' && scannerActive && input) {
+      input.addEventListener('keydown', handlePhysicalScannerInput as any);
+      input.focus();
     }
     
     return () => {
@@ -969,34 +969,52 @@ export default function Home() {
     showAppMessage('Guardando registros de personal...', 'info');
 
     try {
-      const dataToInsert = personalScans.map((item) => ({
-        code: Number(item.code),
-        name: item.personal,
-        name_inc: item.encargado,
-        sku: item.sku,
-        product: item.product,
-        quantity: item.quantity,
-        status: 'ASIGNADO',
-        organization: item.organization,
-        sales_num: Number(item.venta),
-        date: item.date,
-        esti_time: item.esti_time,
-        date_esti: item.date_esti,
-        date_ini: item.date_ini,
-      }));
+      const sortedScans = [...personalScans].sort((a, b) => new Date(a.date_ini!).valueOf() - new Date(b.date_ini!).valueOf());
+      let lastFinishTime: Date | null = null;
 
-      // Insertar los nuevos registros
+      const dataToInsert = sortedScans.map((item, index) => {
+        let startTime: Date;
+        if (index === 0) {
+          startTime = new Date();
+        } else {
+          startTime = lastFinishTime!;
+        }
+
+        let date_esti_str: string | null = null;
+        if (!isNaN(startTime.getTime()) && item.esti_time) {
+          const endDate = new Date(startTime.getTime() + item.esti_time * 60000);
+          date_esti_str = endDate.toISOString();
+          lastFinishTime = endDate;
+        } else {
+          lastFinishTime = startTime;
+        }
+        
+        return {
+          code: Number(item.code),
+          name: item.personal,
+          name_inc: item.encargado,
+          sku: item.sku,
+          product: item.product,
+          quantity: item.quantity,
+          status: 'ASIGNADO',
+          organization: item.organization,
+          sales_num: Number(item.venta),
+          date: item.date,
+          esti_time: item.esti_time,
+          date_esti: date_esti_str,
+          date_ini: startTime.toISOString(),
+        };
+      });
+
       const { error: insertError } = await supabaseDB2.from('personal').insert(dataToInsert);
       if (insertError) {
         console.error("Error en insert:", insertError);
         throw new Error(`Error al guardar en 'personal': ${insertError.message}`);
       }
 
-      // Obtener los números de venta únicos para borrar de la tabla de programación
       const salesNumbersToDelete = [...new Set(personalScans.map(item => item.venta).filter(Boolean))];
 
       if (salesNumbersToDelete.length > 0) {
-        // Borrar los registros de 'personal_prog' por sales_num
         const { error: deleteError } = await supabaseDB2
           .from('personal_prog')
           .delete()
@@ -1004,7 +1022,6 @@ export default function Home() {
         
         if (deleteError) {
           console.error("Error en delete:", deleteError);
-          // No lanzamos un error que bloquee, pero sí lo notificamos.
           showAppMessage(`Registros guardados, pero hubo un error al limpiar 'personal_prog': ${deleteError.message}`, 'info');
         }
       }
