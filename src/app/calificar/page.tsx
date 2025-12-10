@@ -123,9 +123,19 @@ export default function ScannerPage() {
     if ('vibrate' in navigator) navigator.vibrate(100);
     playBeep();
 
+    let finalCode = decodedText;
+    try {
+      const parsedJson = JSON.parse(decodedText);
+      if (parsedJson && parsedJson.id) {
+        finalCode = parsedJson.id;
+      }
+    } catch (e) {
+      // Not a JSON, use decodedText as is
+    }
+
     // Prevent duplicates in mass scanning mode
-    if (scanMode === 'masivo' && massScannedCodesRef.current.has(decodedText)) {
-        setMessage(`Código duplicado: ${decodedText}`);
+    if (scanMode === 'masivo' && massScannedCodesRef.current.has(finalCode)) {
+        setMessage(`Código duplicado: ${finalCode}`);
         setLoading(false);
         return;
     }
@@ -135,7 +145,7 @@ export default function ScannerPage() {
         const { data, error } = await supabaseDB2
             .from('personal')
             .select('name, product, status, details')
-            .eq('code', decodedText)
+            .eq('code', finalCode)
             .single();
 
         if (error && error.code !== 'PGRST116') { // PGRST116 means no rows found
@@ -146,7 +156,7 @@ export default function ScannerPage() {
             const result: ScanResult = {
                 name: data.name,
                 product: data.product,
-                code: decodedText,
+                code: finalCode,
                 found: true,
                 status: data.status,
                 details: data.details,
@@ -162,19 +172,19 @@ export default function ScannerPage() {
                     setIsRatingModalOpen(true);
                 } else { // Mass scanning mode
                     if (data.status === 'REPORTADO') {
-                       setMessage(`Añadido (Reportado): ${decodedText}`);
+                       setMessage(`Añadido (Reportado): ${finalCode}`);
                     } else {
-                       setMessage(`Añadido a la lista: ${decodedText}`);
+                       setMessage(`Añadido a la lista: ${finalCode}`);
                     }
                     setMassScannedCodes(prev => [result, ...prev]);
-                    massScannedCodesRef.current.add(decodedText);
+                    massScannedCodesRef.current.add(finalCode);
                 }
             }
         } else {
             const result: ScanResult = {
                 name: null,
                 product: null,
-                code: decodedText,
+                code: finalCode,
                 found: false,
             };
             setLastScannedResult(result);
@@ -184,7 +194,7 @@ export default function ScannerPage() {
         const result: ScanResult = {
             name: null,
             product: null,
-            code: decodedText,
+            code: finalCode,
             found: false,
             error: e.message,
         };
@@ -643,5 +653,7 @@ const handleMassQualify = async () => {
     </>
   );
 }
+
+    
 
     
