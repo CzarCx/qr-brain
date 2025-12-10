@@ -122,8 +122,16 @@ export default function Home() {
     showAppMessage('Procesando código...', 'info');
     if ('vibrate' in navigator) navigator.vibrate(100);
     
-
-    const finalCode = decodedText.trim();
+    let finalCode = decodedText;
+    try {
+      const parsedJson = JSON.parse(decodedText);
+      if (parsedJson && parsedJson.id) {
+        finalCode = parsedJson.id;
+      }
+    } catch (e) {
+      // Not a JSON, use decodedText as is and trim it
+      finalCode = decodedText.trim();
+    }
 
     if (scannedCodesRef.current.has(finalCode)) {
         setLoading(false);
@@ -201,13 +209,13 @@ export default function Home() {
     const input = physicalScannerInputRef.current;
     
     if (selectedScannerMode === 'fisico' && scannerActive && input) {
-      input.addEventListener('keydown', handlePhysicalScannerInput);
+      input.addEventListener('keydown', handlePhysicalScannerInput as any);
       input.focus();
     }
     
     return () => {
       if (input) {
-        input.removeEventListener('keydown', handlePhysicalScannerInput);
+        input.removeEventListener('keydown', handlePhysicalScannerInput as any);
       }
     };
   }, [scannerActive, selectedScannerMode]);
@@ -501,3 +509,5 @@ export default function Home() {
     </>
   );
 }
+
+    
