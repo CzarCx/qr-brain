@@ -630,9 +630,9 @@ export default function Home() {
   useEffect(() => {
     const input = physicalScannerInputRef.current;
     
-    if (selectedScannerMode === 'fisico' && scannerActive && input) {
-      input.addEventListener('keydown', handlePhysicalScannerInput as any);
-      input.focus();
+    if (selectedScannerMode === 'fisico' && scannerActive) {
+      input?.addEventListener('keydown', handlePhysicalScannerInput as any);
+      input?.focus();
     }
     
     return () => {
@@ -1032,7 +1032,7 @@ export default function Home() {
         sku: item.sku,
         name: selectedPersonal,
         name_inc: item.encargado,
-        product: item.product,
+        product: item.producto,
         quantity: item.cantidad,
         organization: item.empresa,
         sales_num: Number(item.venta),
