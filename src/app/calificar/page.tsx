@@ -114,6 +114,21 @@ export default function ScannerPage() {
     oscillator.stop(context.currentTime + 0.1);
   };
 
+  const playWarningSound = () => {
+    const context = new (window.AudioContext || (window as any).webkitAudioContext)();
+    if (!context) return;
+    const oscillator = context.createOscillator();
+    const gainNode = context.createGain();
+    oscillator.type = 'sawtooth';
+    oscillator.frequency.setValueAtTime(440, context.currentTime); // A4
+    gainNode.gain.setValueAtTime(0.1, context.currentTime);
+    gainNode.gain.exponentialRampToValueAtTime(0.00001, context.currentTime + 0.2);
+    oscillator.connect(gainNode);
+    gainNode.connect(context.destination);
+    oscillator.start();
+    oscillator.stop(context.currentTime + 0.2);
+  };
+
   const onScanSuccess = useCallback(async (decodedText: string) => {
     if (loading || Date.now() - lastScanTimeRef.current < MIN_SCAN_INTERVAL) return;
     
@@ -121,7 +136,6 @@ export default function ScannerPage() {
     setLoading(true);
     setMessage('Procesando código...');
     if ('vibrate' in navigator) navigator.vibrate(100);
-    playBeep();
 
     let finalCode = decodedText;
     try {
@@ -153,6 +167,7 @@ export default function ScannerPage() {
         }
 
         if (data) {
+            playBeep();
             const result: ScanResult = {
                 name: data.name,
                 product: data.product,
@@ -181,6 +196,7 @@ export default function ScannerPage() {
                 }
             }
         } else {
+            playWarningSound();
             const result: ScanResult = {
                 name: null,
                 product: null,
@@ -653,6 +669,8 @@ const handleMassQualify = async () => {
     </>
   );
 }
+
+    
 
     
 
