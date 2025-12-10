@@ -969,22 +969,39 @@ export default function Home() {
     showAppMessage('Guardando registros de personal...', 'info');
 
     try {
+      const personName = personalScans[0]?.personal;
+      if (!personName) {
+        throw new Error("No se pudo determinar el nombre del personal.");
+      }
+
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      const { data: lastScan, error: lastScanError } = await supabaseDB2
+        .from('personal')
+        .select('date_esti')
+        .eq('name', personName)
+        .gte('date', today.toISOString())
+        .order('date_esti', { ascending: false })
+        .limit(1)
+        .single();
+      
+      if (lastScanError && lastScanError.code !== 'PGRST116') {
+        throw new Error(`Error al buscar el último registro: ${lastScanError.message}`);
+      }
+      
+      let lastFinishTime: Date = lastScan?.date_esti ? new Date(lastScan.date_esti) : new Date();
+
       const sortedScans = [...personalScans].sort((a, b) => new Date(a.date_ini!).valueOf() - new Date(b.date_ini!).valueOf());
-      let lastFinishTime: Date | null = null;
 
-      const dataToInsert = sortedScans.map((item, index) => {
-        let startTime: Date;
-        if (index === 0) {
-          startTime = new Date();
-        } else {
-          startTime = lastFinishTime!;
-        }
-
+      const dataToInsert = sortedScans.map((item) => {
+        const startTime = lastFinishTime;
         let date_esti_str: string | null = null;
+        
         if (!isNaN(startTime.getTime()) && item.esti_time) {
           const endDate = new Date(startTime.getTime() + item.esti_time * 60000);
           date_esti_str = endDate.toISOString();
-          lastFinishTime = endDate;
+          lastFinishTime = endDate; // Chain the next start time
         } else {
           lastFinishTime = startTime;
         }
