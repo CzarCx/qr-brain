@@ -106,7 +106,7 @@ export default function ScannerPage() {
     const gainNode = context.createGain();
     oscillator.type = 'sine';
     oscillator.frequency.setValueAtTime(880, context.currentTime); // A5 note
-    gainNode.gain.setValueAtTime(0.1, context.currentTime); // Volume
+    gainNode.gain.setValueAtTime(0.5, context.currentTime); // Increased Volume
     gainNode.gain.exponentialRampToValueAtTime(0.00001, context.currentTime + 0.1);
     oscillator.connect(gainNode);
     gainNode.connect(context.destination);
@@ -121,7 +121,7 @@ export default function ScannerPage() {
     const gainNode = context.createGain();
     oscillator.type = 'sawtooth';
     oscillator.frequency.setValueAtTime(440, context.currentTime); // A4
-    gainNode.gain.setValueAtTime(0.1, context.currentTime);
+    gainNode.gain.setValueAtTime(0.5, context.currentTime); // Increased Volume
     gainNode.gain.exponentialRampToValueAtTime(0.00001, context.currentTime + 0.2);
     oscillator.connect(gainNode);
     gainNode.connect(context.destination);
@@ -669,6 +669,8 @@ const handleMassQualify = async () => {
     </>
   );
 }
+
+    
 
     
 
