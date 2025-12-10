@@ -339,7 +339,13 @@ export default function Home() {
           throw new Error(`Error fetching last scan: ${lastScanError.message}`);
         }
 
-        let lastFinishTime: Date = lastScan && lastScan.date_esti ? new Date(lastScan.date_esti) : new Date();
+        let lastFinishTime: Date;
+        if (lastScan && lastScan.date_esti) {
+            const lastEstiDate = new Date(lastScan.date_esti);
+            lastFinishTime = lastEstiDate > new Date() ? lastEstiDate : new Date();
+        } else {
+            lastFinishTime = new Date();
+        }
 
         const newPersonalScansPromises = sortedScans.map(async (item, index) => {
           let sku: string | null = '';
@@ -990,7 +996,13 @@ export default function Home() {
         throw new Error(`Error al buscar el último registro: ${lastScanError.message}`);
       }
       
-      let lastFinishTime: Date = lastScan?.date_esti ? new Date(lastScan.date_esti) : new Date();
+      let lastFinishTime: Date;
+      if (lastScan && lastScan.date_esti) {
+        const lastEstiDate = new Date(lastScan.date_esti);
+        lastFinishTime = lastEstiDate > new Date() ? lastEstiDate : new Date();
+      } else {
+        lastFinishTime = new Date();
+      }
 
       const sortedScans = [...personalScans].sort((a, b) => new Date(a.date_ini!).valueOf() - new Date(b.date_ini!).valueOf());
 
@@ -1674,3 +1686,4 @@ export default function Home() {
 }
 
     
+
