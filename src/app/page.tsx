@@ -22,10 +22,10 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-  DialogFooter,
 } from "@/components/ui/dialog"
 
 
@@ -323,7 +323,24 @@ export default function Home() {
     try {
         const sortedScans = [...pendingScans].sort((a, b) => new Date(`1970/01/01 ${a.hora}`).valueOf() - new Date(`1970/01/01 ${b.hora}`).valueOf());
         
-        let lastFinishTime: Date | null = null;
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        const { data: lastScan, error: lastScanError } = await supabaseDB2
+            .from('personal')
+            .select('date_esti')
+            .eq('name', name)
+            .gte('date', today.toISOString())
+            .order('date_esti', { ascending: false })
+            .limit(1)
+            .single();
+
+        if (lastScanError && lastScanError.code !== 'PGRST116') {
+          throw new Error(`Error fetching last scan: ${lastScanError.message}`);
+        }
+
+        let lastFinishTime: Date = lastScan && lastScan.date_esti ? new Date(lastScan.date_esti) : new Date();
+
         const newPersonalScansPromises = sortedScans.map(async (item, index) => {
           let sku: string | null = '';
           let producto: string | null = '';
@@ -337,7 +354,7 @@ export default function Home() {
           // Calculate start time
           let startTime: Date;
           if (index === 0) {
-              startTime = new Date();
+              startTime = lastFinishTime;
           } else {
               startTime = lastFinishTime!;
           }
@@ -1621,9 +1638,5 @@ export default function Home() {
     </>
   );
 }
-
-    
-
-    
 
     
