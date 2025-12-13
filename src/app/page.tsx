@@ -997,12 +997,12 @@ export default function Home() {
       }
       
       let lastFinishTime: Date;
-      if (lastScan && lastScan.date_esti) {
-        const lastEstiDate = new Date(lastScan.date_esti);
-        lastFinishTime = lastEstiDate > new Date() ? lastEstiDate : new Date();
-      } else {
-        lastFinishTime = new Date();
-      }
+        if (lastScan && lastScan.date_esti) {
+            const lastEstiDate = new Date(lastScan.date_esti);
+            lastFinishTime = lastEstiDate > new Date() ? lastEstiDate : new Date();
+        } else {
+            lastFinishTime = new Date();
+        }
 
       const sortedScans = [...personalScans].sort((a, b) => new Date(a.date_ini!).valueOf() - new Date(b.date_ini!).valueOf());
 
@@ -1582,6 +1582,14 @@ export default function Home() {
                             </Button>
                         </div>
                         
+                        {totalPersonalEstimatedTime > 0 && (
+                            <div className="mb-4 p-3 bg-blue-100 border border-blue-300 rounded-lg text-center">
+                                <p className="font-semibold text-blue-800 flex items-center justify-center gap-2">
+                                    <Clock className="h-5 w-5"/>
+                                    Tiempo Total Asignado: <span className="font-bold">{formatTotalTime(totalPersonalEstimatedTime)}</span>
+                                </p>
+                            </div>
+                        )}
                         <div className="table-container border border-gray-200 rounded-lg">
                             <table className="w-full min-w-full divide-y divide-gray-200">
                                 <thead className="bg-starbucks-cream sticky top-0 z-10">
@@ -1598,14 +1606,6 @@ export default function Home() {
                                 </tbody>
                             </table>
                         </div>
-                        {totalPersonalEstimatedTime > 0 && (
-                            <div className="mt-4 p-3 bg-blue-100 border border-blue-300 rounded-lg text-center">
-                                <p className="font-semibold text-blue-800 flex items-center justify-center gap-2">
-                                    <Clock className="h-5 w-5"/>
-                                    Tiempo Total Asignado: <span className="font-bold">{formatTotalTime(totalPersonalEstimatedTime)}</span>
-                                </p>
-                            </div>
-                        )}
                     </div>
 
                     <div>
@@ -1698,6 +1698,7 @@ export default function Home() {
 }
 
     
+
 
 
 
