@@ -1263,6 +1263,10 @@ export default function Home() {
     return scannedData.reduce((acc, item) => acc + (item.esti_time || 0), 0);
   }, [scannedData]);
 
+  const totalPersonalEstimatedTime = useMemo(() => {
+    return personalScans.reduce((acc, item) => acc + (item.esti_time || 0), 0);
+  }, [personalScans]);
+
   const formatTotalTime = (totalMinutes: number) => {
     if (totalMinutes === 0) return null;
     if (totalMinutes < 60) {
@@ -1594,6 +1598,14 @@ export default function Home() {
                                 </tbody>
                             </table>
                         </div>
+                        {totalPersonalEstimatedTime > 0 && (
+                            <div className="mt-4 p-3 bg-blue-100 border border-blue-300 rounded-lg text-center">
+                                <p className="font-semibold text-blue-800 flex items-center justify-center gap-2">
+                                    <Clock className="h-5 w-5"/>
+                                    Tiempo Total Asignado: <span className="font-bold">{formatTotalTime(totalPersonalEstimatedTime)}</span>
+                                </p>
+                            </div>
+                        )}
                     </div>
 
                     <div>
@@ -1686,6 +1698,7 @@ export default function Home() {
 }
 
     
+
 
 
 
