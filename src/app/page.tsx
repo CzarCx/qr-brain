@@ -132,7 +132,7 @@ export default function Home() {
   useEffect(() => {
     setIsMounted(true);
     const checkDbConnection = async () => {
-      const { error } = await supabase.from('BASE DE DATOS ETIQUETAS IMPRESAS').select('Código').limit(1);
+      const { error } = await supabase.from('etiquetas_i').select('code').limit(1);
       if (error) {
         showAppMessage('Error de conexión a la base de datos.', 'duplicate');
         console.error("Database connection error:", error);
@@ -380,9 +380,9 @@ export default function Home() {
           if (!item.sku || !item.producto || !item.cantidad || !item.empresa || !item.venta) {
               try {
                   const { data, error } = await supabase
-                  .from('BASE DE DATOS ETIQUETAS IMPRESAS')
-                  .select('SKU, Producto, Cantidad, EMPRESA, Venta')
-                  .eq('Código', item.code)
+                  .from('etiquetas_i')
+                  .select('sku, product, quantity, organization, sales_num')
+                  .eq('code', item.code)
                   .single();
           
                   if (error && error.code !== 'PGRST116') {
@@ -390,11 +390,11 @@ export default function Home() {
                   }
           
                   if (data) {
-                  sku = data.SKU || '';
-                  producto = data.Producto || '';
-                  cantidad = data.Cantidad || 0;
-                  empresa = data.EMPRESA || '';
-                  venta = data.Venta || '';
+                  sku = data.sku || '';
+                  producto = data.product || '';
+                  cantidad = data.quantity || 0;
+                  empresa = data.organization || '';
+                  venta = data.sales_num || '';
                   } else {
                   showAppMessage(`Código ${item.code} no encontrado. Se añade sin detalles.`, 'info');
                   }
@@ -514,9 +514,9 @@ export default function Home() {
         }
 
         const { data, error } = await supabase
-            .from('BASE DE DATOS ETIQUETAS IMPRESAS')
-            .select('Código, SKU, Cantidad, Producto, EMPRESA, Venta')
-            .eq('Código', finalCode)
+            .from('etiquetas_i')
+            .select('code, sku, quantity, product, organization, sales_num')
+            .eq('code', finalCode)
             .single();
 
         if (error && error.code !== 'PGRST116') {
@@ -533,7 +533,7 @@ export default function Home() {
             return;
         }
 
-        const { SKU, Cantidad, Producto, EMPRESA, Venta } = data;
+        const { sku, quantity, product, organization, sales_num } = data;
 
         const isBarcode = finalCode.length > 5;
         let confirmed = true;
@@ -547,7 +547,7 @@ export default function Home() {
         }
 
         if (confirmed) {
-          addCodeAndUpdateCounters(finalCode, { sku: SKU, cantidad: Cantidad, producto: Producto, empresa: EMPRESA, venta: Venta });
+          addCodeAndUpdateCounters(finalCode, { sku: sku, cantidad: quantity, producto: product, empresa: organization, venta: sales_num });
         } else {
           showAppMessage('Escaneo cancelado.', 'info');
         }
@@ -705,9 +705,9 @@ export default function Home() {
         }
         
         const { data, error } = await supabase
-            .from('BASE DE DATOS ETIQUETAS IMPRESAS')
-            .select('Código, SKU, Cantidad, Producto, EMPRESA, Venta')
-            .eq('Código', finalCode)
+            .from('etiquetas_i')
+            .select('code, sku, quantity, product, organization, sales_num')
+            .eq('code', finalCode)
             .single();
         
         if (error && error.code !== 'PGRST116') {
@@ -724,10 +724,10 @@ export default function Home() {
             return;
         }
 
-        const { SKU, Cantidad, Producto, EMPRESA, Venta } = data;
+        const { sku, quantity, product, organization, sales_num } = data;
 
         if(finalCode.startsWith('4') && finalCode.length === 11) {
-            addCodeAndUpdateCounters(finalCode, { sku: SKU, cantidad: Cantidad, producto: Producto, empresa: EMPRESA, venta: Venta });
+            addCodeAndUpdateCounters(finalCode, { sku: sku, cantidad: quantity, producto: product, empresa: organization, venta: sales_num });
             return;
         }
         
@@ -741,7 +741,7 @@ export default function Home() {
         }
 
         if (confirmed) {
-            addCodeAndUpdateCounters(finalCode, { sku: SKU, cantidad: Cantidad, producto: Producto, empresa: EMPRESA, venta: Venta });
+            addCodeAndUpdateCounters(finalCode, { sku: sku, cantidad: quantity, producto: product, empresa: organization, venta: sales_num });
         } else {
             showAppMessage('Escaneo cancelado.', 'info');
         }
@@ -808,9 +808,9 @@ export default function Home() {
         }
         
         const { data, error } = await supabase
-            .from('BASE DE DATOS ETIQUETAS IMPRESAS')
-            .select('Código, SKU, Cantidad, Producto, EMPRESA, Venta')
-            .eq('Código', manualCode)
+            .from('etiquetas_i')
+            .select('code, sku, quantity, product, organization, sales_num')
+            .eq('code', manualCode)
             .single();
 
         if (error && error.code !== 'PGRST116') { 
@@ -827,7 +827,7 @@ export default function Home() {
             return;
         }
 
-        const { SKU, Cantidad, Producto, EMPRESA, Venta } = data;
+        const { sku, quantity, product, organization, sales_num } = data;
 
         let confirmed = true;
         if(!manualCode.startsWith('4')) {
@@ -835,7 +835,7 @@ export default function Home() {
         }
 
         if(confirmed) {
-            if(await addCodeAndUpdateCounters(manualCode, { sku: SKU, cantidad: Cantidad, producto: Producto, empresa: EMPRESA, venta: Venta })) {
+            if(await addCodeAndUpdateCounters(manualCode, { sku: sku, cantidad: quantity, producto: product, empresa: organization, venta: sales_num })) {
                 manualCodeInput.value = '';
                 manualCodeInput.focus();
             } else {
@@ -1028,7 +1028,7 @@ export default function Home() {
           status: 'ASIGNADO',
           organization: item.organization,
           sales_num: Number(item.venta),
-          date: new Date().toISOString(),
+          date: item.date,
           esti_time: item.esti_time,
           date_esti: date_esti_str,
           date_ini: startTime.toISOString(),
@@ -1698,6 +1698,7 @@ export default function Home() {
 }
 
     
+
 
 
 
