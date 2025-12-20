@@ -4,7 +4,7 @@
 import { useState } from 'react';
 import Head from 'next/head';
 import Image from 'next/image';
-import { supabaseDB2 } from '@/lib/supabaseClient';
+import { supabase } from '@/lib/supabaseClient';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -33,7 +33,7 @@ export default function RegistroPersonal() {
     setLoading(true);
 
     try {
-      const { error } = await supabaseDB2
+      const { error } = await supabase
         .from('personal_name')
         .insert([{ name, rol }]);
 

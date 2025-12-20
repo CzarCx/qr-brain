@@ -5,7 +5,6 @@ import Head from 'next/head';
 import Image from 'next/image';
 import { Html5Qrcode, Html5QrcodeScannerState } from 'html5-qrcode';
 import { supabase } from '@/lib/supabaseClient';
-import { supabaseDB2 } from '@/lib/supabaseClient';
 import {
   Select,
   SelectContent,
@@ -145,7 +144,7 @@ export default function Home() {
 
   useEffect(() => {
     const fetchPersonal = async () => {
-        const { data, error } = await supabaseDB2
+        const { data, error } = await supabase
             .from('personal_name')
             .select('name')
             .eq('rol', 'operativo');
@@ -157,7 +156,7 @@ export default function Home() {
         }
     };
     const fetchEncargados = async () => {
-        const { data, error } = await supabaseDB2
+        const { data, error } = await supabase
             .from('personal_name')
             .select('name')
             .eq('rol', 'barra');
@@ -232,7 +231,7 @@ export default function Home() {
     let estimatedTime: number | null = null;
     if (details.sku) {
         try {
-            const { data: personalData, error: personalError } = await supabaseDB2
+            const { data: personalData, error: personalError } = await supabase
                 .from('personal')
                 .select('esti_time')
                 .eq('sku', details.sku)
@@ -326,7 +325,7 @@ export default function Home() {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
 
-        const { data: lastScan, error: lastScanError } = await supabaseDB2
+        const { data: lastScan, error: lastScanError } = await supabase
             .from('personal')
             .select('date_esti')
             .eq('name', name)
@@ -488,7 +487,7 @@ export default function Home() {
     
     setLoading(true);
     try {
-        const { data: personalData, error: personalError } = await supabaseDB2
+        const { data: personalData, error: personalError } = await supabase
             .from('personal')
             .select('code, name, name_inc')
             .eq('code', finalCode)
@@ -679,10 +678,10 @@ export default function Home() {
 
     setLoading(true);
     try {
-        const { data: personalData, error: personalError } = await supabaseDB2
+        const { data: personalData, error: personalError } = await supabase
             .from('personal')
             .select('code, name, name_inc')
-            .eq('code', finalCode)
+            .eq('code', Number(finalCode))
             .single();
 
         if (personalError && personalError.code !== 'PGRST116') {
@@ -707,7 +706,7 @@ export default function Home() {
         const { data, error } = await supabase
             .from('etiquetas_i')
             .select('code, sku, quantity, product, organization, sales_num')
-            .eq('code', finalCode)
+            .eq('code', Number(finalCode))
             .single();
         
         if (error && error.code !== 'PGRST116') {
@@ -787,7 +786,7 @@ export default function Home() {
       
       setLoading(true);
       try {
-        const { data: personalData, error: personalError } = await supabaseDB2
+        const { data: personalData, error: personalError } = await supabase
             .from('personal')
             .select('code, name, name_inc')
             .eq('code', numericCode)
@@ -988,7 +987,7 @@ export default function Home() {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
 
-      const { data: lastScan, error: lastScanError } = await supabaseDB2
+      const { data: lastScan, error: lastScanError } = await supabase
         .from('personal')
         .select('date_esti')
         .eq('name', personName)
@@ -1040,7 +1039,7 @@ export default function Home() {
         };
       });
 
-      const { error: insertError } = await supabaseDB2.from('personal').insert(dataToInsert);
+      const { error: insertError } = await supabase.from('personal').insert(dataToInsert);
       if (insertError) {
         console.error("Error en insert:", insertError);
         throw new Error(`Error al guardar en 'personal': ${insertError.message}`);
@@ -1049,7 +1048,7 @@ export default function Home() {
       const salesNumbersToDelete = [...new Set(personalScans.map(item => item.venta).filter(Boolean))];
 
       if (salesNumbersToDelete.length > 0) {
-        const { error: deleteError } = await supabaseDB2
+        const { error: deleteError } = await supabase
           .from('personal_prog')
           .delete()
           .in('sales_num', salesNumbersToDelete as (string | number)[]);
@@ -1111,7 +1110,7 @@ export default function Home() {
         date_esti: null,
       }));
 
-      const { error } = await supabaseDB2.from('personal_prog').insert(dataToInsert);
+      const { error } = await supabase.from('personal_prog').insert(dataToInsert);
       if (error) throw error;
 
       showAppMessage(`¡Éxito! Se guardaron ${scannedData.length} registros en producción programada.`, 'success');
@@ -1133,7 +1132,7 @@ export default function Home() {
     setIsCargarModalOpen(true);
     setLoadingProgramadosPersonal(true);
     try {
-        const { data, error } = await supabaseDB2
+        const { data, error } = await supabase
             .from('personal_prog')
             .select('name');
 
@@ -1159,7 +1158,7 @@ export default function Home() {
     showAppMessage('Cargando producción programada...', 'info');
 
     try {
-      const { data, error } = await supabaseDB2
+      const { data, error } = await supabase
         .from('personal_prog')
         .select('*')
         .eq('name', selectedPersonalParaCargar);

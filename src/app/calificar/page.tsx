@@ -3,7 +3,7 @@
 import {useEffect, useRef, useState, useCallback} from 'react';
 import Head from 'next/head';
 import { Html5Qrcode, Html5QrcodeScannerState } from 'html5-qrcode';
-import { supabaseDB2 } from '@/lib/supabaseClient';
+import { supabase } from '@/lib/supabaseClient';
 import {
   Dialog,
   DialogContent,
@@ -85,7 +85,7 @@ export default function ScannerPage() {
    useEffect(() => {
     setIsMounted(true);
     const fetchEncargados = async () => {
-        const { data, error } = await supabaseDB2
+        const { data, error } = await supabase
             .from('personal_name')
             .select('name')
             .eq('rol', 'barra');
@@ -156,7 +156,7 @@ export default function ScannerPage() {
     
 
     try {
-        const { data, error } = await supabaseDB2
+        const { data, error } = await supabase
             .from('personal')
             .select('name, product, status, details')
             .eq('code', finalCode)
@@ -321,7 +321,7 @@ export default function ScannerPage() {
     }
     setLoading(true);
     try {
-        const { error } = await supabaseDB2
+        const { error } = await supabase
             .from('personal')
             .update({ details: selectedReport, status: 'REPORTADO' })
             .eq('code', lastScannedResult.code);
@@ -346,7 +346,7 @@ export default function ScannerPage() {
     setLoading(true);
     try {
         const qualificationTimestamp = new Date().toISOString();
-        const { error } = await supabaseDB2
+        const { error } = await supabase
             .from('personal')
             .update({ status: 'CALIFICADO', details: null, date_cal: qualificationTimestamp })
             .eq('code', lastScannedResult.code);
@@ -376,7 +376,7 @@ const handleMassQualify = async () => {
         const codesToUpdate = massScannedCodes.map(item => item.code);
         const qualificationTimestamp = new Date().toISOString();
 
-        const { error } = await supabaseDB2
+        const { error } = await supabase
             .from('personal')
             .update({ status: 'CALIFICADO', details: null, date_cal: qualificationTimestamp })
             .in('code', codesToUpdate);
@@ -408,7 +408,7 @@ const handleMassQualify = async () => {
   useEffect(() => {
     if (isRatingModalOpen && showReportSelect && reportReasons.length === 0) {
         const fetchReportReasons = async () => {
-            const { data, error } = await supabaseDB2
+            const { data, error } = await supabase
                 .from('reports')
                 .select('id, t_report');
             

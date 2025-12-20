@@ -4,7 +4,7 @@ import {useEffect, useRef, useState, useCallback} from 'react';
 import Head from 'next/head';
 import Image from 'next/image';
 import { Html5Qrcode, Html5QrcodeScannerState } from 'html5-qrcode';
-import { supabaseDB2 } from '@/lib/supabaseClient';
+import { supabase } from '@/lib/supabaseClient';
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -61,7 +61,7 @@ export default function Home() {
    useEffect(() => {
     setIsMounted(true);
     const fetchEncargados = async () => {
-        const { data, error } = await supabaseDB2
+        const { data, error } = await supabase
             .from('personal_name')
             .select('name')
             .eq('rol', 'entrega');
@@ -140,7 +140,7 @@ export default function Home() {
     }
 
     try {
-        const { data, error } = await supabaseDB2
+        const { data, error } = await supabase
             .from('personal')
             .select('name, product, status')
             .eq('code', finalCode)
@@ -326,7 +326,7 @@ export default function Home() {
     const deliveryTimestamp = new Date().toISOString();
 
     try {
-      const { error } = await supabaseDB2
+      const { error } = await supabase
         .from('personal')
         .update({ status: 'ENTREGADO', date_entre: deliveryTimestamp })
         .in('code', codesToUpdate);

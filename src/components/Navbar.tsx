@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils';
 import { ScanLine, PackageCheck, UserCheck, UserPlus, Home } from 'lucide-react';
 import Image from 'next/image';
 import { useEffect } from 'react';
-import { supabaseDB2 } from '@/lib/supabaseClient';
+import { supabase } from '@/lib/supabaseClient';
 
 const mainNavLinks = [
   { href: '/', label: 'Asignar', icon: <UserCheck className="h-5 w-5" /> },
