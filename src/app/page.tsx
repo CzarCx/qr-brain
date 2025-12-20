@@ -780,12 +780,17 @@ export default function Home() {
       const manualCode = manualCodeInput.value.trim();
       if (!manualCode) return showAppMessage('Por favor, ingresa un código para agregar.', 'duplicate');
       
+      const numericCode = Number(manualCode);
+      if (isNaN(numericCode)) {
+          return showAppMessage('El código debe ser numérico.', 'duplicate');
+      }
+      
       setLoading(true);
       try {
         const { data: personalData, error: personalError } = await supabaseDB2
             .from('personal')
             .select('code, name, name_inc')
-            .eq('code', manualCode)
+            .eq('code', numericCode)
             .single();
 
         if (personalError && personalError.code !== 'PGRST116') {
@@ -810,7 +815,7 @@ export default function Home() {
         const { data, error } = await supabase
             .from('etiquetas_i')
             .select('code, sku, quantity, product, organization, sales_num')
-            .eq('code', manualCode)
+            .eq('code', numericCode)
             .single();
 
         if (error && error.code !== 'PGRST116') { 
@@ -1704,3 +1709,6 @@ export default function Home() {
 
 
 
+
+
+    
