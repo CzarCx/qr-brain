@@ -133,7 +133,7 @@ export default function Home() {
     const checkDbConnection = async () => {
       const { error } = await supabase.from('etiquetas_i').select('code').limit(1);
       if (error) {
-        showAppMessage('Error de conexión a la base de datos.', 'duplicate');
+        showAppMessage('Error de conexión a la base de datos. Revisa los permisos RLS.', 'duplicate');
         console.error("Database connection error:", error);
       } else {
         showAppMessage('Conexión a la base de datos exitosa.', 'success');
@@ -150,7 +150,7 @@ export default function Home() {
             .eq('rol', 'operativo');
 
         if (error) {
-            console.error(`Error fetching operativos:`, error);
+            showAppMessage('Error al cargar personal. Revisa los permisos RLS de la tabla personal_name.', 'duplicate');
         } else {
             setPersonalList(data || []);
         }
@@ -162,7 +162,7 @@ export default function Home() {
             .eq('rol', 'barra');
 
         if (error) {
-            console.error(`Error fetching barra:`, error);
+            showAppMessage('Error al cargar encargados. Revisa los permisos RLS de la tabla personal_name.', 'duplicate');
         } else {
             setEncargadosList(data || []);
         }
@@ -381,7 +381,7 @@ export default function Home() {
                   const { data, error } = await supabase
                   .from('etiquetas_i')
                   .select('sku, product, quantity, organization, sales_num')
-                  .eq('code', item.code)
+                  .eq('code', Number(item.code))
                   .single();
           
                   if (error && error.code !== 'PGRST116') {
@@ -393,7 +393,7 @@ export default function Home() {
                   producto = data.product || '';
                   cantidad = data.quantity || 0;
                   empresa = data.organization || '';
-                  venta = data.sales_num || '';
+                  venta = data.sales_num ? String(data.sales_num) : '';
                   } else {
                   showAppMessage(`Código ${item.code} no encontrado. Se añade sin detalles.`, 'info');
                   }
@@ -490,7 +490,7 @@ export default function Home() {
         const { data: personalData, error: personalError } = await supabase
             .from('personal')
             .select('code, name, name_inc')
-            .eq('code', finalCode)
+            .eq('code', Number(finalCode))
             .single();
 
         if (personalError && personalError.code !== 'PGRST116') {
@@ -515,7 +515,7 @@ export default function Home() {
         const { data, error } = await supabase
             .from('etiquetas_i')
             .select('code, sku, quantity, product, organization, sales_num')
-            .eq('code', finalCode)
+            .eq('code', Number(finalCode))
             .single();
 
         if (error && error.code !== 'PGRST116') {
@@ -546,7 +546,7 @@ export default function Home() {
         }
 
         if (confirmed) {
-          addCodeAndUpdateCounters(finalCode, { sku: sku, cantidad: quantity, producto: product, empresa: organization, venta: sales_num });
+          addCodeAndUpdateCounters(finalCode, { sku: sku, cantidad: quantity, producto: product, empresa: organization, venta: sales_num ? String(sales_num) : null });
         } else {
           showAppMessage('Escaneo cancelado.', 'info');
         }
@@ -726,7 +726,7 @@ export default function Home() {
         const { sku, quantity, product, organization, sales_num } = data;
 
         if(finalCode.startsWith('4') && finalCode.length === 11) {
-            addCodeAndUpdateCounters(finalCode, { sku: sku, cantidad: quantity, producto: product, empresa: organization, venta: sales_num });
+            addCodeAndUpdateCounters(finalCode, { sku: sku, cantidad: quantity, producto: product, empresa: organization, venta: sales_num ? String(sales_num) : null });
             return;
         }
         
@@ -740,7 +740,7 @@ export default function Home() {
         }
 
         if (confirmed) {
-            addCodeAndUpdateCounters(finalCode, { sku: sku, cantidad: quantity, producto: product, empresa: organization, venta: sales_num });
+            addCodeAndUpdateCounters(finalCode, { sku: sku, cantidad: quantity, producto: product, empresa: organization, venta: sales_num ? String(sales_num) : null });
         } else {
             showAppMessage('Escaneo cancelado.', 'info');
         }
@@ -839,7 +839,7 @@ export default function Home() {
         }
 
         if(confirmed) {
-            if(await addCodeAndUpdateCounters(manualCode, { sku: sku, cantidad: quantity, producto: product, empresa: organization, venta: sales_num })) {
+            if(await addCodeAndUpdateCounters(manualCode, { sku: sku, cantidad: quantity, producto: product, empresa: organization, venta: sales_num ? String(sales_num) : null })) {
                 manualCodeInput.value = '';
                 manualCodeInput.focus();
             } else {
@@ -1709,5 +1709,7 @@ export default function Home() {
 
 
 
+
+    
 
     
