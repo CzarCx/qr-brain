@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/select"
 import { Button } from '@/components/ui/button';
 import { Input } from "@/components/ui/input";
-import { Zap, ZoomIn, UserPlus, PlusCircle, Clock } from 'lucide-react';
+import { Zap, ZoomIn, UserPlus, PlusCircle, Clock, AlertTriangle } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Combobox } from '@/components/ui/combobox';
 import {
@@ -26,6 +26,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
+import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 
 
 type ScannedItem = {
@@ -103,6 +104,7 @@ export default function Home() {
   const [loadingProgramadosPersonal, setLoadingProgramadosPersonal] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [selectedBulkPersonal, setSelectedBulkPersonal] = useState('');
+  const [dbError, setDbError] = useState<string | null>(null);
 
 
   // Refs para elementos del DOM y la instancia del escáner
@@ -134,7 +136,6 @@ export default function Home() {
       const { error } = await supabase.from('etiquetas_i').select('code').limit(1);
       if (error) {
         showAppMessage('Error de conexión a la base de datos. Revisa los permisos RLS.', 'duplicate');
-        console.error("Database connection error:", error);
       } else {
         showAppMessage('Conexión a la base de datos exitosa.', 'success');
       }
@@ -150,7 +151,9 @@ export default function Home() {
             .eq('rol', 'operativo');
 
         if (error) {
-            showAppMessage('Error al cargar personal. Revisa los permisos RLS de la tabla personal_name.', 'duplicate');
+            setDbError('Error al cargar personal. Revisa los permisos RLS de la tabla `personal_name`.');
+        } else if (data && data.length === 0) {
+            setDbError('No se encontró personal operativo. Revisa los datos o los permisos RLS.');
         } else {
             setPersonalList(data || []);
         }
@@ -162,7 +165,9 @@ export default function Home() {
             .eq('rol', 'barra');
 
         if (error) {
-            showAppMessage('Error al cargar encargados. Revisa los permisos RLS de la tabla personal_name.', 'duplicate');
+            setDbError('Error al cargar encargados. Revisa los permisos RLS de la tabla `personal_name`.');
+        } else if (data && data.length === 0) {
+            setDbError('No se encontraron encargados. Revisa los datos o los permisos RLS.');
         } else {
             setEncargadosList(data || []);
         }
@@ -546,7 +551,7 @@ export default function Home() {
         }
 
         if (confirmed) {
-          addCodeAndUpdateCounters(finalCode, { sku: sku, cantidad: quantity, producto: product, empresa: organization, venta: sales_num ? String(sales_num) : null });
+          addCodeAndUpdateCounters(finalCode, { sku, cantidad: quantity, producto: product, empresa: organization, venta: sales_num ? String(sales_num) : null });
         } else {
           showAppMessage('Escaneo cancelado.', 'info');
         }
@@ -726,7 +731,7 @@ export default function Home() {
         const { sku, quantity, product, organization, sales_num } = data;
 
         if(finalCode.startsWith('4') && finalCode.length === 11) {
-            addCodeAndUpdateCounters(finalCode, { sku: sku, cantidad: quantity, producto: product, empresa: organization, venta: sales_num ? String(sales_num) : null });
+            addCodeAndUpdateCounters(finalCode, { sku, cantidad: quantity, producto: product, empresa: organization, venta: sales_num ? String(sales_num) : null });
             return;
         }
         
@@ -740,7 +745,7 @@ export default function Home() {
         }
 
         if (confirmed) {
-            addCodeAndUpdateCounters(finalCode, { sku: sku, cantidad: quantity, producto: product, empresa: organization, venta: sales_num ? String(sales_num) : null });
+            addCodeAndUpdateCounters(finalCode, { sku, cantidad: quantity, producto: product, empresa: organization, venta: sales_num ? String(sales_num) : null });
         } else {
             showAppMessage('Escaneo cancelado.', 'info');
         }
@@ -839,7 +844,7 @@ export default function Home() {
         }
 
         if(confirmed) {
-            if(await addCodeAndUpdateCounters(manualCode, { sku: sku, cantidad: quantity, producto: product, empresa: organization, venta: sales_num ? String(sales_num) : null })) {
+            if(await addCodeAndUpdateCounters(manualCode, { sku, cantidad: quantity, producto: product, empresa: organization, venta: sales_num ? String(sales_num) : null })) {
                 manualCodeInput.value = '';
                 manualCodeInput.focus();
             } else {
@@ -1401,6 +1406,14 @@ export default function Home() {
                     <p className="text-gray-600 text-sm md:text-base mt-1">Asigna un producto a un miembro del personal.</p>
                 </header>
 
+                {dbError && (
+                    <Alert variant="destructive">
+                        <AlertTriangle className="h-4 w-4" />
+                        <AlertTitle>Error de Base de Datos</AlertTitle>
+                        <AlertDescription>{dbError}</AlertDescription>
+                    </Alert>
+                )}
+
                 <div className="grid md:grid-cols-2 gap-4">
                     <div className="space-y-4">
                         <div>
@@ -1700,16 +1713,5 @@ export default function Home() {
     </>
   );
 }
-
-    
-
-
-
-
-
-
-
-
-    
 
     

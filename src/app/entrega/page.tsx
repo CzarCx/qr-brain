@@ -45,6 +45,7 @@ export default function Home() {
   const [isFlashOn, setIsFlashOn] = useState(false);
   const [zoom, setZoom] = useState(1);
   const isMobile = useIsMobile();
+  const [dbError, setDbError] = useState<string | null>(null);
 
 
   // Refs
@@ -67,7 +68,9 @@ export default function Home() {
             .eq('rol', 'entrega');
 
         if (error) {
-            console.error('Error fetching encargados:', error);
+            setDbError('Error al cargar encargados. Revisa los permisos RLS de la tabla `personal_name`.');
+        } else if (data && data.length === 0) {
+            setDbError('No se encontraron encargados de entrega. Revisa los datos o los permisos RLS.');
         } else {
             setEncargadosList(data || []);
         }
@@ -365,6 +368,14 @@ export default function Home() {
                     <p className="text-gray-600 text-sm mt-1">Escanea los paquetes para confirmar su entrega.</p>
                 </header>
 
+                 {dbError && (
+                    <Alert variant="destructive">
+                        <AlertTriangle className="h-4 w-4" />
+                        <AlertTitle>Error de Base de Datos</AlertTitle>
+                        <AlertDescription>{dbError}</AlertDescription>
+                    </Alert>
+                )}
+
                 <div className="space-y-4">
                     <div>
                         <label htmlFor="encargado" className="block text-sm font-bold text-starbucks-dark mb-1">Nombre del Encargado:</label>
@@ -509,11 +520,5 @@ export default function Home() {
     </>
   );
 }
-
-    
-
-    
-
-    
 
     
