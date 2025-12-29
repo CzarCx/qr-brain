@@ -151,7 +151,7 @@ export default function Home() {
             .eq('rol', 'operativo');
 
         if (error) {
-            setDbError('Error al cargar personal. Revisa los permisos RLS de la tabla `personal_name`.');
+            setDbError('Error al cargar personal operativo. Revisa los permisos RLS de la tabla `personal_name`.');
         } else if (data && data.length === 0) {
             setDbError('No se encontró personal operativo. Revisa los datos o los permisos RLS.');
         } else {
@@ -167,7 +167,7 @@ export default function Home() {
         if (error) {
             setDbError('Error al cargar encargados. Revisa los permisos RLS de la tabla `personal_name`.');
         } else if (data && data.length === 0) {
-            setDbError('No se encontraron encargados. Revisa los datos o los permisos RLS.');
+            setDbError('No se encontraron encargados con el rol "barra". Revisa los datos o los permisos RLS.');
         } else {
             setEncargadosList(data || []);
         }

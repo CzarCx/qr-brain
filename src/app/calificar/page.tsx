@@ -94,7 +94,7 @@ export default function ScannerPage() {
         if (error) {
             setDbError('Error al cargar encargados. Revisa los permisos RLS de la tabla `personal_name`.');
         } else if (data && data.length === 0) {
-            setDbError('No se encontraron encargados. Revisa los datos o los permisos RLS.');
+            setDbError('No se encontraron encargados con el rol "barra". Revisa los datos o los permisos RLS.');
         } else {
             setEncargadosList(data || []);
         }
@@ -417,6 +417,7 @@ const handleMassQualify = async () => {
             
             if (error) {
                 console.error('Error fetching report reasons:', error);
+                 setDbError('Error al cargar motivos de reporte. Revisa los permisos RLS de la tabla `reports`.');
             } else {
                 setReportReasons(data || []);
             }
