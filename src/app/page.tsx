@@ -154,29 +154,29 @@ export default function Home() {
     const fetchPersonal = async () => {
         const { data, error } = await supabase
             .from('personal_name')
-            .select('name');
+            .select('name')
+            .eq('rol', 'operativo');
 
         if (error) {
             setDbError('Error al cargar personal. Revisa los permisos RLS de la tabla `personal_name`.');
         } else if (data && data.length === 0) {
-            setDbError('No se encontró personal. Revisa los datos o los permisos RLS.');
+            setDbError('No se encontró personal con el rol "operativo". Revisa los datos o los permisos RLS.');
         } else {
-            const operativos = data.filter((p: any) => p.rol === 'operativo');
-            setPersonalList(operativos || []);
+            setPersonalList(data || []);
         }
     };
     const fetchEncargados = async () => {
         const { data, error } = await supabase
             .from('personal_name')
-            .select('name');
+            .select('name')
+            .eq('rol', 'barra');
 
         if (error) {
             setDbError('Error al cargar encargados. Revisa los permisos RLS de la tabla `personal_name`.');
         } else if (data && data.length === 0) {
             setDbError('No se encontraron encargados con el rol "barra". Revisa los datos o los permisos RLS.');
         } else {
-             const barras = data.filter((p: any) => p.rol === 'barra');
-            setEncargadosList(barras || []);
+            setEncargadosList(data || []);
         }
     };
     fetchEncargados();
@@ -232,7 +232,7 @@ export default function Home() {
   };
 
   const addCodeAndUpdateCounters = useCallback(async (codeToAdd: string, details: { sku: string | null; cantidad: number | null; producto: string | null; empresa: string | null; venta: string | null; }) => {
-    const finalCode = codeToAdd.trim();
+    const finalCode = String(codeToAdd).trim();
 
     if (scannedCodesRef.current.has(finalCode)) {
       showAppMessage(<>DUPLICADO: {finalCode}</>, 'duplicate');
@@ -681,10 +681,6 @@ export default function Home() {
     lastScanTimeRef.current = Date.now();
 
     let finalCode = code.trim();
-    const patternMatch = finalCode.match(/^id(\d+)tlm$/i);
-    if (patternMatch) {
-        finalCode = patternMatch[1];
-    }
     
     if (finalCode === lastSuccessfullyScannedCodeRef.current) return;
 
@@ -1726,6 +1722,5 @@ export default function Home() {
     </>
   );
 }
-
 
     
