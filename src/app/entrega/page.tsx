@@ -68,11 +68,15 @@ export default function Home() {
 
         if (error) {
             setDbError('Error al cargar encargados. Revisa los permisos RLS de la tabla `personal_name`.');
-        } else if (data && data.length === 0) {
-            setDbError('No se encontraron encargados de entrega. Revisa los datos o los permisos RLS.');
-        } else {
+        } else if (data && data.length > 0) {
             const entregas = data.filter((p: any) => p.rol === 'entrega');
-            setEncargadosList(entregas || []);
+            if (entregas.length === 0) {
+                setDbError('No se encontraron encargados de entrega. Revisa los datos o los permisos RLS.');
+            } else {
+                setEncargadosList(entregas || []);
+            }
+        } else {
+            setDbError('No se encontraron encargados de entrega. Revisa los datos o los permisos RLS.');
         }
     };
     fetchEncargados();

@@ -393,7 +393,7 @@ export default function Home() {
                   const { data, error } = await supabaseEtiquetas
                   .from('etiquetas_i')
                   .select('sku, product, quantity, organization, sales_num')
-                  .eq('code', Number(item.code))
+                  .eq('code', String(item.code))
                   .single();
           
                   if (error && error.code !== 'PGRST116') {
@@ -527,7 +527,7 @@ export default function Home() {
         const { data, error } = await supabaseEtiquetas
             .from('etiquetas_i')
             .select('code, sku, quantity, product, organization, sales_num')
-            .eq('code', Number(finalCode))
+            .eq('code', finalCode)
             .single();
 
         if (error && error.code !== 'PGRST116') {
@@ -549,7 +549,7 @@ export default function Home() {
         const isBarcode = finalCode.length > 5;
         let confirmed = true;
 
-        if (isBarcode && (!finalCode.startsWith('4') || finalCode.length !== 11)) {
+        if (isBarcode && (!finalCode.startsWith('4'))) {
              const title = 'Advertencia';
              const message = 'Este no es un código MEL estándar, ¿desea agregarlo de todos modos?';
              confirmed = await showConfirmationDialog(title, message, finalCode);
@@ -651,7 +651,7 @@ export default function Home() {
       }
 
       if(event.key.length === 1) {
-          bufferRef.current += event.key;
+          bufferRef.current += event.key;;
       }
 
       if(scanTimeoutRef.current) clearTimeout(scanTimeoutRef.current);
@@ -716,7 +716,7 @@ export default function Home() {
         const { data, error } = await supabaseEtiquetas
             .from('etiquetas_i')
             .select('code, sku, quantity, product, organization, sales_num')
-            .eq('code', Number(finalCode))
+            .eq('code', finalCode)
             .single();
         
         if (error && error.code !== 'PGRST116') {
@@ -819,7 +819,7 @@ export default function Home() {
         const { data, error } = await supabaseEtiquetas
             .from('etiquetas_i')
             .select('code, sku, quantity, product, organization, sales_num')
-            .eq('code', Number(manualCode))
+            .eq('code', manualCode)
             .single();
 
         if (error && error.code !== 'PGRST116') { 
@@ -1028,7 +1028,7 @@ export default function Home() {
         }
         
         return {
-          code: item.code,
+          code: String(item.code),
           name: item.personal,
           name_inc: item.encargado,
           sku: item.sku,
@@ -1100,7 +1100,7 @@ export default function Home() {
 
     try {
       const dataToInsert = scannedData.map(item => ({
-        code: item.code,
+        code: String(item.code),
         sku: item.sku,
         name: selectedPersonal,
         name_inc: item.encargado,
@@ -1725,4 +1725,4 @@ export default function Home() {
   );
 }
 
-
+    

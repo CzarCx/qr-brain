@@ -92,11 +92,15 @@ export default function ScannerPage() {
 
         if (error) {
             setDbError('Error al cargar encargados. Revisa los permisos RLS de la tabla `personal_name`.');
-        } else if (data && data.length === 0) {
-            setDbError('No se encontraron encargados con el rol "barra". Revisa los datos o los permisos RLS.');
-        } else {
+        } else if (data && data.length > 0) {
             const barras = data.filter((p: any) => p.rol === 'barra');
-            setEncargadosList(barras || []);
+             if (barras.length === 0) {
+                setDbError('No se encontraron encargados con el rol "barra". Revisa los datos o los permisos RLS.');
+            } else {
+                setEncargadosList(barras || []);
+            }
+        } else {
+             setDbError('No se encontraron encargados. Revisa los datos o los permisos RLS.');
         }
     };
     fetchEncargados();
