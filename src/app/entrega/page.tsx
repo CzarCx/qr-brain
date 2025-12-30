@@ -64,17 +64,13 @@ export default function Home() {
     const fetchEncargados = async () => {
         const { data, error } = await supabase
             .from('personal_name')
-            .select('name');
+            .select('name')
+            .eq('rol', 'entrega');
 
         if (error) {
             setDbError('Error al cargar encargados. Revisa los permisos RLS de la tabla `personal_name`.');
-        } else if (data) {
-            const entregas = data.filter((p: any) => p.rol === 'entrega') as Encargado[];
-            if (entregas.length === 0) {
-                setDbError('No se encontraron encargados de entrega. Revisa los datos o los permisos RLS.');
-            } else {
-                setEncargadosList(entregas || []);
-            }
+        } else if (data && data.length > 0) {
+            setEncargadosList(data as Encargado[] || []);
         } else {
             setDbError('No se encontraron encargados de entrega. Revisa los datos o los permisos RLS.');
         }
@@ -130,15 +126,7 @@ export default function Home() {
     if ('vibrate' in navigator) navigator.vibrate(100);
     
     let finalCode = String(decodedText).trim();
-    try {
-      const parsedJson = JSON.parse(decodedText);
-      if (parsedJson && parsedJson.id) {
-        finalCode = String(parsedJson.id).trim();
-      }
-    } catch (e) {
-      // Not a JSON, use decodedText as is and trim it
-    }
-
+    
     if (scannedCodesRef.current.has(finalCode)) {
         setLoading(false);
         showAppMessage(`Código ya en la lista: ${finalCode}`, 'warning');
@@ -523,6 +511,8 @@ export default function Home() {
     </>
   );
 }
+
+    
 
     
 
