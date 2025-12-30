@@ -64,15 +64,15 @@ export default function Home() {
     const fetchEncargados = async () => {
         const { data, error } = await supabase
             .from('personal_name')
-            .select('name')
-            .eq('rol', 'entrega');
+            .select('name');
 
         if (error) {
             setDbError('Error al cargar encargados. Revisa los permisos RLS de la tabla `personal_name`.');
         } else if (data && data.length === 0) {
             setDbError('No se encontraron encargados de entrega. Revisa los datos o los permisos RLS.');
         } else {
-            setEncargadosList(data || []);
+            const entregas = data.filter((p: any) => p.rol === 'entrega');
+            setEncargadosList(entregas || []);
         }
     };
     fetchEncargados();

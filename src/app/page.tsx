@@ -154,29 +154,29 @@ export default function Home() {
     const fetchPersonal = async () => {
         const { data, error } = await supabase
             .from('personal_name')
-            .select('name')
-            .eq('rol', 'operativo');
+            .select('name');
 
         if (error) {
-            setDbError('Error al cargar personal operativo. Revisa los permisos RLS de la tabla `personal_name`.');
+            setDbError('Error al cargar personal. Revisa los permisos RLS de la tabla `personal_name`.');
         } else if (data && data.length === 0) {
-            setDbError('No se encontró personal operativo. Revisa los datos o los permisos RLS.');
+            setDbError('No se encontró personal. Revisa los datos o los permisos RLS.');
         } else {
-            setPersonalList(data || []);
+            const operativos = data.filter((p: any) => p.rol === 'operativo');
+            setPersonalList(operativos || []);
         }
     };
     const fetchEncargados = async () => {
         const { data, error } = await supabase
             .from('personal_name')
-            .select('name')
-            .eq('rol', 'barra');
+            .select('name');
 
         if (error) {
             setDbError('Error al cargar encargados. Revisa los permisos RLS de la tabla `personal_name`.');
         } else if (data && data.length === 0) {
             setDbError('No se encontraron encargados con el rol "barra". Revisa los datos o los permisos RLS.');
         } else {
-            setEncargadosList(data || []);
+             const barras = data.filter((p: any) => p.rol === 'barra');
+            setEncargadosList(barras || []);
         }
     };
     fetchEncargados();
@@ -680,8 +680,8 @@ export default function Home() {
     if(!scannerActive || (Date.now() - lastScanTimeRef.current) < MIN_SCAN_INTERVAL) return;
     lastScanTimeRef.current = Date.now();
 
-    let finalCode = code.trim().replace(/[^0-9A-Za-z-]/g, '');
-    const patternMatch = finalCode.match(/^id(\d{11})tlm$/i);
+    let finalCode = code.trim();
+    const patternMatch = finalCode.match(/^id(\d+)tlm$/i);
     if (patternMatch) {
         finalCode = patternMatch[1];
     }
@@ -1726,5 +1726,6 @@ export default function Home() {
     </>
   );
 }
+
 
     

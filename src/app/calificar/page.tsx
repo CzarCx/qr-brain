@@ -88,15 +88,15 @@ export default function ScannerPage() {
     const fetchEncargados = async () => {
         const { data, error } = await supabase
             .from('personal_name')
-            .select('name')
-            .eq('rol', 'barra');
+            .select('name');
 
         if (error) {
             setDbError('Error al cargar encargados. Revisa los permisos RLS de la tabla `personal_name`.');
         } else if (data && data.length === 0) {
             setDbError('No se encontraron encargados con el rol "barra". Revisa los datos o los permisos RLS.');
         } else {
-            setEncargadosList(data || []);
+            const barras = data.filter((p: any) => p.rol === 'barra');
+            setEncargadosList(barras || []);
         }
     };
     fetchEncargados();
