@@ -393,7 +393,7 @@ export default function Home() {
                   const { data, error } = await supabaseEtiquetas
                   .from('etiquetas_i')
                   .select('sku, product, quantity, organization, sales_num')
-                  .eq('code', Number(item.code))
+                  .eq('code', item.code)
                   .single();
           
                   if (error && error.code !== 'PGRST116') {
@@ -482,10 +482,10 @@ export default function Home() {
   }, [scannerActive]);
 
   const processScan = useCallback(async (decodedText: string) => {
-    let finalCode = decodedText;
+    let finalCode = decodedText.trim();
     try {
       const parsedJson = JSON.parse(decodedText);
-      if (parsedJson && parsedJson.id) finalCode = parsedJson.id;
+      if (parsedJson && parsedJson.id) finalCode = String(parsedJson.id).trim();
     } catch (e) {}
 
     if (isLikelyName(finalCode)) {
@@ -502,7 +502,7 @@ export default function Home() {
         const { data: personalData, error: personalError } = await supabase
             .from('personal')
             .select('code, name, name_inc')
-            .eq('code', Number(finalCode))
+            .eq('code', finalCode)
             .single();
 
         if (personalError && personalError.code !== 'PGRST116') {
@@ -527,7 +527,7 @@ export default function Home() {
         const { data, error } = await supabaseEtiquetas
             .from('etiquetas_i')
             .select('code, sku, quantity, product, organization, sales_num')
-            .eq('code', Number(finalCode))
+            .eq('code', finalCode)
             .single();
 
         if (error && error.code !== 'PGRST116') {
@@ -693,7 +693,7 @@ export default function Home() {
         const { data: personalData, error: personalError } = await supabase
             .from('personal')
             .select('code, name, name_inc')
-            .eq('code', Number(finalCode))
+            .eq('code', finalCode)
             .single();
 
         if (personalError && personalError.code !== 'PGRST116') {
@@ -718,7 +718,7 @@ export default function Home() {
         const { data, error } = await supabaseEtiquetas
             .from('etiquetas_i')
             .select('code, sku, quantity, product, organization, sales_num')
-            .eq('code', Number(finalCode))
+            .eq('code', finalCode)
             .single();
         
         if (error && error.code !== 'PGRST116') {
@@ -791,17 +791,12 @@ export default function Home() {
       const manualCode = manualCodeInput.value.trim();
       if (!manualCode) return showAppMessage('Por favor, ingresa un código para agregar.', 'duplicate');
       
-      const numericCode = Number(manualCode);
-      if (isNaN(numericCode)) {
-          return showAppMessage('El código debe ser numérico.', 'duplicate');
-      }
-      
       setLoading(true);
       try {
         const { data: personalData, error: personalError } = await supabase
             .from('personal')
             .select('code, name, name_inc')
-            .eq('code', numericCode)
+            .eq('code', manualCode)
             .single();
 
         if (personalError && personalError.code !== 'PGRST116') {
@@ -826,7 +821,7 @@ export default function Home() {
         const { data, error } = await supabaseEtiquetas
             .from('etiquetas_i')
             .select('code, sku, quantity, product, organization, sales_num')
-            .eq('code', numericCode)
+            .eq('code', manualCode)
             .single();
 
         if (error && error.code !== 'PGRST116') { 
@@ -1035,7 +1030,7 @@ export default function Home() {
         }
         
         return {
-          code: Number(item.code),
+          code: item.code,
           name: item.personal,
           name_inc: item.encargado,
           sku: item.sku,
@@ -1107,7 +1102,7 @@ export default function Home() {
 
     try {
       const dataToInsert = scannedData.map(item => ({
-        code: Number(item.code),
+        code: item.code,
         sku: item.sku,
         name: selectedPersonal,
         name_inc: item.encargado,
@@ -1731,3 +1726,5 @@ export default function Home() {
     </>
   );
 }
+
+    

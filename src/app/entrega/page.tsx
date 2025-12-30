@@ -125,15 +125,14 @@ export default function Home() {
     showAppMessage('Procesando código...', 'info');
     if ('vibrate' in navigator) navigator.vibrate(100);
     
-    let finalCode = decodedText;
+    let finalCode = decodedText.trim();
     try {
       const parsedJson = JSON.parse(decodedText);
       if (parsedJson && parsedJson.id) {
-        finalCode = parsedJson.id;
+        finalCode = String(parsedJson.id).trim();
       }
     } catch (e) {
       // Not a JSON, use decodedText as is and trim it
-      finalCode = decodedText.trim();
     }
 
     if (scannedCodesRef.current.has(finalCode)) {
@@ -521,3 +520,4 @@ export default function Home() {
   );
 }
 
+    
