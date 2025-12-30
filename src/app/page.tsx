@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/select"
 import { Button } from '@/components/ui/button';
 import { Input } from "@/components/ui/input";
-import { Zap, ZoomIn, UserPlus, PlusCircle, Clock, AlertTriangle } from 'lucide-react';
+import { Zap, ZoomIn, UserPlus, PlusCircle, Clock, AlertTriangle, Wifi, WifiOff } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Combobox } from '@/components/ui/combobox';
 import {
@@ -62,6 +62,11 @@ type Encargado = {
   name: string;
 };
 
+type DbStatus = {
+    personalDb: 'connecting' | 'success' | 'error';
+    etiquetasDb: 'connecting' | 'success' | 'error';
+};
+
 
 // Helper function to check if a string is likely a name
 const isLikelyName = (text: string): boolean => {
@@ -100,11 +105,12 @@ export default function Home() {
   const isMobile = useIsMobile();
   const [isCargarModalOpen, setIsCargarModalOpen] = useState(false);
   const [programadosPersonalList, setProgramadosPersonalList] = useState<{ name: string }[]>([]);
-  const [selectedPersonalParaCargar, setSelectedPersonalParaCargar] = useState('');
   const [loadingProgramadosPersonal, setLoadingProgramadosPersonal] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [selectedBulkPersonal, setSelectedBulkPersonal] = useState('');
   const [dbError, setDbError] = useState<string | null>(null);
+  const [dbStatus, setDbStatus] = useState<DbStatus>({ personalDb: 'connecting', etiquetasDb: 'connecting' });
+  const [selectedPersonalParaCargar, setSelectedPersonalParaCargar] = useState('');
 
 
   // Refs para elementos del DOM y la instancia del escáner
@@ -132,17 +138,16 @@ export default function Home() {
 
   useEffect(() => {
     setIsMounted(true);
-    const checkDbConnection = async () => {
-      const { error } = await supabase.from('personal_name').select('name').limit(1);
-      if (error) {
-        setDbError('Error de conexión a la base de datos de personal. Revisa los permisos RLS.');
-      }
+    const checkDbConnections = async () => {
+      // Check personal DB
+      const { error: personalError } = await supabase.from('personal_name').select('name').limit(1);
+      setDbStatus(prev => ({ ...prev, personalDb: personalError ? 'error' : 'success' }));
+
+      // Check etiquetas DB
       const { error: etiquetasError } = await supabaseEtiquetas.from('etiquetas_i').select('code').limit(1);
-      if (etiquetasError) {
-         setDbError(prev => prev ? `${prev} Y Error en DB de etiquetas.` : 'Error de conexión a la base de datos de etiquetas. Revisa los permisos RLS.');
-      }
+      setDbStatus(prev => ({ ...prev, etiquetasDb: etiquetasError ? 'error' : 'success' }));
     };
-    checkDbConnection();
+    checkDbConnections();
   }, []);
 
   useEffect(() => {
@@ -387,7 +392,7 @@ export default function Home() {
               try {
                   const { data, error } = await supabaseEtiquetas
                   .from('etiquetas_i')
-                  .select('sku, product:productO, quantity, organization, sales_num')
+                  .select('sku, product, quantity, organization, sales_num')
                   .eq('code', Number(item.code))
                   .single();
           
@@ -521,7 +526,7 @@ export default function Home() {
 
         const { data, error } = await supabaseEtiquetas
             .from('etiquetas_i')
-            .select('code, sku, quantity, product:productO, organization, sales_num')
+            .select('code, sku, quantity, product, organization, sales_num')
             .eq('code', Number(finalCode))
             .single();
 
@@ -712,7 +717,7 @@ export default function Home() {
         
         const { data, error } = await supabaseEtiquetas
             .from('etiquetas_i')
-            .select('code, sku, quantity, product:productO, organization, sales_num')
+            .select('code, sku, quantity, product, organization, sales_num')
             .eq('code', Number(finalCode))
             .single();
         
@@ -820,7 +825,7 @@ export default function Home() {
         
         const { data, error } = await supabaseEtiquetas
             .from('etiquetas_i')
-            .select('code, sku, quantity, product:productO, organization, sales_num')
+            .select('code, sku, quantity, product, organization, sales_num')
             .eq('code', numericCode)
             .single();
 
@@ -1408,6 +1413,17 @@ export default function Home() {
                     <p className="text-gray-600 text-sm md:text-base mt-1">Asigna un producto a un miembro del personal.</p>
                 </header>
 
+                <div className="flex justify-center gap-4">
+                    <div className={`flex items-center gap-2 p-2 rounded-lg ${dbStatus.personalDb === 'success' ? 'bg-green-100 text-green-800' : dbStatus.personalDb === 'error' ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800'}`}>
+                        {dbStatus.personalDb === 'success' ? <Wifi className="h-5 w-5" /> : dbStatus.personalDb === 'error' ? <WifiOff className="h-5 w-5"/> : <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-yellow-800"></div>}
+                        <span className="text-sm font-medium">BD Personal</span>
+                    </div>
+                    <div className={`flex items-center gap-2 p-2 rounded-lg ${dbStatus.etiquetasDb === 'success' ? 'bg-green-100 text-green-800' : dbStatus.etiquetasDb === 'error' ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800'}`}>
+                        {dbStatus.etiquetasDb === 'success' ? <Wifi className="h-5 w-5" /> : dbStatus.etiquetasDb === 'error' ? <WifiOff className="h-5 w-5"/> : <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-yellow-800"></div>}
+                        <span className="text-sm font-medium">BD Etiquetas</span>
+                    </div>
+                </div>
+
                 {dbError && (
                     <Alert variant="destructive">
                         <AlertTriangle className="h-4 w-4" />
@@ -1715,4 +1731,3 @@ export default function Home() {
     </>
   );
 }
-
