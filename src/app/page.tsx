@@ -549,11 +549,13 @@ export default function Home() {
         const isBarcode = finalCode.length > 5;
         let confirmed = true;
 
-        if (isBarcode && finalCode.startsWith('4') && finalCode.length === 11) {
-            confirmed = true;
-        } else {
-            const title = isBarcode ? 'Advertencia' : 'Confirmar Código';
-            const message = isBarcode ? 'Este no es un código MEL, ¿desea agregar?' : 'Se ha detectado el siguiente código. ¿Desea agregarlo al registro?';
+        if (isBarcode && (!finalCode.startsWith('4') || finalCode.length !== 11)) {
+             const title = 'Advertencia';
+             const message = 'Este no es un código MEL estándar, ¿desea agregarlo de todos modos?';
+             confirmed = await showConfirmationDialog(title, message, finalCode);
+        } else if (!isBarcode) {
+            const title = 'Confirmar Código';
+            const message = 'Se ha detectado un código corto. ¿Desea agregarlo al registro?';
             confirmed = await showConfirmationDialog(title, message, finalCode);
         }
 
@@ -733,19 +735,19 @@ export default function Home() {
 
         const { sku, quantity, product, organization, sales_num } = data;
 
-        if(finalCode.startsWith('4') && finalCode.length === 11) {
-            addCodeAndUpdateCounters(finalCode, { sku, cantidad: quantity, producto: product, empresa: organization, venta: sales_num ? String(sales_num) : null });
-            return;
-        }
-        
-        const isQrCodeLike = finalCode.length < 10 || finalCode.length > 14;
+        const isBarcode = finalCode.length > 5;
         let confirmed = true;
 
-        if (isQrCodeLike || !finalCode.startsWith('4')) {
-            const title = isQrCodeLike ? 'Confirmar Código' : 'Advertencia';
-            const message = isQrCodeLike ? 'Se ha detectado el siguiente código. ¿Desea agregarlo al registro?': 'Este no es un código MEL, ¿desea agregar?';
+        if (isBarcode && (!finalCode.startsWith('4'))) {
+            const title = 'Advertencia';
+            const message = 'Este no es un código MEL estándar, ¿desea agregar?';
+            confirmed = await showConfirmationDialog(title, message, finalCode);
+        } else if (!isBarcode) {
+            const title = 'Confirmar Código';
+            const message = 'Se ha detectado el siguiente código. ¿Desea agregarlo al registro?';
             confirmed = await showConfirmationDialog(title, message, finalCode);
         }
+
 
         if (confirmed) {
             addCodeAndUpdateCounters(finalCode, { sku, cantidad: quantity, producto: product, empresa: organization, venta: sales_num ? String(sales_num) : null });
@@ -1723,4 +1725,3 @@ export default function Home() {
   );
 }
 
-    
