@@ -387,7 +387,7 @@ export default function Home() {
               try {
                   const { data, error } = await supabaseEtiquetas
                   .from('etiquetas_i')
-                  .select('sku, product, quantity, organization, sales_num')
+                  .select('sku, product:productO, quantity, organization, sales_num')
                   .eq('code', Number(item.code))
                   .single();
           
@@ -521,7 +521,7 @@ export default function Home() {
 
         const { data, error } = await supabaseEtiquetas
             .from('etiquetas_i')
-            .select('code, sku, quantity, product, organization, sales_num')
+            .select('code, sku, quantity, product:productO, organization, sales_num')
             .eq('code', Number(finalCode))
             .single();
 
@@ -712,7 +712,7 @@ export default function Home() {
         
         const { data, error } = await supabaseEtiquetas
             .from('etiquetas_i')
-            .select('code, sku, quantity, product, organization, sales_num')
+            .select('code, sku, quantity, product:productO, organization, sales_num')
             .eq('code', Number(finalCode))
             .single();
         
@@ -820,7 +820,7 @@ export default function Home() {
         
         const { data, error } = await supabaseEtiquetas
             .from('etiquetas_i')
-            .select('code, sku, quantity, product, organization, sales_num')
+            .select('code, sku, quantity, product:productO, organization, sales_num')
             .eq('code', numericCode)
             .single();
 
