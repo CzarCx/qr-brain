@@ -53,6 +53,7 @@ type ReportReason = {
 
 type Encargado = {
   name: string;
+  rol: string;
 };
 
 export default function ScannerPage() {
@@ -93,7 +94,8 @@ export default function ScannerPage() {
         if (error) {
             setDbError('Error al cargar encargados. Revisa los permisos RLS de la tabla `personal_name`.');
         } else if (data) {
-             const barras = data as Encargado[];
+             const uniqueEncargados = Array.from(new Map(data.map(item => [item.name, item])).values());
+             const barras = uniqueEncargados as Encargado[];
              if (barras.length === 0) {
                 setDbError('No se encontraron encargados con el rol "barra". Revisa los datos o los permisos RLS.');
             } else {
@@ -145,15 +147,7 @@ export default function ScannerPage() {
     if ('vibrate' in navigator) navigator.vibrate(100);
 
     let finalCode = String(decodedText).trim();
-    try {
-      const parsedJson = JSON.parse(decodedText);
-      if (parsedJson && parsedJson.id) {
-        finalCode = String(parsedJson.id).trim();
-      }
-    } catch (e) {
-      // Not a JSON, use decodedText as is
-    }
-
+    
     // Prevent duplicates in mass scanning mode
     if (scanMode === 'masivo' && massScannedCodesRef.current.has(finalCode)) {
         setMessage(`Código duplicado: ${finalCode}`);
@@ -461,7 +455,7 @@ const handleMassQualify = async () => {
                       </SelectTrigger>
                       <SelectContent>
                           {encargadosList.map((enc) => (
-                              <SelectItem key={enc.name} value={enc.name}>
+                              <SelectItem key={`${enc.name}-${enc.rol}`} value={enc.name}>
                                   {enc.name}
                               </SelectItem>
                           ))}
@@ -685,7 +679,3 @@ const handleMassQualify = async () => {
     </>
   );
 }
-
-    
-
-    
