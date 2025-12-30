@@ -4,7 +4,7 @@ import React, {useEffect, useRef, useState, useCallback, useMemo} from 'react';
 import Head from 'next/head';
 import Image from 'next/image';
 import { Html5Qrcode, Html5QrcodeScannerState } from 'html5-qrcode';
-import { supabase } from '@/lib/supabaseClient';
+import { supabase, supabaseEtiquetas } from '@/lib/supabaseClient';
 import {
   Select,
   SelectContent,
@@ -133,11 +133,13 @@ export default function Home() {
   useEffect(() => {
     setIsMounted(true);
     const checkDbConnection = async () => {
-      const { error } = await supabase.from('etiquetas_i').select('code').limit(1);
+      const { error } = await supabase.from('personal_name').select('name').limit(1);
       if (error) {
-        showAppMessage('Error de conexión a la base de datos. Revisa los permisos RLS.', 'duplicate');
-      } else {
-        showAppMessage('Conexión a la base de datos exitosa.', 'success');
+        setDbError('Error de conexión a la base de datos de personal. Revisa los permisos RLS.');
+      }
+      const { error: etiquetasError } = await supabaseEtiquetas.from('etiquetas_i').select('code').limit(1);
+      if (etiquetasError) {
+         setDbError(prev => prev ? `${prev} Y Error en DB de etiquetas.` : 'Error de conexión a la base de datos de etiquetas. Revisa los permisos RLS.');
       }
     };
     checkDbConnection();
@@ -383,7 +385,7 @@ export default function Home() {
 
           if (!item.sku || !item.producto || !item.cantidad || !item.empresa || !item.venta) {
               try {
-                  const { data, error } = await supabase
+                  const { data, error } = await supabaseEtiquetas
                   .from('etiquetas_i')
                   .select('sku, product, quantity, organization, sales_num')
                   .eq('code', Number(item.code))
@@ -517,21 +519,21 @@ export default function Home() {
             return;
         }
 
-        const { data, error } = await supabase
+        const { data, error } = await supabaseEtiquetas
             .from('etiquetas_i')
             .select('code, sku, quantity, product, organization, sales_num')
             .eq('code', Number(finalCode))
             .single();
 
         if (error && error.code !== 'PGRST116') {
-            showAppMessage(`Error de base de datos: ${error.message}`, 'duplicate');
+            showAppMessage(`Error de base de datos de etiquetas: ${error.message}`, 'duplicate');
             playErrorSound();
             setLoading(false);
             return;
         }
 
         if (!data) {
-            showAppMessage(`Código ${finalCode} no encontrado en la base de datos.`, 'duplicate');
+            showAppMessage(`Código ${finalCode} no encontrado en la base de datos de etiquetas.`, 'duplicate');
             playErrorSound();
             setLoading(false);
             return;
@@ -708,21 +710,21 @@ export default function Home() {
             return;
         }
         
-        const { data, error } = await supabase
+        const { data, error } = await supabaseEtiquetas
             .from('etiquetas_i')
             .select('code, sku, quantity, product, organization, sales_num')
             .eq('code', Number(finalCode))
             .single();
         
         if (error && error.code !== 'PGRST116') {
-            showAppMessage(`Error de base de datos: ${error.message}`, 'duplicate');
+            showAppMessage(`Error de base de datos de etiquetas: ${error.message}`, 'duplicate');
             playErrorSound();
             setLoading(false);
             return;
         }
 
         if (!data) {
-            showAppMessage(`Código ${finalCode} no encontrado en la base de datos.`, 'duplicate');
+            showAppMessage(`Código ${finalCode} no encontrado en la base de datos de etiquetas.`, 'duplicate');
             playErrorSound();
             setLoading(false);
             return;
@@ -816,21 +818,21 @@ export default function Home() {
             return;
         }
         
-        const { data, error } = await supabase
+        const { data, error } = await supabaseEtiquetas
             .from('etiquetas_i')
             .select('code, sku, quantity, product, organization, sales_num')
             .eq('code', numericCode)
             .single();
 
         if (error && error.code !== 'PGRST116') { 
-            showAppMessage(`Error de base de datos: ${error.message}`, 'duplicate');
+            showAppMessage(`Error de base de datos de etiquetas: ${error.message}`, 'duplicate');
             playErrorSound();
             setLoading(false);
             return;
         }
 
         if (!data) {
-            showAppMessage(`Código ${manualCode} no encontrado en la base de datos.`, 'duplicate');
+            showAppMessage(`Código ${manualCode} no encontrado en la base de datos de etiquetas.`, 'duplicate');
             playErrorSound();
             setLoading(false);
             return;
@@ -1714,4 +1716,3 @@ export default function Home() {
   );
 }
 
-    
