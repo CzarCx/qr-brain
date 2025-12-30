@@ -92,8 +92,8 @@ export default function ScannerPage() {
 
         if (error) {
             setDbError('Error al cargar encargados. Revisa los permisos RLS de la tabla `personal_name`.');
-        } else if (data && data.length > 0) {
-            const barras = data.filter((p: any) => p.rol === 'barra');
+        } else if (data) {
+             const barras = data as Encargado[];
              if (barras.length === 0) {
                 setDbError('No se encontraron encargados con el rol "barra". Revisa los datos o los permisos RLS.');
             } else {
@@ -144,7 +144,7 @@ export default function ScannerPage() {
     setMessage('Procesando código...');
     if ('vibrate' in navigator) navigator.vibrate(100);
 
-    let finalCode = decodedText.trim();
+    let finalCode = String(decodedText).trim();
     try {
       const parsedJson = JSON.parse(decodedText);
       if (parsedJson && parsedJson.id) {
@@ -685,5 +685,7 @@ const handleMassQualify = async () => {
     </>
   );
 }
+
+    
 
     

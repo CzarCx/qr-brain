@@ -68,8 +68,8 @@ export default function Home() {
 
         if (error) {
             setDbError('Error al cargar encargados. Revisa los permisos RLS de la tabla `personal_name`.');
-        } else if (data && data.length > 0) {
-            const entregas = data.filter((p: any) => p.rol === 'entrega');
+        } else if (data) {
+            const entregas = data.filter((p: any) => p.rol === 'entrega') as Encargado[];
             if (entregas.length === 0) {
                 setDbError('No se encontraron encargados de entrega. Revisa los datos o los permisos RLS.');
             } else {
@@ -129,7 +129,7 @@ export default function Home() {
     showAppMessage('Procesando código...', 'info');
     if ('vibrate' in navigator) navigator.vibrate(100);
     
-    let finalCode = decodedText.trim();
+    let finalCode = String(decodedText).trim();
     try {
       const parsedJson = JSON.parse(decodedText);
       if (parsedJson && parsedJson.id) {
@@ -523,5 +523,7 @@ export default function Home() {
     </>
   );
 }
+
+    
 
     

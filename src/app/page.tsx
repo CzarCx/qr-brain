@@ -159,10 +159,10 @@ export default function Home() {
 
         if (error) {
             setDbError('Error al cargar personal. Revisa los permisos RLS de la tabla `personal_name`.');
-        } else if (data && data.length === 0) {
-            setDbError('No se encontró personal con el rol "operativo". Revisa los datos o los permisos RLS.');
+        } else if (data) {
+             setPersonalList((data as Encargado[]) || []);
         } else {
-            setPersonalList(data || []);
+            setDbError('No se encontró personal con el rol "operativo". Revisa los datos o los permisos RLS.');
         }
     };
     const fetchEncargados = async () => {
@@ -173,10 +173,10 @@ export default function Home() {
 
         if (error) {
             setDbError('Error al cargar encargados. Revisa los permisos RLS de la tabla `personal_name`.');
-        } else if (data && data.length === 0) {
-            setDbError('No se encontraron encargados con el rol "barra". Revisa los datos o los permisos RLS.');
+        } else if (data) {
+            setEncargadosList((data as Encargado[]) || []);
         } else {
-            setEncargadosList(data || []);
+             setDbError('No se encontraron encargados con el rol "barra". Revisa los datos o los permisos RLS.');
         }
     };
     fetchEncargados();
@@ -481,24 +481,28 @@ export default function Home() {
     setLastScannedCode(decodedText);
   }, [scannerActive]);
 
-  const processScan = useCallback(async (decodedText: string) => {
-    let finalCode = decodedText.trim();
-    try {
-      const parsedJson = JSON.parse(decodedText);
-      if (parsedJson && parsedJson.id) finalCode = String(parsedJson.id).trim();
-    } catch (e) {}
-
-    if (isLikelyName(finalCode)) {
-      if ('vibrate' in navigator) navigator.vibrate([100, 50, 100]);
-      associateNameToScans(finalCode, scannedData); 
-      lastSuccessfullyScannedCodeRef.current = finalCode;
-      return;
-    }
-
-    if (finalCode === lastSuccessfullyScannedCodeRef.current) return;
-    
+ const processScan = useCallback(async (decodedText: string) => {
     setLoading(true);
     try {
+        const finalCode = String(decodedText).trim();
+
+        if (scannedCodesRef.current.has(finalCode) || finalCode === lastSuccessfullyScannedCodeRef.current) {
+            if (scannedCodesRef.current.has(finalCode)) {
+                showAppMessage(<>DUPLICADO: {finalCode}</>, 'duplicate');
+            }
+            setLoading(false);
+            return;
+        }
+
+        const isKnownPersonal = personalList.some(p => p.name === finalCode);
+        if (isKnownPersonal) {
+            if ('vibrate' in navigator) navigator.vibrate([100, 50, 100]);
+            await associateNameToScans(finalCode, scannedData);
+            lastSuccessfullyScannedCodeRef.current = finalCode;
+            setLoading(false);
+            return;
+        }
+
         const { data: personalData, error: personalError } = await supabase
             .from('personal')
             .select('code, name, name_inc')
@@ -506,68 +510,44 @@ export default function Home() {
             .single();
 
         if (personalError && personalError.code !== 'PGRST116') {
-            showAppMessage(`Error al verificar el código en personal: ${personalError.message}`, 'duplicate');
-            playErrorSound();
-            setLoading(false);
-            return;
+            throw new Error(`Error al verificar en 'personal': ${personalError.message}`);
         }
 
         if (personalData) {
             playErrorSound();
             showAppMessage(
-                <>
-                  El código {finalCode} ya fue asignado a <strong className="font-bold text-yellow-300">{personalData.name}</strong> por <strong className="font-bold text-yellow-300">{personalData.name_inc}</strong>.
-                </>,
+                <>El código {finalCode} ya fue asignado a <strong className="font-bold">{personalData.name}</strong> por <strong className="font-bold">{personalData.name_inc}</strong>.</>,
                 'duplicate'
             );
             setLoading(false);
             return;
         }
 
-        const { data, error } = await supabaseEtiquetas
+        const { data: etiquetaData, error: etiquetaError } = await supabaseEtiquetas
             .from('etiquetas_i')
             .select('code, sku, quantity, product, organization, sales_num')
             .eq('code', finalCode)
             .single();
-
-        if (error && error.code !== 'PGRST116') {
-            showAppMessage(`Error de base de datos de etiquetas: ${error.message}`, 'duplicate');
-            playErrorSound();
-            setLoading(false);
-            return;
+        
+        if (etiquetaError && etiquetaError.code !== 'PGRST116') {
+            throw new Error(`Error al buscar en 'etiquetas_i': ${etiquetaError.message}`);
         }
 
-        if (!data) {
-            showAppMessage(`Código ${finalCode} no encontrado en la base de datos de etiquetas.`, 'duplicate');
-            playErrorSound();
-            setLoading(false);
-            return;
-        }
-
-        const { sku, quantity, product, organization, sales_num } = data;
-
-        const isBarcode = finalCode.length > 5;
-        let confirmed = true;
-
-        if (isBarcode && (!finalCode.startsWith('4'))) {
-             const title = 'Advertencia';
-             const message = 'Este no es un código MEL estándar, ¿desea agregarlo de todos modos?';
-             confirmed = await showConfirmationDialog(title, message, finalCode);
-        } else if (!isBarcode) {
-            const title = 'Confirmar Código';
-            const message = 'Se ha detectado un código corto. ¿Desea agregarlo al registro?';
-            confirmed = await showConfirmationDialog(title, message, finalCode);
-        }
-
-        if (confirmed) {
-          addCodeAndUpdateCounters(finalCode, { sku, cantidad: quantity, producto: product, empresa: organization, venta: sales_num ? String(sales_num) : null });
+        if (etiquetaData) {
+            const { sku, quantity, product, organization, sales_num } = etiquetaData;
+            await addCodeAndUpdateCounters(finalCode, { sku, cantidad: quantity, producto: product, empresa: organization, venta: sales_num ? String(sales_num) : null });
         } else {
-          showAppMessage('Escaneo cancelado.', 'info');
+            playErrorSound();
+            showAppMessage(`Código ${finalCode} no encontrado en la base de datos de etiquetas.`, 'duplicate');
         }
+
+    } catch (error: any) {
+        playErrorSound();
+        showAppMessage(error.message, 'duplicate');
     } finally {
         setLoading(false);
     }
-  }, [addCodeAndUpdateCounters, associateNameToScans, scannedData]);
+}, [addCodeAndUpdateCounters, associateNameToScans, scannedData, personalList]);
 
   useEffect(() => {
     if(lastScannedCode) {
@@ -681,83 +661,8 @@ export default function Home() {
   const processPhysicalScan = useCallback(async (code: string) => {
     if(!scannerActive || (Date.now() - lastScanTimeRef.current) < MIN_SCAN_INTERVAL) return;
     lastScanTimeRef.current = Date.now();
-
-    let finalCode = code.trim();
-    
-    if (finalCode === lastSuccessfullyScannedCodeRef.current) return;
-
-    setLoading(true);
-    try {
-        const { data: personalData, error: personalError } = await supabase
-            .from('personal')
-            .select('code, name, name_inc')
-            .eq('code', finalCode)
-            .single();
-
-        if (personalError && personalError.code !== 'PGRST116') {
-            showAppMessage(`Error al verificar el código en personal: ${personalError.message}`, 'duplicate');
-            playErrorSound();
-            setLoading(false);
-            return;
-        }
-
-        if (personalData) {
-            playErrorSound();
-            showAppMessage(
-              <>
-                El código {finalCode} ya fue asignado a <strong className="font-bold text-yellow-300">{personalData.name}</strong> por <strong className="font-bold text-yellow-300">{personalData.name_inc}</strong>.
-              </>,
-              'duplicate'
-            );
-            setLoading(false);
-            return;
-        }
-        
-        const { data, error } = await supabaseEtiquetas
-            .from('etiquetas_i')
-            .select('code, sku, quantity, product, organization, sales_num')
-            .eq('code', finalCode)
-            .single();
-        
-        if (error && error.code !== 'PGRST116') {
-            showAppMessage(`Error de base de datos de etiquetas: ${error.message}`, 'duplicate');
-            playErrorSound();
-            setLoading(false);
-            return;
-        }
-
-        if (!data) {
-            showAppMessage(`Código ${finalCode} no encontrado en la base de datos de etiquetas.`, 'duplicate');
-            playErrorSound();
-            setLoading(false);
-            return;
-        }
-
-        const { sku, quantity, product, organization, sales_num } = data;
-
-        const isBarcode = finalCode.length > 5;
-        let confirmed = true;
-
-        if (isBarcode && (!finalCode.startsWith('4'))) {
-            const title = 'Advertencia';
-            const message = 'Este no es un código MEL estándar, ¿desea agregar?';
-            confirmed = await showConfirmationDialog(title, message, finalCode);
-        } else if (!isBarcode) {
-            const title = 'Confirmar Código';
-            const message = 'Se ha detectado el siguiente código. ¿Desea agregarlo al registro?';
-            confirmed = await showConfirmationDialog(title, message, finalCode);
-        }
-
-
-        if (confirmed) {
-            addCodeAndUpdateCounters(finalCode, { sku, cantidad: quantity, producto: product, empresa: organization, venta: sales_num ? String(sales_num) : null });
-        } else {
-            showAppMessage('Escaneo cancelado.', 'info');
-        }
-    } finally {
-        setLoading(false);
-    }
-  }, [scannerActive, addCodeAndUpdateCounters]);
+    await processScan(code);
+  }, [scannerActive, processScan]);
   
   const startScanner = () => {
     if (!encargado.trim()) return showAppMessage('Por favor, ingresa el nombre del encargado.', 'duplicate');
@@ -789,73 +694,9 @@ export default function Home() {
       const manualCode = manualCodeInput.value.trim();
       if (!manualCode) return showAppMessage('Por favor, ingresa un código para agregar.', 'duplicate');
       
-      setLoading(true);
-      try {
-        const { data: personalData, error: personalError } = await supabase
-            .from('personal')
-            .select('code, name, name_inc')
-            .eq('code', manualCode)
-            .single();
-
-        if (personalError && personalError.code !== 'PGRST116') {
-            showAppMessage(`Error al verificar el código en personal: ${personalError.message}`, 'duplicate');
-            playErrorSound();
-            setLoading(false);
-            return;
-        }
-
-        if (personalData) {
-            playErrorSound();
-            showAppMessage(
-              <>
-                El código {manualCode} ya fue asignado a <strong className="font-bold text-yellow-300">{personalData.name}</strong> por <strong className="font-bold text-yellow-300">{personalData.name_inc}</strong>.
-              </>,
-              'duplicate'
-            );
-            setLoading(false);
-            return;
-        }
-        
-        const { data, error } = await supabaseEtiquetas
-            .from('etiquetas_i')
-            .select('code, sku, quantity, product, organization, sales_num')
-            .eq('code', manualCode)
-            .single();
-
-        if (error && error.code !== 'PGRST116') { 
-            showAppMessage(`Error de base de datos de etiquetas: ${error.message}`, 'duplicate');
-            playErrorSound();
-            setLoading(false);
-            return;
-        }
-
-        if (!data) {
-            showAppMessage(`Código ${manualCode} no encontrado en la base de datos de etiquetas.`, 'duplicate');
-            playErrorSound();
-            setLoading(false);
-            return;
-        }
-
-        const { sku, quantity, product, organization, sales_num } = data;
-
-        let confirmed = true;
-        if(!manualCode.startsWith('4')) {
-            confirmed = await showConfirmationDialog('Advertencia', 'Este no es un código MEL, ¿desea agregar?', manualCode);
-        }
-
-        if(confirmed) {
-            if(await addCodeAndUpdateCounters(manualCode, { sku, cantidad: quantity, producto: product, empresa: organization, venta: sales_num ? String(sales_num) : null })) {
-                manualCodeInput.value = '';
-                manualCodeInput.focus();
-            } else {
-                manualCodeInput.select();
-            }
-        } else {
-            showAppMessage('Ingreso cancelado.', 'info');
-        }
-      } finally {
-          setLoading(false);
-      }
+      await processScan(manualCode);
+      manualCodeInput.value = '';
+      manualCodeInput.focus();
   };
   
   const deleteRow = (codeToDelete: string) => {
@@ -1724,5 +1565,7 @@ export default function Home() {
     </>
   );
 }
+
+    
 
     
