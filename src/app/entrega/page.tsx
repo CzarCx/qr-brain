@@ -8,7 +8,7 @@ import { supabase } from '@/lib/supabaseClient';
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { XCircle, PackageCheck, AlertTriangle, Trash2, Zap, ZoomIn } from 'lucide-react';
+import { XCircle, PackageCheck, AlertTriangle, Trash2, Zap, ZoomIn, PlusCircle } from 'lucide-react';
 import {
   Select,
   SelectContent,
@@ -19,6 +19,7 @@ import {
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
 
 
 type DeliveryItem = {
@@ -128,7 +129,7 @@ export default function Home() {
     showAppMessage('Procesando código...', 'info');
     if ('vibrate' in navigator) navigator.vibrate(100);
     
-    let finalCode = String(decodedText).trim();
+    const finalCode = String(decodedText).trim();
     
     if (scannedCodesRef.current.has(finalCode)) {
         setLoading(false);
@@ -341,6 +342,25 @@ export default function Home() {
       setLoading(false);
     }
   };
+  
+    const handleManualAdd = async () => {
+      const manualCodeInput = document.getElementById('manual-code-input-entrega') as HTMLInputElement;
+      if (!encargado.trim()) {
+        showAppMessage('Por favor, selecciona un encargado.', 'error');
+        return;
+      }
+
+      const manualCode = manualCodeInput.value.trim();
+      if (!manualCode) {
+        showAppMessage('Por favor, ingresa un código para agregar.', 'error');
+        return;
+      }
+      
+      await onScanSuccess(manualCode);
+      manualCodeInput.value = '';
+      manualCodeInput.focus();
+  };
+
 
   const messageClasses: any = {
       success: 'bg-green-100 border-green-400 text-green-800',
@@ -449,6 +469,28 @@ export default function Home() {
                         Escáner físico listo.
                     </div>
                 </div>
+                
+                 <div className="p-4 bg-starbucks-cream rounded-lg">
+                    <label htmlFor="manual-code-input-entrega" className="block text-sm font-bold text-starbucks-dark mb-1">Ingreso Manual:</label>
+                    <div className="relative mt-1 flex items-center rounded-lg border border-input bg-background focus-within:ring-2 focus-within:ring-ring">
+                        <Input
+                            type="text"
+                            id="manual-code-input-entrega"
+                            className="w-full border-0 bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0"
+                            placeholder="Escriba el código..."
+                            onKeyDown={(e) => e.key === 'Enter' && handleManualAdd()}
+                        />
+                        <Button
+                            type="button"
+                            onClick={handleManualAdd}
+                            size="icon"
+                            className="h-8 w-8 bg-starbucks-green hover:bg-starbucks-dark text-white rounded-md mr-1"
+                        >
+                            <PlusCircle className="h-5 w-5" />
+                        </Button>
+                    </div>
+                </div>
+
 
                  <div>
                      <div className="flex flex-col sm:flex-row justify-end items-center mb-2 gap-2">
@@ -519,5 +561,3 @@ export default function Home() {
     </>
   );
 }
-
-    
