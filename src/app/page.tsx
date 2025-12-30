@@ -393,7 +393,7 @@ export default function Home() {
                   const { data, error } = await supabaseEtiquetas
                   .from('etiquetas_i')
                   .select('sku, product, quantity, organization, sales_num')
-                  .eq('code', item.code)
+                  .eq('code', Number(item.code))
                   .single();
           
                   if (error && error.code !== 'PGRST116') {
@@ -527,7 +527,7 @@ export default function Home() {
         const { data, error } = await supabaseEtiquetas
             .from('etiquetas_i')
             .select('code, sku, quantity, product, organization, sales_num')
-            .eq('code', finalCode)
+            .eq('code', Number(finalCode))
             .single();
 
         if (error && error.code !== 'PGRST116') {
@@ -716,7 +716,7 @@ export default function Home() {
         const { data, error } = await supabaseEtiquetas
             .from('etiquetas_i')
             .select('code, sku, quantity, product, organization, sales_num')
-            .eq('code', finalCode)
+            .eq('code', Number(finalCode))
             .single();
         
         if (error && error.code !== 'PGRST116') {
@@ -819,7 +819,7 @@ export default function Home() {
         const { data, error } = await supabaseEtiquetas
             .from('etiquetas_i')
             .select('code, sku, quantity, product, organization, sales_num')
-            .eq('code', manualCode)
+            .eq('code', Number(manualCode))
             .single();
 
         if (error && error.code !== 'PGRST116') { 
@@ -1724,4 +1724,5 @@ export default function Home() {
     </>
   );
 }
+
 
