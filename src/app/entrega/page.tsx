@@ -17,6 +17,8 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { useIsMobile } from '@/hooks/use-mobile';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 
 
 type DeliveryItem = {
@@ -46,6 +48,7 @@ export default function Home() {
   const [zoom, setZoom] = useState(1);
   const isMobile = useIsMobile();
   const [dbError, setDbError] = useState<string | null>(null);
+  const [isValidationOverridden, setIsValidationOverridden] = useState(false);
 
 
   // Refs
@@ -150,7 +153,7 @@ export default function Home() {
         } else if (data.status === 'REPORTADO') {
             playWarningSound();
             showModalNotification('Paquete Reportado', 'Este paquete no está listo para ser enviado, tiene un reporte activo.', 'destructive');
-        } else if (data.status === 'CALIFICADO') {
+        } else if (isValidationOverridden || data.status === 'CALIFICADO') {
             playBeep();
             const newItem: DeliveryItem = {
                 code: finalCode,
@@ -170,7 +173,7 @@ export default function Home() {
     } finally {
         setLoading(false);
     }
-  }, [loading]);
+  }, [loading, isValidationOverridden]);
 
   const processPhysicalScan = (code: string) => {
       onScanSuccess(code);
@@ -391,6 +394,11 @@ export default function Home() {
                             <button onClick={() => setSelectedScannerMode('fisico')} className={`area-btn w-full px-4 py-3 text-sm rounded-md shadow-sm focus:outline-none ${selectedScannerMode === 'fisico' ? 'scanner-mode-selected' : ''}`} disabled={scannerActive}>ESCÁNER FÍSICO</button>
                         </div>
                     </div>
+                    
+                    <div className="flex items-center space-x-2 bg-yellow-100 border border-yellow-300 p-3 rounded-lg">
+                        <Switch id="validation-override" checked={isValidationOverridden} onCheckedChange={setIsValidationOverridden} />
+                        <Label htmlFor="validation-override" className="text-sm font-medium text-yellow-800">Omitir validación de 'Calificado'</Label>
+                    </div>
                 </div>
                 
                 <h2 className="text-lg font-bold text-starbucks-dark">Para Entrega ({deliveryList.length})</h2>
@@ -511,9 +519,5 @@ export default function Home() {
     </>
   );
 }
-
-    
-
-    
 
     
