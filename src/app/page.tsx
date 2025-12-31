@@ -1242,7 +1242,7 @@ export default function Home() {
         </Head>
 
         <main className="text-starbucks-dark flex items-center justify-center p-4">
-            <div className="w-full max-w-4xl mx-auto bg-starbucks-white rounded-xl shadow-2xl p-4 md:p-6 space-y-4">
+            <div className="w-full max-w-7xl mx-auto bg-starbucks-white rounded-xl shadow-2xl p-4 md:p-6 space-y-4">
                 <header className="text-center">
                     <Image src="https://media0.giphy.com/media/v1.Y2lkPTc5MGI3NjExbnQ4MGZzdXYzYWo1cXRiM3I1cjNoNjd4cjdia202ZXcwNjJ6YjdvbiZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/QQO6BH98nhigF8FLsb/giphy.gif" alt="Scanner Logo" width={80} height={80} className="mx-auto h-20 w-auto mb-2" unoptimized={true} />
                     <h1 className="text-xl md:text-2xl font-bold text-starbucks-green">Asignar Empaquetado</h1>
@@ -1489,9 +1489,9 @@ export default function Home() {
                             </div>
                         </div>
 
-                        <div className="p-4 bg-starbucks-cream rounded-lg mt-4 space-y-2">
-                            <label className="block text-sm font-bold text-starbucks-dark">Asociar Pendientes a Personal:</label>
-                            <div className="flex gap-2">
+                        <div className="p-4 bg-starbucks-cream rounded-lg mt-4 space-y-2 md:flex md:items-center md:gap-4 md:space-y-0">
+                            <label className="block text-sm font-bold text-starbucks-dark flex-shrink-0">Asociar Pendientes a:</label>
+                            <div className="flex-grow">
                                 <Combobox
                                     options={personalList.map(p => ({ value: p.name, label: p.name }))}
                                     value={selectedPersonal}
@@ -1500,17 +1500,20 @@ export default function Home() {
                                     emptyMessage="No se encontró personal."
                                     buttonClassName="bg-transparent border-input"
                                 />
-                                <Button onClick={handleManualAssociate} disabled={isAssociationDisabled} className="bg-starbucks-accent hover:bg-starbucks-green text-white">
+                            </div>
+                            <div className="flex gap-2 flex-wrap">
+                                <Button onClick={handleManualAssociate} disabled={isAssociationDisabled} className="bg-starbucks-accent hover:bg-starbucks-green text-white w-full sm:w-auto">
                                     <UserPlus className="mr-2 h-4 w-4" /> Asociar
                                 </Button>
-                                 <Button onClick={handleProduccionProgramada} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg shadow-sm text-sm transition-colors duration-200" disabled={loading || isAssociationDisabled}>
+                                 <Button onClick={handleProduccionProgramada} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg shadow-sm text-sm transition-colors duration-200 w-full sm:w-auto" disabled={loading || isAssociationDisabled}>
                                     Producción Programada
                                  </Button>
                             </div>
-                             {isAssociationDisabled && (
-                                <p className="text-xs text-red-600">Completa todos los campos de "Tiempo Estimado" para poder asociar.</p>
-                            )}
                         </div>
+                         {isAssociationDisabled && (
+                            <p className="text-xs text-red-600 mt-2">Completa todos los campos de "Tiempo Estimado" para poder asociar.</p>
+                        )}
+                        
 
                         {totalEstimatedTime > 0 && (
                             <div className="mt-4 p-3 bg-blue-100 border border-blue-300 rounded-lg text-center">
@@ -1567,3 +1570,5 @@ export default function Home() {
     </>
   );
 }
+
+    

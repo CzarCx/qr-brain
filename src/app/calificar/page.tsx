@@ -265,7 +265,7 @@ export default function ScannerPage() {
         input.removeEventListener('keydown', handlePhysicalScannerInput as any);
       }
     };
-  }, [scannerActive, selectedScannerMode]);
+  }, [scannerActive, selectedScannerMode, scanMode]);
 
   const applyCameraConstraints = useCallback((track: MediaStreamTrack) => {
     track.applyConstraints({
@@ -725,3 +725,5 @@ const handleMassQualify = async () => {
     </>
   );
 }
+
+    
