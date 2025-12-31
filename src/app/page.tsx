@@ -160,7 +160,8 @@ export default function Home() {
         if (error) {
             setDbError('Error al cargar personal. Revisa los permisos RLS de la tabla `personal_name`.');
         } else if (data) {
-             setPersonalList((data as Encargado[]) || []);
+             const uniquePersonal = Array.from(new Map(data.map(item => [item.name, item])).values());
+             setPersonalList((uniquePersonal as Encargado[]) || []);
         } else {
             setDbError('No se encontró personal con el rol "operativo". Revisa los datos o los permisos RLS.');
         }
@@ -174,7 +175,8 @@ export default function Home() {
         if (error) {
             setDbError('Error al cargar encargados. Revisa los permisos RLS de la tabla `personal_name`.');
         } else if (data) {
-            setEncargadosList((data as Encargado[]) || []);
+            const uniqueEncargados = Array.from(new Map(data.map(item => [item.name, item])).values());
+            setEncargadosList((uniqueEncargados as Encargado[]) || []);
         } else {
              setDbError('No se encontraron encargados con el rol "barra". Revisa los datos o los permisos RLS.');
         }
@@ -1565,7 +1567,3 @@ export default function Home() {
     </>
   );
 }
-
-    
-
-    
