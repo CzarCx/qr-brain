@@ -83,6 +83,9 @@ export default function ScannerPage() {
   const lastScanTimeRef = useRef(Date.now());
   const MIN_SCAN_INTERVAL = 2000; // 2 seconds between scans
   const massScannedCodesRef = useRef(new Set<string>());
+  const physicalScannerInputRef = useRef<HTMLInputElement | null>(null);
+  const bufferRef = useRef('');
+  const scanTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
    useEffect(() => {
     setIsMounted(true);
@@ -221,6 +224,48 @@ export default function ScannerPage() {
         setLoading(false);
     }
   }, [loading, scanMode]);
+  
+    const processPhysicalScan = (code: string) => {
+      onScanSuccess(code);
+  };
+
+  const handlePhysicalScannerInput = (event: KeyboardEvent) => {
+      if(event.key === 'Enter') {
+          event.preventDefault();
+          if(bufferRef.current.length > 0) {
+              processPhysicalScan(bufferRef.current);
+              bufferRef.current = '';
+          }
+          return;
+      }
+
+      if(event.key.length === 1) {
+          bufferRef.current += event.key;
+      }
+
+      if(scanTimeoutRef.current) clearTimeout(scanTimeoutRef.current);
+      scanTimeoutRef.current = setTimeout(() => {
+          if(bufferRef.current.length > 0) {
+              processPhysicalScan(bufferRef.current);
+              bufferRef.current = '';
+          }
+      }, 200);
+  };
+  
+    useEffect(() => {
+    const input = physicalScannerInputRef.current;
+    
+    if (selectedScannerMode === 'fisico' && scannerActive && input) {
+      input.addEventListener('keydown', handlePhysicalScannerInput as any);
+      input.focus();
+    }
+    
+    return () => {
+      if (input) {
+        input.removeEventListener('keydown', handlePhysicalScannerInput as any);
+      }
+    };
+  }, [scannerActive, selectedScannerMode]);
 
   const applyCameraConstraints = useCallback((track: MediaStreamTrack) => {
     track.applyConstraints({
@@ -488,6 +533,7 @@ const handleMassQualify = async () => {
             <div className="scanner-container relative">
                 <div id="reader" ref={readerRef} style={{ display: selectedScannerMode === 'camara' && scannerActive ? 'block' : 'none' }}></div>
                 {scannerActive && selectedScannerMode === 'camara' && <div id="laser-line"></div>}
+                <input type="text" id="physical-scanner-input" ref={physicalScannerInputRef} className="hidden-input" autoComplete="off" />
                 {selectedScannerMode === 'camara' && !scannerActive && (
                     <div className="text-center p-8 border-2 border-dashed border-gray-300 rounded-lg">
                         <p className="text-gray-500">La cámara está desactivada.</p>
@@ -498,7 +544,7 @@ const handleMassQualify = async () => {
             {isMobile && scannerActive && selectedScannerMode === 'camara' && cameraCapabilities && (
                 <div id="camera-controls" className="flex items-center gap-4 mt-4 p-2 rounded-lg bg-gray-200">
                     {cameraCapabilities.torch && (
-                        <Button variant="ghost" size="icon" onClick={() => setIsFlashOn(prev => !prev)} className={isFlashOn ? 'bg-yellow-400' : ''}>
+                        <Button variant="ghost" size="icon" onClick={()={() => setIsFlashOn(prev => !prev)} className={isFlashOn ? 'bg-yellow-400' : ''}>
                             <Zap className="h-5 w-5" />
                         </Button>
                     )}
@@ -679,3 +725,5 @@ const handleMassQualify = async () => {
     </>
   );
 }
+
+    
