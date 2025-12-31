@@ -92,13 +92,13 @@ export default function ScannerPage() {
     const fetchEncargados = async () => {
         const { data, error } = await supabase
             .from('personal_name')
-            .select('name');
+            .select('name, rol');
 
         if (error) {
             setDbError('Error al cargar encargados. Revisa los permisos RLS de la tabla `personal_name`.');
         } else if (data) {
              const uniqueEncargados = Array.from(new Map(data.map(item => [item.name, item])).values());
-             const barras = uniqueEncargados as Encargado[];
+             const barras = uniqueEncargados.filter(enc => enc.rol === 'barra') as Encargado[];
              if (barras.length === 0) {
                 setDbError('No se encontraron encargados con el rol "barra". Revisa los datos o los permisos RLS.');
             } else {
@@ -544,7 +544,7 @@ const handleMassQualify = async () => {
             {isMobile && scannerActive && selectedScannerMode === 'camara' && cameraCapabilities && (
                 <div id="camera-controls" className="flex items-center gap-4 mt-4 p-2 rounded-lg bg-gray-200">
                     {cameraCapabilities.torch && (
-                        <Button variant="ghost" size="icon" onClick={()={() => setIsFlashOn(prev => !prev)} className={isFlashOn ? 'bg-yellow-400' : ''}>
+                        <Button variant="ghost" size="icon" onClick={() => setIsFlashOn(prev => !prev)} className={isFlashOn ? 'bg-yellow-400' : ''}>
                             <Zap className="h-5 w-5" />
                         </Button>
                     )}
@@ -725,5 +725,3 @@ const handleMassQualify = async () => {
     </>
   );
 }
-
-    
