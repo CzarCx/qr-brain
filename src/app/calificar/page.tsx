@@ -85,7 +85,6 @@ export default function ScannerPage() {
   const massScannedCodesRef = useRef(new Set<string>());
   const physicalScannerInputRef = useRef<HTMLInputElement | null>(null);
   const bufferRef = useRef('');
-  const scanTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
    useEffect(() => {
     setIsMounted(true);
@@ -225,47 +224,30 @@ export default function ScannerPage() {
     }
   }, [loading, scanMode]);
   
-    const processPhysicalScan = (code: string) => {
-      onScanSuccess(code);
-  };
-
-  const handlePhysicalScannerInput = (event: KeyboardEvent) => {
-      if(event.key === 'Enter') {
-          event.preventDefault();
-          if(bufferRef.current.length > 0) {
-              processPhysicalScan(bufferRef.current);
-              bufferRef.current = '';
-          }
-          return;
-      }
-
-      if(event.key.length === 1) {
-          bufferRef.current += event.key;
-      }
-
-      if(scanTimeoutRef.current) clearTimeout(scanTimeoutRef.current);
-      scanTimeoutRef.current = setTimeout(() => {
-          if(bufferRef.current.length > 0) {
-              processPhysicalScan(bufferRef.current);
-              bufferRef.current = '';
-          }
-      }, 200);
-  };
-  
-    useEffect(() => {
-    const input = physicalScannerInputRef.current;
-    
-    if (selectedScannerMode === 'fisico' && scannerActive && input) {
-      input.addEventListener('keydown', handlePhysicalScannerInput as any);
-      input.focus();
-    }
-    
-    return () => {
-      if (input) {
-        input.removeEventListener('keydown', handlePhysicalScannerInput as any);
+    const handlePhysicalScannerInput = (event: KeyboardEvent) => {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        if (bufferRef.current) {
+          onScanSuccess(bufferRef.current);
+          bufferRef.current = '';
+        }
+      } else if (event.key.length === 1) {
+        bufferRef.current += event.key;
       }
     };
-  }, [scannerActive, selectedScannerMode, scanMode]);
+  
+    useEffect(() => {
+        const input = physicalScannerInputRef.current;
+        if (selectedScannerMode === 'fisico' && scannerActive && input) {
+            input.addEventListener('keydown', handlePhysicalScannerInput);
+            input.focus();
+        }
+        return () => {
+            if (input) {
+                input.removeEventListener('keydown', handlePhysicalScannerInput);
+            }
+        };
+    }, [scannerActive, selectedScannerMode, onScanSuccess]);
 
   const applyCameraConstraints = useCallback((track: MediaStreamTrack) => {
     track.applyConstraints({

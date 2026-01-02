@@ -623,42 +623,31 @@ export default function Home() {
   }, [scannerActive, selectedScannerMode, onScanSuccess, isMounted, isMobile]);
 
   const handlePhysicalScannerInput = (event: KeyboardEvent) => {
-      if(event.key === 'Enter') {
-          event.preventDefault();
-          if(bufferRef.current.length > 0) {
-              processPhysicalScan(bufferRef.current);
-              bufferRef.current = '';
-          }
-          return;
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      if (bufferRef.current) {
+        processScan(bufferRef.current);
+        bufferRef.current = '';
       }
-
-      if(event.key.length === 1) {
-          bufferRef.current += event.key;;
-      }
-
-      if(scanTimeoutRef.current) clearTimeout(scanTimeoutRef.current);
-      scanTimeoutRef.current = setTimeout(() => {
-          if(bufferRef.current.length > 0) {
-              processPhysicalScan(bufferRef.current);
-              bufferRef.current = '';
-          }
-      }, 200);
+    } else if (event.key.length === 1) {
+      bufferRef.current += event.key;
+    }
   };
 
   useEffect(() => {
     const input = physicalScannerInputRef.current;
     
     if (selectedScannerMode === 'fisico' && scannerActive && input) {
-      input.addEventListener('keydown', handlePhysicalScannerInput as any);
+      input.addEventListener('keydown', handlePhysicalScannerInput);
       input.focus();
     }
     
     return () => {
       if (input) {
-        input.removeEventListener('keydown', handlePhysicalScannerInput as any);
+        input.removeEventListener('keydown', handlePhysicalScannerInput);
       }
     };
-  }, [scannerActive, selectedScannerMode]);
+  }, [scannerActive, selectedScannerMode, processScan]);
   
   const processPhysicalScan = useCallback(async (code: string) => {
     if(!scannerActive || (Date.now() - lastScanTimeRef.current) < MIN_SCAN_INTERVAL) return;
