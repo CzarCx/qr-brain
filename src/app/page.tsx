@@ -227,9 +227,9 @@ export default function Home() {
     if (!context) return;
     const oscillator = context.createOscillator();
     const gainNode = context.createGain();
-    oscillator.type = 'square';
-    oscillator.frequency.setValueAtTime(110, context.currentTime); // A2 note
-    gainNode.gain.setValueAtTime(1, context.currentTime); // Volume
+    oscillator.type = 'sawtooth';
+    oscillator.frequency.setValueAtTime(220, context.currentTime); // A3 note, lower pitch for warning
+    gainNode.gain.setValueAtTime(1.5, context.currentTime); // Louder volume
     gainNode.gain.exponentialRampToValueAtTime(0.00001, context.currentTime + 0.2);
     oscillator.connect(gainNode);
     gainNode.connect(context.destination);

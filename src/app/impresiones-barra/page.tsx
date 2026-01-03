@@ -132,7 +132,7 @@ export default function ImpresionesBarraPage() {
     const gainNode = context.createGain();
     oscillator.type = 'sawtooth';
     oscillator.frequency.setValueAtTime(440, context.currentTime); // A4
-    gainNode.gain.setValueAtTime(1, context.currentTime); // Increased Volume
+    gainNode.gain.setValueAtTime(1.5, context.currentTime); // Increased Volume
     gainNode.gain.exponentialRampToValueAtTime(0.00001, context.currentTime + 0.2);
     oscillator.connect(gainNode);
     gainNode.connect(context.destination);
