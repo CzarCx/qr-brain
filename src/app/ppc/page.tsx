@@ -419,7 +419,7 @@ const handleMassQualify = async () => {
 
     } catch (e: any) {
         console.error('Error en el proceso masivo de PPC:', e);
-        const errorMessage = e.message || JSON.stringify(e);
+        const errorMessage = e.message || (typeof e === 'object' && e !== null ? JSON.stringify(e) : String(e));
         alert(`Error en proceso masivo de PPC: ${errorMessage}`);
     } finally {
         setLoading(false);
@@ -707,4 +707,3 @@ const handleMassQualify = async () => {
   );
 }
 
-    
