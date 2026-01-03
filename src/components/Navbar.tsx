@@ -26,15 +26,15 @@ export default function Navbar() {
 
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 bg-starbucks-white shadow-md">
-      <div className="max-w-7xl mx-auto px-2 sm:px-4 lg:px-8">
+      <div className="max-w-7xl mx-auto px-1 sm:px-4 lg:px-8">
         <div className="flex items-center justify-between h-16">
           <div className="flex items-center">
             <Link href="/" className="flex-shrink-0 p-2">
                 <Home className="h-6 w-6 text-starbucks-green" />
             </Link>
           </div>
-          <div className="flex-1 flex justify-center px-2 lg:ml-6 lg:justify-center">
-            <div className="flex space-x-1 sm:space-x-2">
+          <div className="flex-1 flex justify-center px-1 lg:ml-6 lg:justify-center">
+            <div className="flex space-x-1 w-full">
               {mainNavLinks.map((link) => {
                 const isActive = pathname === link.href;
                 return (
@@ -42,7 +42,7 @@ export default function Navbar() {
                     key={link.href}
                     href={link.href}
                     className={cn(
-                      'flex flex-col items-center justify-center gap-1 px-2 py-2 rounded-md text-xs font-medium w-20 sm:w-24',
+                      'flex flex-1 flex-col items-center justify-center gap-1 px-1 py-2 rounded-md text-[10px] sm:text-xs font-medium',
                       'transform transition-transform duration-200 ease-in-out hover:scale-110',
                       isActive
                         ? 'bg-starbucks-green text-white scale-105'
@@ -50,7 +50,7 @@ export default function Navbar() {
                     )}
                   >
                     {link.icon}
-                    <span>{link.label}</span>
+                    <span className="text-center">{link.label}</span>
                   </Link>
                 );
               })}
@@ -72,5 +72,3 @@ export default function Navbar() {
     </nav>
   );
 }
-
-
