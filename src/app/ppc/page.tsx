@@ -397,6 +397,7 @@ export default function PpcPage() {
 const handleMassQualify = async () => {
     if (massScannedCodes.length === 0) {
         alert("No hay códigos en la lista para procesar.");
+        setLoading(false);
         return;
     }
     setLoading(true);
@@ -418,7 +419,6 @@ const handleMassQualify = async () => {
         massScannedCodesRef.current.clear();
 
     } catch (e: any) {
-        console.error('Error en el proceso masivo de PPC:', e);
         const errorMessage = e.message || (typeof e === 'object' && e !== null ? JSON.stringify(e) : String(e));
         alert(`Error en proceso masivo de PPC: ${errorMessage}`);
     } finally {
