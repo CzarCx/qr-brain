@@ -437,7 +437,7 @@ export default function Home() {
               organization: empresa,
               venta: venta,
               date: new Date().toISOString(),
-              status: 'POR CALIFICAR',
+              status: 'ASIGNADO',
               esti_time: item.esti_time,
               date_esti: date_esti,
               date_ini: date_ini,
@@ -873,7 +873,7 @@ export default function Home() {
           sku: item.sku,
           product: item.product,
           quantity: item.quantity,
-          status: 'POR CALIFICAR',
+          status: 'ASIGNADO',
           organization: item.organization,
           sales_num: Number(item.venta),
           date: item.date,
@@ -1052,7 +1052,7 @@ export default function Home() {
         organization: item.organization,
         venta: item.sales_num,
         date: item.date,
-        status: 'POR CALIFICAR',
+        status: 'ASIGNADO',
         esti_time: item.esti_time,
         date_esti: item.date_esti,
         date_ini: item.date_ini,
@@ -1637,3 +1637,5 @@ export default function Home() {
     </>
   );
 }
+
+    
