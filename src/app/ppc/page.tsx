@@ -418,7 +418,6 @@ const handleMassQualify = async () => {
         massScannedCodesRef.current.clear();
 
     } catch (e: any) {
-        console.error('Error en el proceso masivo de PPC:', e);
         const errorMessage = e.message || (typeof e === 'object' && e !== null ? JSON.stringify(e) : String(e));
         alert(`Error en proceso masivo de PPC: ${errorMessage}`);
     } finally {
@@ -706,4 +705,3 @@ const handleMassQualify = async () => {
     </>
   );
 }
-
