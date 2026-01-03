@@ -11,9 +11,9 @@ import { supabase } from '@/lib/supabaseClient';
 
 const mainNavLinks = [
   { href: '/', label: 'Asignar', icon: <UserCheck className="h-5 w-5" /> },
+  { href: '/ppc', label: 'PPC', icon: <ClipboardList className="h-5 w-5" /> },
   { href: '/calificar', label: 'Calificar', icon: <ScanLine className="h-5 w-5" /> },
   { href: '/entrega', label: 'Entrega', icon: <PackageCheck className="h-5 w-5" /> },
-  { href: '/ppc', label: 'PPC', icon: <ClipboardList className="h-5 w-5" /> },
 ];
 
 const secondaryNavLinks = [
