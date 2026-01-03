@@ -626,7 +626,7 @@ export default function Home() {
     if (event.key === 'Enter') {
       event.preventDefault();
       if (bufferRef.current) {
-        processScan(bufferRef.current);
+        onScanSuccess(bufferRef.current);
         bufferRef.current = '';
       }
     } else if (event.key.length === 1) {
@@ -647,13 +647,7 @@ export default function Home() {
         input.removeEventListener('keydown', handlePhysicalScannerInput);
       }
     };
-  }, [scannerActive, selectedScannerMode, processScan]);
-  
-  const processPhysicalScan = useCallback(async (code: string) => {
-    if(!scannerActive || (Date.now() - lastScanTimeRef.current) < MIN_SCAN_INTERVAL) return;
-    lastScanTimeRef.current = Date.now();
-    await processScan(code);
-  }, [scannerActive, processScan]);
+  }, [scannerActive, selectedScannerMode, onScanSuccess]);
   
   const startScanner = () => {
     if (!encargado.trim()) return showAppMessage('Por favor, ingresa el nombre del encargado.', 'duplicate');
@@ -866,7 +860,7 @@ export default function Home() {
           sku: item.sku,
           product: item.product,
           quantity: item.quantity,
-          status: 'ASIGNADO',
+          status: 'POR CALIFICAR',
           organization: item.organization,
           sales_num: Number(item.venta),
           date: item.date,
@@ -1559,5 +1553,3 @@ export default function Home() {
     </>
   );
 }
-
-    
