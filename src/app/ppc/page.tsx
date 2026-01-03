@@ -224,19 +224,19 @@ export default function PpcPage() {
     }
   }, [loading, scanMode]);
   
-    const handlePhysicalScannerInput = (event: KeyboardEvent) => {
-      if (event.key === 'Enter') {
-        event.preventDefault();
-        if (bufferRef.current) {
-          onScanSuccess(bufferRef.current);
-          bufferRef.current = '';
-        }
-      } else if (event.key.length === 1) {
-        bufferRef.current += event.key;
-      }
-    };
-  
     useEffect(() => {
+        const handlePhysicalScannerInput = (event: KeyboardEvent) => {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                if (bufferRef.current) {
+                onScanSuccess(bufferRef.current);
+                bufferRef.current = '';
+                }
+            } else if (event.key.length === 1) {
+                bufferRef.current += event.key;
+            }
+        };
+
         const input = physicalScannerInputRef.current;
         if (selectedScannerMode === 'fisico' && scannerActive && input) {
             input.addEventListener('keydown', handlePhysicalScannerInput);

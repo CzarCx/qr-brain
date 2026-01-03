@@ -97,11 +97,11 @@ export default function ScannerPage() {
             setDbError('Error al cargar encargados. Revisa los permisos RLS de la tabla `personal_name`.');
         } else if (data) {
              const uniqueEncargados = Array.from(new Map(data.map(item => [item.name, item])).values());
-             const barras = uniqueEncargados.filter(enc => enc.rol === 'barra') as Encargado[];
-             if (barras.length === 0) {
-                setDbError('No se encontraron encargados con el rol "barra". Revisa los datos o los permisos RLS.');
+             const operativos = uniqueEncargados.filter(enc => enc.rol === 'operativo') as Encargado[];
+             if (operativos.length === 0) {
+                setDbError('No se encontraron encargados con el rol "operativo". Revisa los datos o los permisos RLS.');
             } else {
-                setEncargadosList(barras || []);
+                setEncargadosList(operativos || []);
             }
         } else {
              setDbError('No se encontraron encargados. Revisa los datos o los permisos RLS.');
@@ -224,19 +224,19 @@ export default function ScannerPage() {
     }
   }, [loading, scanMode]);
   
-    const handlePhysicalScannerInput = (event: KeyboardEvent) => {
-      if (event.key === 'Enter') {
-        event.preventDefault();
-        if (bufferRef.current) {
-          onScanSuccess(bufferRef.current);
-          bufferRef.current = '';
-        }
-      } else if (event.key.length === 1) {
-        bufferRef.current += event.key;
-      }
-    };
-  
     useEffect(() => {
+        const handlePhysicalScannerInput = (event: KeyboardEvent) => {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                if (bufferRef.current) {
+                onScanSuccess(bufferRef.current);
+                bufferRef.current = '';
+                }
+            } else if (event.key.length === 1) {
+                bufferRef.current += event.key;
+            }
+        };
+
         const input = physicalScannerInputRef.current;
         if (selectedScannerMode === 'fisico' && scannerActive && input) {
             input.addEventListener('keydown', handlePhysicalScannerInput);
@@ -707,5 +707,3 @@ const handleMassQualify = async () => {
     </>
   );
 }
-
-    
