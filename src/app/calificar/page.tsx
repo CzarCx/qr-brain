@@ -115,7 +115,7 @@ export default function ScannerPage() {
     if (!context) return;
     const oscillator = context.createOscillator();
     const gainNode = context.createGain();
-    oscillator.type = 'sine';
+    oscillator.type = 'square';
     oscillator.frequency.setValueAtTime(880, context.currentTime); // A5 note
     gainNode.gain.setValueAtTime(1, context.currentTime); // Further increased Volume
     gainNode.gain.exponentialRampToValueAtTime(0.00001, context.currentTime + 0.1);
