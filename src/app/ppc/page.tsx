@@ -386,7 +386,7 @@ export default function PpcPage() {
         alert('Guardado en PPC correctamente.');
         handleOpenRatingModal(false);
     } catch (e: any) {
-        console.error('Error guardando el estado PPC:', e);
+        console.error('Error guardando estado PPC:', e);
         const errorMessage = e.message || JSON.stringify(e);
         alert(`Error al guardar estado PPC: ${errorMessage}`);
     } finally {
@@ -406,7 +406,7 @@ const handleMassQualify = async () => {
 
         const { error } = await supabase
             .from('personal')
-            .update({ status: 'PPC', details: null, date_ppc: ppcTimestamp })
+            .update({ status: 'PPC', date_ppc: ppcTimestamp })
             .in('code', codesToUpdate);
 
         if (error) {
