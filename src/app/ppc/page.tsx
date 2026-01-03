@@ -180,7 +180,7 @@ export default function PpcPage() {
                 details: data.details,
             };
 
-            if (data.status === 'CALIFICADO') {
+            if (data.status === 'PPC') {
                 setMessage(`Etiqueta ya procesada (Estado: ${data.status}).`);
                 setLastScannedResult(result);
             } else {
@@ -373,22 +373,22 @@ export default function PpcPage() {
     if (!lastScannedResult?.code) return;
     setLoading(true);
     try {
-        const qualificationTimestamp = new Date().toISOString();
+        const ppcTimestamp = new Date().toISOString();
         const { error } = await supabase
             .from('personal')
-            .update({ status: 'CALIFICADO', details: null, date_cal: qualificationTimestamp })
+            .update({ status: 'PPC', details: null, date_ppc: ppcTimestamp })
             .eq('code', lastScannedResult.code);
 
         if (error) {
             throw error;
         }
 
-        alert('Calificación guardada correctamente.');
+        alert('Guardado en PPC correctamente.');
         handleOpenRatingModal(false);
     } catch (e: any) {
-        console.error('Error guardando la calificación:', e);
+        console.error('Error guardando el estado PPC:', e);
         const errorMessage = e.message || JSON.stringify(e);
-        alert(`Error al guardar la calificación: ${errorMessage}`);
+        alert(`Error al guardar estado PPC: ${errorMessage}`);
     } finally {
         setLoading(false);
     }
@@ -396,31 +396,31 @@ export default function PpcPage() {
 
 const handleMassQualify = async () => {
     if (massScannedCodes.length === 0) {
-        alert("No hay códigos en la lista para calificar.");
+        alert("No hay códigos en la lista para procesar.");
         return;
     }
     setLoading(true);
     try {
         const codesToUpdate = massScannedCodes.map(item => item.code);
-        const qualificationTimestamp = new Date().toISOString();
+        const ppcTimestamp = new Date().toISOString();
 
         const { error } = await supabase
             .from('personal')
-            .update({ status: 'CALIFICADO', details: null, date_cal: qualificationTimestamp })
+            .update({ status: 'PPC', details: null, date_ppc: ppcTimestamp })
             .in('code', codesToUpdate);
 
         if (error) {
             throw error;
         }
 
-        alert(`Se calificaron ${massScannedCodes.length} etiquetas correctamente.`);
+        alert(`Se marcaron ${massScannedCodes.length} etiquetas como PPC correctamente.`);
         setMassScannedCodes([]); // Clear the list
         massScannedCodesRef.current.clear();
 
     } catch (e: any) {
-        console.error('Error en la calificación masiva:', e);
+        console.error('Error en el proceso masivo de PPC:', e);
         const errorMessage = e.message || JSON.stringify(e);
-        alert(`Error al calificar masivamente: ${errorMessage}`);
+        alert(`Error en proceso masivo de PPC: ${errorMessage}`);
     } finally {
         setLoading(false);
     }
@@ -462,7 +462,7 @@ const handleMassQualify = async () => {
         <div className="w-full max-w-md mx-auto bg-starbucks-white rounded-xl shadow-2xl p-4 md:p-6 space-y-4">
           <header className="text-center">
             <h1 className="text-xl md:text-2xl font-bold text-starbucks-green">PPC</h1>
-            <p className="text-gray-600 text-sm mt-1">Escanea el QR para calificar la calidad.</p>
+            <p className="text-gray-600 text-sm mt-1">Escanea el QR para marcar la etiqueta como PPC.</p>
           </header>
 
           {dbError && (
@@ -589,19 +589,18 @@ const handleMassQualify = async () => {
                             <h3 className="font-bold text-starbucks-dark uppercase text-sm">Producto</h3>
                             <p className="text-base text-gray-800">{lastScannedResult.product || 'No especificado'}</p>
                         </div>
-                        {(lastScannedResult.status !== 'CALIFICADO' || lastScannedResult.status === 'REPORTADO') && (
+                        {(lastScannedResult.status !== 'PPC' || lastScannedResult.status === 'REPORTADO') && (
                              <Dialog open={isRatingModalOpen} onOpenChange={handleOpenRatingModal}>
                              <DialogTrigger asChild>
                                  <Button className="w-full mt-4 bg-starbucks-accent hover:bg-starbucks-green text-white">
-                                 Calificar
+                                 Procesar PPC
                                  </Button>
                              </DialogTrigger>
                              <DialogContent className="sm:max-w-[425px]">
                                  <DialogHeader>
-                                  <DialogTitle>Calificar Empaquetado</DialogTitle>
+                                  <DialogTitle>Procesar PPC</DialogTitle>
                                    <DialogDescription className="text-center pt-2">
-                                     ¿Cómo calificarías la calidad del empaquetado de
-                                     <span className="font-bold text-2xl text-starbucks-green block mt-2">{lastScannedResult.name}?</span>
+                                     ¿Deseas marcar la etiqueta de <span className="font-bold text-2xl text-starbucks-green block mt-2">{lastScannedResult.name}</span> como PPC?
                                    </DialogDescription>
                                  </DialogHeader>
                                  <div className="grid gap-4 py-4">
@@ -664,7 +663,7 @@ const handleMassQualify = async () => {
                 <div className="space-y-4">
                     <div className="flex flex-col sm:flex-row justify-end items-center gap-2">
                         <Button onClick={handleMassQualify} disabled={loading || massScannedCodes.length === 0} className="bg-green-600 hover:bg-green-700 w-full sm:w-auto">
-                            {loading ? 'Calificando...' : 'Calificar Todos'}
+                            {loading ? 'Procesando...' : 'Marcar Todos como PPC'}
                         </Button>
                     </div>
                     <div className="table-container border border-gray-200 rounded-lg max-h-60 overflow-auto">
@@ -707,3 +706,5 @@ const handleMassQualify = async () => {
     </>
   );
 }
+
+    
