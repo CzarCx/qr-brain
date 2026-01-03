@@ -29,7 +29,7 @@ export default function MainPage() {
                     </div>
                     <h3 className="text-xl font-bold text-starbucks-dark mb-2">Panel de Administración</h3>
                     <p className="text-gray-600 text-sm mb-4">Accede al panel de control y reportes.</p>
-                    <Button variant="ghost" className="mt-auto text-starbucks-green font-bold group-hover:underline">
+                    <Button variant="outline" className="mt-auto font-bold border-starbucks-green text-starbucks-green hover:bg-starbucks-green hover:text-white">
                       Ir al Panel <UserCog className="ml-2 h-4 w-4" />
                     </Button>
                   </div>
