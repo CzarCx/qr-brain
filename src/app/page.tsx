@@ -228,8 +228,8 @@ export default function Home() {
     const oscillator = context.createOscillator();
     const gainNode = context.createGain();
     oscillator.type = 'sawtooth';
-    oscillator.frequency.setValueAtTime(220, context.currentTime); // A3 note, lower pitch for warning
-    gainNode.gain.setValueAtTime(1.5, context.currentTime); // Louder volume
+    oscillator.frequency.setValueAtTime(440, context.currentTime); // A4
+    gainNode.gain.setValueAtTime(1.5, context.currentTime); // Increased Volume
     gainNode.gain.exponentialRampToValueAtTime(0.00001, context.currentTime + 0.2);
     oscillator.connect(gainNode);
     gainNode.connect(context.destination);
@@ -1284,7 +1284,7 @@ export default function Home() {
         <main className="text-starbucks-dark flex items-center justify-center p-4">
             <div className="w-full max-w-7xl mx-auto bg-starbucks-white rounded-xl shadow-2xl p-4 md:p-6 space-y-4">
                 <header className="text-center">
-                    <Image src="https://media0.giphy.com/media/v1.Y2lkPTc5MGI3NjExbnQ4MGZzdXYzYWo1cXRiM3I1cjNoNjd4cjdia202ZXcwNjJ6YjdvbiZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/QQO6BH98nhigF8FLsb/giphy.gif" alt="Scanner Logo" width={80} height={80} className="mx-auto h-20 w-auto mb-2" unoptimized={true} />
+                    <Image src="/INMATMEX.png" alt="Scanner Logo" width={80} height={80} className="mx-auto h-20 w-auto mb-2" />
                     <h1 className="text-xl md:text-2xl font-bold text-starbucks-green">Asignar Empaquetado</h1>
                     <p className="text-gray-600 text-sm md:text-base mt-1">Asigna un producto a un miembro del personal.</p>
                 </header>
@@ -1638,3 +1638,4 @@ export default function Home() {
     </>
   );
 }
+
