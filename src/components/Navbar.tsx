@@ -4,7 +4,7 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
-import { ScanLine, PackageCheck, UserCheck, UserPlus, Home, ClipboardList, Printer } from 'lucide-react';
+import { ScanLine, PackageCheck, UserCheck, UserPlus, Home, ClipboardList } from 'lucide-react';
 import Image from 'next/image';
 import { useEffect } from 'react';
 import { supabase } from '@/lib/supabaseClient';
@@ -28,7 +28,7 @@ export default function Navbar() {
       <div className="max-w-7xl mx-auto px-1 sm:px-4 lg:px-8">
         <div className="flex items-center justify-between h-16">
           <div className="flex items-center">
-            <Link href="/" className="flex-shrink-0 p-2">
+            <Link href="/main" className="flex-shrink-0 p-2">
                 <Home className="h-6 w-6 text-starbucks-green" />
             </Link>
           </div>
