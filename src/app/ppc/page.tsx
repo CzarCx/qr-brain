@@ -150,13 +150,11 @@ export default function PpcPage() {
 
     let finalCode = String(decodedText).trim();
     
-    // Prevent duplicates in mass scanning mode
     if (scanMode === 'masivo' && massScannedCodesRef.current.has(finalCode)) {
         setMessage(`Código duplicado: ${finalCode}`);
         setLoading(false);
         return;
     }
-    
 
     try {
         const { data, error } = await supabase
@@ -170,7 +168,6 @@ export default function PpcPage() {
         }
 
         if (data) {
-            playBeep();
             const result: ScanResult = {
                 name: data.name,
                 product: data.product,
@@ -181,9 +178,11 @@ export default function PpcPage() {
             };
 
             if (data.status === 'PPC') {
-                setMessage(`Etiqueta ya procesada (Estado: ${data.status}).`);
+                playWarningSound();
+                setMessage(`Etiqueta ya procesada como PPC.`);
                 setLastScannedResult(result);
             } else {
+                 playBeep();
                  if (scanMode === 'individual') {
                     setLastScannedResult(result);
                     setMessage('Etiqueta confirmada correctamente.');
@@ -210,6 +209,7 @@ export default function PpcPage() {
             setMessage('Esta etiqueta todavía no ha sido asignada.');
         }
     } catch (e: any) {
+        playWarningSound();
         const result: ScanResult = {
             name: null,
             product: null,
@@ -440,7 +440,6 @@ const handleMassQualify = async () => {
                 .select('id, t_report');
             
             if (error) {
-                console.error('Error fetching report reasons:', error);
                  setDbError('Error al cargar motivos de reporte. Revisa los permisos RLS de la tabla `reports`.');
             } else {
                 setReportReasons(data || []);
@@ -705,3 +704,5 @@ const handleMassQualify = async () => {
     </>
   );
 }
+
+    
