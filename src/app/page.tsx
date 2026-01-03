@@ -115,6 +115,7 @@ export default function Home() {
   const [verificationCode, setVerificationCode] = useState('');
   const [verificationResult, setVerificationResult] = useState<string | null>(null);
   const [isVerifying, setIsVerifying] = useState(false);
+  const [vCodeContent, setVCodeContent] = useState<any[] | null>(null);
 
 
   // Refs para elementos del DOM y la instancia del escáner
@@ -1110,15 +1111,15 @@ export default function Home() {
         const { data, error } = await supabaseEtiquetas
             .from('v_code')
             .select('code_i')
-            .eq('code_i', codeAsNumber);
+            .eq('code_i', codeAsNumber)
+            .single();
 
-        if (error) {
-            // This will catch actual query errors, but not "no rows found"
-            throw new Error(`Error en la consulta: ${error.message}`);
+        if (error && error.code !== 'PGRST116') {
+             throw new Error(`Error en la consulta: ${error.message}`);
         }
 
-        if (data && data.length > 0) {
-            setVerificationResult(`Código Válido. Encontrado: ${data[0].code_i}`);
+        if (data) {
+            setVerificationResult(`Código Válido. Encontrado: ${data.code_i}`);
         } else {
             setVerificationResult('Código Inválido o no encontrado.');
         }
@@ -1129,7 +1130,23 @@ export default function Home() {
     } finally {
         setIsVerifying(false);
     }
-};
+  };
+  
+  const handleShowVCodeContent = async () => {
+    setIsVerifying(true);
+    setVCodeContent(null);
+    try {
+      const { data, error } = await supabaseEtiquetas.from('v_code').select('*');
+      if (error) {
+        throw error;
+      }
+      setVCodeContent(data);
+    } catch (e: any) {
+      setVerificationResult(`Error al obtener datos: ${e.message}`);
+    } finally {
+      setIsVerifying(false);
+    }
+  };
 
 
   const messageClasses: any = {
@@ -1335,11 +1352,21 @@ export default function Home() {
                                     )}
                                     <span className="ml-2">Verificar</span>
                                 </Button>
+                                <Button onClick={handleShowVCodeContent} disabled={isVerifying} variant="secondary">Mostrar Contenido de v_code</Button>
+
                             </div>
                             {verificationResult && (
                                 <Alert variant={verificationResult.includes('Inválido') ? 'destructive' : 'default'} className="mt-2 text-sm">
                                     <AlertDescription>{verificationResult}</AlertDescription>
                                 </Alert>
+                            )}
+                             {vCodeContent && (
+                                <div className="mt-4 p-2 bg-gray-200 rounded">
+                                    <h4 className="font-bold text-sm">Contenido de v_code:</h4>
+                                    <pre className="text-xs whitespace-pre-wrap max-h-40 overflow-auto">
+                                        {JSON.stringify(vCodeContent, null, 2)}
+                                    </pre>
+                                </div>
                             )}
                         </div>
 
@@ -1627,4 +1654,5 @@ export default function Home() {
     </>
   );
 }
+
 
