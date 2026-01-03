@@ -24,8 +24,8 @@ export default function MainPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 justify-center">
                <a href="https://admin-mod-cerebro-jphk.vercel.app/" target="_blank" rel="noopener noreferrer" className="sm:col-span-2 lg:col-span-3 w-full lg:w-1/3 mx-auto">
                   <div className="group bg-starbucks-white border border-gray-200 rounded-xl p-6 flex flex-col items-center justify-center text-center h-full transform transition-transform duration-300 ease-in-out hover:scale-105 hover:shadow-lg">
-                    <div className="bg-starbucks-accent rounded-full p-4 mb-4">
-                      <ExternalLink className="h-8 w-8 text-white" />
+                    <div className="bg-gray-100 rounded-full p-4 mb-4">
+                      <ExternalLink className="h-8 w-8 text-starbucks-dark" />
                     </div>
                     <h3 className="text-xl font-bold text-starbucks-dark mb-2">Panel de Administración</h3>
                     <p className="text-gray-600 text-sm mb-4">Accede al panel de control y reportes.</p>
