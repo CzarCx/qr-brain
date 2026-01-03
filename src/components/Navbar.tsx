@@ -14,7 +14,6 @@ const mainNavLinks = [
   { href: '/calificar', label: 'Calificar', icon: <ScanLine className="h-5 w-5" /> },
   { href: '/entrega', label: 'Entrega', icon: <PackageCheck className="h-5 w-5" /> },
   { href: '/ppc', label: 'PPC', icon: <ClipboardList className="h-5 w-5" /> },
-  { href: '/impresiones-barra', label: 'Impresiones', icon: <Printer className="h-5 w-5" /> },
 ];
 
 const secondaryNavLinks = [
