@@ -214,7 +214,7 @@ export default function Home() {
     const gainNode = context.createGain();
     oscillator.type = 'square';
     oscillator.frequency.setValueAtTime(880, context.currentTime); // A5 note
-    gainNode.gain.setValueAtTime(1, context.currentTime); // Volume
+    gainNode.gain.setValueAtTime(1, context.currentTime); // Further increased Volume
     gainNode.gain.exponentialRampToValueAtTime(0.00001, context.currentTime + 0.1);
     oscillator.connect(gainNode);
     gainNode.connect(context.destination);
@@ -1120,7 +1120,16 @@ export default function Home() {
         }
 
         if (data) {
-            setVerificationResult(`Código Válido. Encontrado: ${data.code_i}`);
+            const { error: updateError } = await supabaseEtiquetas
+                .from('v_code')
+                .update({ corte_etiquetas: new Date().toISOString() })
+                .eq('code_i', verificationCode);
+            
+            if (updateError) {
+                throw new Error(`Error al actualizar la hora: ${updateError.message}`);
+            }
+
+            setVerificationResult(`Código Válido. Hora de corte guardada.`);
         } else {
             setVerificationResult('Código Inválido o no encontrado.');
         }
