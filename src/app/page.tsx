@@ -53,6 +53,7 @@ type PersonalScanItem = {
   organization: string | null;
   venta: string | number | null;
   date: string;
+  status: string;
   esti_time?: number | null;
   date_esti?: string | null;
   date_ini?: string | null;
@@ -435,6 +436,7 @@ export default function Home() {
               organization: empresa,
               venta: venta,
               date: new Date().toISOString(),
+              status: 'POR CALIFICAR',
               esti_time: item.esti_time,
               date_esti: date_esti,
               date_ini: date_ini,
@@ -628,7 +630,7 @@ export default function Home() {
     if (event.key === 'Enter') {
       event.preventDefault();
       if (bufferRef.current) {
-        onScanSuccess(bufferRef.current);
+        onScanSuccess(bufferRef.current, null);
         bufferRef.current = '';
       }
     } else if (event.key.length === 1) {
@@ -862,7 +864,7 @@ export default function Home() {
           sku: item.sku,
           product: item.product,
           quantity: item.quantity,
-          status: 'POR CALIFICAR',
+          status: item.status,
           organization: item.organization,
           sales_num: Number(item.venta),
           date: item.date,
@@ -1041,6 +1043,7 @@ export default function Home() {
         organization: item.organization,
         venta: item.sales_num,
         date: item.date,
+        status: 'POR CALIFICAR',
         esti_time: item.esti_time,
         date_esti: item.date_esti,
         date_ini: item.date_ini,
@@ -1608,3 +1611,5 @@ export default function Home() {
     </>
   );
 }
+
+    
