@@ -20,6 +20,7 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 
 
 type DeliveryItem = {
@@ -50,6 +51,9 @@ export default function Home() {
   const isMobile = useIsMobile();
   const [dbError, setDbError] = useState<string | null>(null);
   const [isValidationOverridden, setIsValidationOverridden] = useState(false);
+  const [isDeliveryModalOpen, setIsDeliveryModalOpen] = useState(false);
+  const [driverName, setDriverName] = useState('');
+  const [driverPlate, setDriverPlate] = useState('');
 
 
   // Refs
@@ -294,11 +298,20 @@ export default function Home() {
     showAppMessage(`Código ${codeToRemove} eliminado de la lista.`, 'info');
   };
 
-  const handleUpdateStatusToDelivered = async () => {
+  const handleOpenDeliveryModal = () => {
     if (deliveryList.length === 0) {
       showModalNotification('Lista Vacía', 'No hay paquetes en la lista para marcar como entregados.');
       return;
     }
+    setIsDeliveryModalOpen(true);
+  };
+
+  const handleUpdateStatusToDelivered = async () => {
+    if (!driverName.trim() || !driverPlate.trim()) {
+        alert("Por favor, completa el nombre del conductor y las placas.");
+        return;
+    }
+
     setLoading(true);
     showAppMessage('Actualizando estados...', 'info');
 
@@ -308,14 +321,22 @@ export default function Home() {
     try {
       const { error } = await supabase
         .from('personal')
-        .update({ status: 'ENTREGADO', date_entre: deliveryTimestamp })
+        .update({ 
+            status: 'ENTREGADO', 
+            date_entre: deliveryTimestamp,
+            driver_name: driverName,
+            driver_plate: driverPlate 
+        })
         .in('code', codesToUpdate);
       
       if (error) throw error;
       
+      setIsDeliveryModalOpen(false);
       showModalNotification('Éxito', `Se marcaron ${deliveryList.length} paquetes como "ENTREGADO".`);
       setDeliveryList([]);
       scannedCodesRef.current.clear();
+      setDriverName('');
+      setDriverPlate('');
       showAppMessage('Esperando para escanear...', 'info');
 
     } catch (e: any) {
@@ -476,7 +497,7 @@ export default function Home() {
 
                  <div>
                      <div className="flex flex-col sm:flex-row justify-end items-center mb-2 gap-2">
-                        <Button onClick={handleUpdateStatusToDelivered} disabled={loading || deliveryList.length === 0} className="bg-green-600 hover:bg-green-700 w-full sm:w-auto">
+                        <Button onClick={handleOpenDeliveryModal} disabled={loading || deliveryList.length === 0} className="bg-green-600 hover:bg-green-700 w-full sm:w-auto">
                            <PackageCheck className="mr-2 h-4 w-4" /> Entregar
                         </Button>
                     </div>
@@ -539,7 +560,52 @@ export default function Home() {
                     </div>
                 </div>
             )}
+
+            <Dialog open={isDeliveryModalOpen} onOpenChange={setIsDeliveryModalOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Confirmar Entrega</DialogTitle>
+                        <DialogDescription>
+                            Ingresa los datos del conductor para registrar la entrega.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="grid gap-4 py-4">
+                        <div className="grid grid-cols-4 items-center gap-4">
+                            <Label htmlFor="driver-name" className="text-right">
+                                Conductor
+                            </Label>
+                            <Input
+                                id="driver-name"
+                                value={driverName}
+                                onChange={(e) => setDriverName(e.target.value)}
+                                className="col-span-3"
+                                placeholder="Nombre del conductor"
+                            />
+                        </div>
+                        <div className="grid grid-cols-4 items-center gap-4">
+                            <Label htmlFor="driver-plate" className="text-right">
+                                Placas
+                            </Label>
+                            <Input
+                                id="driver-plate"
+                                value={driverPlate}
+                                onChange={(e) => setDriverPlate(e.target.value)}
+                                className="col-span-3"
+                                placeholder="Placas del vehículo"
+                            />
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setIsDeliveryModalOpen(false)}>Cancelar</Button>
+                        <Button onClick={handleUpdateStatusToDelivered} disabled={loading}>
+                            {loading ? 'Confirmando...' : 'Confirmar Entrega'}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </main>
     </>
   );
 }
+
+    
