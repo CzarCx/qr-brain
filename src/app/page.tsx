@@ -864,7 +864,7 @@ export default function Home() {
           sku: item.sku,
           product: item.product,
           quantity: item.quantity,
-          status: item.status,
+          status: 'POR CALIFICAR',
           organization: item.organization,
           sales_num: Number(item.venta),
           date: item.date,
@@ -1611,5 +1611,3 @@ export default function Home() {
     </>
   );
 }
-
-    
