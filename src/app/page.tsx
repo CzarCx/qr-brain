@@ -1284,7 +1284,6 @@ export default function Home() {
         <main className="text-starbucks-dark flex items-center justify-center p-4">
             <div className="w-full max-w-7xl mx-auto bg-starbucks-white rounded-xl shadow-2xl p-4 md:p-6 space-y-4">
                 <header className="text-center">
-                    <Image src="/INMATMEX.png" alt="Scanner Logo" width={80} height={80} className="mx-auto h-20 w-auto mb-2" />
                     <h1 className="text-xl md:text-2xl font-bold text-starbucks-green">Asignar Empaquetado</h1>
                     <p className="text-gray-600 text-sm md:text-base mt-1">Asigna un producto a un miembro del personal.</p>
                 </header>
@@ -1638,4 +1637,3 @@ export default function Home() {
     </>
   );
 }
-

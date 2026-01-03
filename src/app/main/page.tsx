@@ -17,7 +17,6 @@ export default function MainPage() {
       <main className="flex items-center justify-center min-h-screen bg-starbucks-light-gray p-4">
         <Card className="w-full max-w-4xl mx-auto shadow-2xl">
           <CardHeader className="text-center p-6 bg-starbucks-green text-white rounded-t-xl">
-             <Image src="/INMATMEX.png" alt="INMATMEX Logo" width={80} height={80} className="mx-auto mb-4" />
             <CardTitle className="text-3xl font-bold">Bienvenido al Sistema de Control</CardTitle>
             <CardDescription className="text-gray-200 mt-2 text-lg">Selecciona un módulo para comenzar</CardDescription>
           </CardHeader>
