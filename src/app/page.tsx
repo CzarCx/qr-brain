@@ -1096,6 +1096,13 @@ export default function Home() {
         setVerificationResult('Por favor, ingresa un código.');
         return;
     }
+
+    const codeAsNumber = Number(verificationCode);
+    if (isNaN(codeAsNumber)) {
+        setVerificationResult('El código debe ser numérico.');
+        return;
+    }
+
     setIsVerifying(true);
     setVerificationResult('Verificando...');
     
@@ -1103,16 +1110,17 @@ export default function Home() {
         const { data, error } = await supabaseEtiquetas
             .from('v_code')
             .select('code_i')
-            .ilike('code_i', `%${verificationCode}%`);
+            .eq('code_i', codeAsNumber);
 
         if (error) {
+            // This will catch actual query errors, but not "no rows found"
             throw new Error(`Error en la consulta: ${error.message}`);
         }
 
         if (data && data.length > 0) {
-            setVerificationResult(`Código Válido: ${data.map(d => d.code_i).join(', ')}`);
+            setVerificationResult(`Código Válido. Encontrado: ${data[0].code_i}`);
         } else {
-            setVerificationResult('Código Inválido.');
+            setVerificationResult('Código Inválido o no encontrado.');
         }
 
     } catch (e: any) {
@@ -1619,3 +1627,4 @@ export default function Home() {
     </>
   );
 }
+
