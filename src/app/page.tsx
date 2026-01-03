@@ -114,6 +114,7 @@ export default function Home() {
   const [selectedPersonalParaCargar, setSelectedPersonalParaCargar] = useState('');
   const [verificationCode, setVerificationCode] = useState('');
   const [verificationResult, setVerificationResult] = useState<string | null>(null);
+  const [isVerifying, setIsVerifying] = useState(false);
 
 
   // Refs para elementos del DOM y la instancia del escáner
@@ -1092,33 +1093,35 @@ export default function Home() {
 
   const handleVerifyCode = async () => {
     if (!verificationCode) {
-      setVerificationResult('Por favor, ingresa un código para verificar.');
-      return;
+        setVerificationResult('Por favor, ingresa un código.');
+        return;
     }
-    setLoading(true);
+    setIsVerifying(true);
     setVerificationResult('Verificando...');
+    
     try {
-      const { data, error } = await supabaseEtiquetas
-        .from('v_code')
-        .select('code_i')
-        .eq('code_i', verificationCode)
-        .single();
+        const { data, error } = await supabaseEtiquetas
+            .from('v_code')
+            .select('code_i')
+            .ilike('code_i', `%${verificationCode}%`);
 
-      if (error && error.code !== 'PGRST116') {
-        throw error;
-      }
+        if (error) {
+            throw new Error(`Error en la consulta: ${error.message}`);
+        }
 
-      if (data) {
-        setVerificationResult(`Código Válido: ${data.code_i}`);
-      } else {
-        setVerificationResult('Código Inválido.');
-      }
+        if (data && data.length > 0) {
+            setVerificationResult(`Código Válido: ${data.map(d => d.code_i).join(', ')}`);
+        } else {
+            setVerificationResult('Código Inválido.');
+        }
+
     } catch (e: any) {
-      setVerificationResult(`Error al verificar: ${e.message}`);
+        console.error("Error al verificar:", e);
+        setVerificationResult(e.message || 'Ocurrió un error inesperado.');
     } finally {
-      setLoading(false);
+        setIsVerifying(false);
     }
-  };
+};
 
 
   const messageClasses: any = {
@@ -1314,10 +1317,15 @@ export default function Home() {
                                     onChange={(e) => setVerificationCode(e.target.value)}
                                     placeholder="Ingresa código a verificar"
                                     className="bg-white"
+                                    disabled={isVerifying}
                                 />
-                                <Button onClick={handleVerifyCode} disabled={loading || !verificationCode} className="bg-blue-600 hover:bg-blue-700">
-                                    <Search className="h-4 w-4 mr-2" />
-                                    Verificar
+                                <Button onClick={handleVerifyCode} disabled={isVerifying || !verificationCode} className="bg-blue-600 hover:bg-blue-700">
+                                    {isVerifying ? (
+                                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                                    ) : (
+                                        <Search className="h-4 w-4" />
+                                    )}
+                                    <span className="ml-2">Verificar</span>
                                 </Button>
                             </div>
                             {verificationResult && (
