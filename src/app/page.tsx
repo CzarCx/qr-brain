@@ -1111,7 +1111,7 @@ export default function Home() {
     try {
         const { data, error } = await supabaseEtiquetas
             .from('v_code')
-            .select('code_i')
+            .select('code_i, corte_etiquetas')
             .eq('code_i', verificationCode)
             .single();
 
