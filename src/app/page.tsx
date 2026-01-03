@@ -1106,12 +1106,6 @@ export default function Home() {
         return;
     }
 
-    const codeAsNumber = Number(verificationCode);
-    if (isNaN(codeAsNumber)) {
-        setVerificationResult('El código debe ser numérico.');
-        return;
-    }
-
     setIsVerifying(true);
     setVerificationResult('Verificando...');
     
@@ -1119,7 +1113,7 @@ export default function Home() {
         const { data, error } = await supabaseEtiquetas
             .from('v_code')
             .select('code_i')
-            .eq('code_i', codeAsNumber)
+            .eq('code_i', verificationCode)
             .single();
 
         if (error && error.code !== 'PGRST116') {
@@ -1675,3 +1669,6 @@ export default function Home() {
 
 
 
+
+
+    
