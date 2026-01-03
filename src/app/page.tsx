@@ -629,31 +629,39 @@ export default function Home() {
   }, [scannerActive, selectedScannerMode, onScanSuccess, isMounted, isMobile]);
 
   const handlePhysicalScannerInput = (event: KeyboardEvent) => {
-    if (event.key === 'Enter') {
-      event.preventDefault();
-      if (bufferRef.current) {
-        onScanSuccess(bufferRef.current, null);
-        bufferRef.current = '';
-      }
-    } else if (event.key.length === 1) {
-      bufferRef.current += event.key;
-    }
-  };
-
-  useEffect(() => {
-    const input = physicalScannerInputRef.current;
-    
-    if (selectedScannerMode === 'fisico' && scannerActive && input) {
-      input.addEventListener('keydown', handlePhysicalScannerInput);
-      input.focus();
-    }
-    
-    return () => {
-      if (input) {
-        input.removeEventListener('keydown', handlePhysicalScannerInput);
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        if (bufferRef.current) {
+          onScanSuccess(bufferRef.current, null);
+          bufferRef.current = '';
+        }
+      } else if (event.key.length === 1) {
+        bufferRef.current += event.key;
       }
     };
-  }, [scannerActive, selectedScannerMode, onScanSuccess]);
+  
+    useEffect(() => {
+      const input = physicalScannerInputRef.current;
+      if (selectedScannerMode === 'fisico' && scannerActive && input) {
+        const handleKeyDown = (e: KeyboardEvent) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            if (bufferRef.current) {
+              onScanSuccess(bufferRef.current, null);
+              bufferRef.current = '';
+            }
+          } else if (e.key.length === 1) {
+            bufferRef.current += e.key;
+          }
+        };
+        input.addEventListener('keydown', handleKeyDown);
+        input.focus();
+        
+        return () => {
+          input.removeEventListener('keydown', handleKeyDown);
+        };
+      }
+    }, [scannerActive, selectedScannerMode, onScanSuccess]);
   
   const startScanner = () => {
     if (!encargado.trim()) return showAppMessage('Por favor, ingresa el nombre del encargado.', 'duplicate');
@@ -1135,12 +1143,22 @@ export default function Home() {
   const handleShowVCodeContent = async () => {
     setIsVerifying(true);
     setVCodeContent(null);
+    setVerificationResult(null); // Clear previous results
     try {
-      const { data, error } = await supabaseEtiquetas.from('v_code').select('*');
+      // Explicitly select the column to avoid RLS issues with '*'
+      const { data, error } = await supabaseEtiquetas.from('v_code').select('code_i');
+      
       if (error) {
+        // This will catch actual errors, like network issues or permission problems
         throw error;
       }
+      
       setVCodeContent(data);
+
+      if (data.length === 0) {
+          setVerificationResult("La tabla 'v_code' está vacía o no se pudo acceder a ella.");
+      }
+
     } catch (e: any) {
       setVerificationResult(`Error al obtener datos: ${e.message}`);
     } finally {
@@ -1356,7 +1374,7 @@ export default function Home() {
 
                             </div>
                             {verificationResult && (
-                                <Alert variant={verificationResult.includes('Inválido') ? 'destructive' : 'default'} className="mt-2 text-sm">
+                                <Alert variant={verificationResult.includes('Inválido') || verificationResult.includes('vacía') ? 'destructive' : 'default'} className="mt-2 text-sm">
                                     <AlertDescription>{verificationResult}</AlertDescription>
                                 </Alert>
                             )}
@@ -1654,5 +1672,6 @@ export default function Home() {
     </>
   );
 }
+
 
 
