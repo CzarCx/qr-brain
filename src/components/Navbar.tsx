@@ -4,7 +4,7 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
-import { ScanLine, PackageCheck, UserCheck, UserPlus, Home } from 'lucide-react';
+import { ScanLine, PackageCheck, UserCheck, UserPlus, Home, ClipboardList, Printer } from 'lucide-react';
 import Image from 'next/image';
 import { useEffect } from 'react';
 import { supabase } from '@/lib/supabaseClient';
@@ -13,6 +13,8 @@ const mainNavLinks = [
   { href: '/', label: 'Asignar', icon: <UserCheck className="h-5 w-5" /> },
   { href: '/calificar', label: 'Calificar', icon: <ScanLine className="h-5 w-5" /> },
   { href: '/entrega', label: 'Entrega', icon: <PackageCheck className="h-5 w-5" /> },
+  { href: '/ppc', label: 'PPC', icon: <ClipboardList className="h-5 w-5" /> },
+  { href: '/impresiones-barra', label: 'Impresiones', icon: <Printer className="h-5 w-5" /> },
 ];
 
 const secondaryNavLinks = [
@@ -70,4 +72,5 @@ export default function Navbar() {
     </nav>
   );
 }
+
 
