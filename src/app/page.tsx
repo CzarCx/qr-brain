@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/select"
 import { Button } from '@/components/ui/button';
 import { Input } from "@/components/ui/input";
-import { Zap, ZoomIn, UserPlus, PlusCircle, Clock, AlertTriangle, Wifi, WifiOff } from 'lucide-react';
+import { Zap, ZoomIn, UserPlus, PlusCircle, Clock, AlertTriangle, Wifi, WifiOff, Search } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Combobox } from '@/components/ui/combobox';
 import {
@@ -111,6 +111,8 @@ export default function Home() {
   const [dbError, setDbError] = useState<string | null>(null);
   const [dbStatus, setDbStatus] = useState<DbStatus>({ personalDb: 'connecting', etiquetasDb: 'connecting' });
   const [selectedPersonalParaCargar, setSelectedPersonalParaCargar] = useState('');
+  const [verificationCode, setVerificationCode] = useState('');
+  const [verificationResult, setVerificationResult] = useState<string | null>(null);
 
 
   // Refs para elementos del DOM y la instancia del escáner
@@ -1085,6 +1087,36 @@ export default function Home() {
     setSelectedBulkPersonal('');
   };
 
+  const handleVerifyCode = async () => {
+    if (!verificationCode) {
+      setVerificationResult('Por favor, ingresa un código para verificar.');
+      return;
+    }
+    setLoading(true);
+    setVerificationResult('Verificando...');
+    try {
+      const { data, error } = await supabase
+        .from('personal')
+        .select('name, name_inc, status')
+        .eq('code', verificationCode)
+        .single();
+
+      if (error && error.code !== 'PGRST116') {
+        throw error;
+      }
+
+      if (data) {
+        setVerificationResult(`Código encontrado. Asignado a: ${data.name} por ${data.name_inc}. Estado: ${data.status}`);
+      } else {
+        setVerificationResult('Código no encontrado o no asignado aún.');
+      }
+    } catch (e: any) {
+      setVerificationResult(`Error al verificar: ${e.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
 
   const messageClasses: any = {
       success: 'scan-success',
@@ -1269,6 +1301,29 @@ export default function Home() {
                             </Select>
                         </div>
                         
+                        <div className="p-4 bg-gray-100 rounded-lg space-y-3">
+                            <label htmlFor="verify-code-input" className="block text-sm font-bold text-starbucks-dark">Verificar Código</label>
+                            <div className="flex items-center gap-2">
+                                <Input
+                                    id="verify-code-input"
+                                    type="text"
+                                    value={verificationCode}
+                                    onChange={(e) => setVerificationCode(e.target.value)}
+                                    placeholder="Ingresa código a verificar"
+                                    className="bg-white"
+                                />
+                                <Button onClick={handleVerifyCode} disabled={loading || !verificationCode} className="bg-blue-600 hover:bg-blue-700">
+                                    <Search className="h-4 w-4 mr-2" />
+                                    Verificar
+                                </Button>
+                            </div>
+                            {verificationResult && (
+                                <Alert variant={verificationResult.startsWith('Error') || verificationResult.includes('no encontrado') ? 'destructive' : 'default'} className="mt-2 text-sm">
+                                    <AlertDescription>{verificationResult}</AlertDescription>
+                                </Alert>
+                            )}
+                        </div>
+
                         <div>
                             <label className="block text-sm font-bold text-starbucks-dark mb-1">Método de Escaneo:</label>
                             <div className="grid grid-cols-2 gap-2">
@@ -1553,3 +1608,5 @@ export default function Home() {
     </>
   );
 }
+
+    
