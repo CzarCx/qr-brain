@@ -5,7 +5,7 @@ import Link from 'next/link';
 import Head from 'next/head';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ArrowRight, ExternalLink, UserCheck, ClipboardList, ScanLine, PackageCheck, UserPlus } from 'lucide-react';
+import { ExternalLink, UserCog } from 'lucide-react';
 import Image from 'next/image';
 
 export default function MainPage() {
@@ -31,7 +31,7 @@ export default function MainPage() {
                     <h3 className="text-xl font-bold text-starbucks-dark mb-2">Panel de Administración</h3>
                     <p className="text-gray-600 text-sm mb-4">Accede al panel de control y reportes.</p>
                     <Button variant="ghost" className="mt-auto text-starbucks-green font-bold group-hover:underline">
-                      Ir al Panel <ArrowRight className="ml-2 h-4 w-4" />
+                      Ir al Panel <UserCog className="ml-2 h-4 w-4" />
                     </Button>
                   </div>
                 </a>
