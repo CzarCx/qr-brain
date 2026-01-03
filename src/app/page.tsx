@@ -115,7 +115,6 @@ export default function Home() {
   const [verificationCode, setVerificationCode] = useState('');
   const [verificationResult, setVerificationResult] = useState<string | null>(null);
   const [isVerifying, setIsVerifying] = useState(false);
-  const [vCodeContent, setVCodeContent] = useState<any[] | null>(null);
 
 
   // Refs para elementos del DOM y la instancia del escáner
@@ -1134,32 +1133,6 @@ export default function Home() {
     }
   };
   
-  const handleShowVCodeContent = async () => {
-    setIsVerifying(true);
-    setVCodeContent(null);
-    setVerificationResult(null); // Clear previous results
-    try {
-      // Explicitly select the column to avoid RLS issues with '*'
-      const { data, error } = await supabaseEtiquetas.from('v_code').select('code_i');
-      
-      if (error) {
-        // This will catch actual errors, like network issues or permission problems
-        throw error;
-      }
-      
-      setVCodeContent(data);
-
-      if (data.length === 0) {
-          setVerificationResult("La tabla 'v_code' está vacía o no se pudo acceder a ella.");
-      }
-
-    } catch (e: any) {
-      setVerificationResult(`Error al obtener datos: ${e.message}`);
-    } finally {
-      setIsVerifying(false);
-    }
-  };
-
 
   const messageClasses: any = {
       success: 'scan-success',
@@ -1364,21 +1337,11 @@ export default function Home() {
                                     )}
                                     <span className="ml-2">Verificar</span>
                                 </Button>
-                                <Button onClick={handleShowVCodeContent} disabled={isVerifying} variant="secondary">Mostrar Contenido de v_code</Button>
-
                             </div>
                             {verificationResult && (
-                                <Alert variant={verificationResult.includes('Inválido') || verificationResult.includes('vacía') ? 'destructive' : 'default'} className="mt-2 text-sm">
+                                <Alert variant={verificationResult.includes('Inválido') ? 'destructive' : 'default'} className="mt-2 text-sm">
                                     <AlertDescription>{verificationResult}</AlertDescription>
                                 </Alert>
-                            )}
-                             {vCodeContent && (
-                                <div className="mt-4 p-2 bg-gray-200 rounded">
-                                    <h4 className="font-bold text-sm">Contenido de v_code:</h4>
-                                    <pre className="text-xs whitespace-pre-wrap max-h-40 overflow-auto">
-                                        {JSON.stringify(vCodeContent, null, 2)}
-                                    </pre>
-                                </div>
                             )}
                         </div>
 
