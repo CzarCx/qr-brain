@@ -661,7 +661,7 @@ const handleMassQualify = async () => {
              {scanMode === 'masivo' && (
                 <div className="space-y-4">
                     <div className="flex flex-col sm:flex-row justify-end items-center gap-2">
-                        <Button onClick={handleMassQualify} disabled={loading || massScannedCodes.length === 0} className="bg-green-600 hover:bg-green-700 w-full sm:w-auto">
+                         <Button onClick={handleMassQualify} disabled={loading || massScannedCodes.length === 0} className="bg-green-600 hover:bg-green-700 w-full sm:w-auto">
                             {loading ? 'Procesando...' : 'Marcar Todos como PPC'}
                         </Button>
                     </div>

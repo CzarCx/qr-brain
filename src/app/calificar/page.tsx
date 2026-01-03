@@ -56,7 +56,7 @@ type Encargado = {
   rol: string;
 };
 
-export default function ScannerPage() {
+export default function CalificarPage() {
   const [isMounted, setIsMounted] = useState(false);
   const [message, setMessage] = useState('Apunte la cámara a un código QR.');
   const [lastScannedResult, setLastScannedResult] = useState<ScanResult | null>(null);
