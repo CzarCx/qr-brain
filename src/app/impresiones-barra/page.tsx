@@ -396,31 +396,30 @@ export default function ImpresionesBarraPage() {
 
 const handleMassQualify = async () => {
     if (massScannedCodes.length === 0) {
-        alert("No hay códigos en la lista para calificar.");
+        alert("No hay códigos en la lista para marcar.");
         return;
     }
     setLoading(true);
     try {
         const codesToUpdate = massScannedCodes.map(item => item.code);
-        const qualificationTimestamp = new Date().toISOString();
-
+        
         const { error } = await supabase
             .from('personal')
-            .update({ status: 'CALIFICADO', details: null, date_cal: qualificationTimestamp })
+            .update({ status: 'POR CALIFICAR' })
             .in('code', codesToUpdate);
 
         if (error) {
             throw error;
         }
 
-        alert(`Se calificaron ${massScannedCodes.length} etiquetas correctamente.`);
+        alert(`Se marcaron ${massScannedCodes.length} etiquetas como 'POR CALIFICAR' correctamente.`);
         setMassScannedCodes([]); // Clear the list
         massScannedCodesRef.current.clear();
 
     } catch (e: any) {
         console.error('Error en la calificación masiva:', e);
         const errorMessage = e.message || JSON.stringify(e);
-        alert(`Error al calificar masivamente: ${errorMessage}`);
+        alert(`Error al marcar masivamente: ${errorMessage}`);
     } finally {
         setLoading(false);
     }
@@ -664,7 +663,7 @@ const handleMassQualify = async () => {
                 <div className="space-y-4">
                     <div className="flex flex-col sm:flex-row justify-end items-center gap-2">
                         <Button onClick={handleMassQualify} disabled={loading || massScannedCodes.length === 0} className="bg-green-600 hover:bg-green-700 w-full sm:w-auto">
-                            {loading ? 'Calificando...' : 'Calificar Todos'}
+                            {loading ? 'Procesando...' : 'Calificar Todos'}
                         </Button>
                     </div>
                     <div className="table-container border border-gray-200 rounded-lg max-h-60 overflow-auto">
@@ -707,3 +706,5 @@ const handleMassQualify = async () => {
     </>
   );
 }
+
+    
