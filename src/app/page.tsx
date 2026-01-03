@@ -128,7 +128,7 @@ export default function Home() {
   const scanTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const APPS_SCRIPT_URL =
-    'https://script.google.com/macros/s/AKfycbwxN5n-iE0pi3JlOkImBgWD3-qptWsJxdyMJjXbRySgGvi7jqIsU9Puo7p2uvu5BioIbQ/exec';
+    'https://script.google.com/macros/s/AKfycbwxN5n-iE00pi3JlOkImBgWD3-qptWsJxdyMJjXbRySgGvi7jqIsU9Puo7p2uvu5BioIbQ/exec';
   const MIN_SCAN_INTERVAL = 500;
 
   useEffect(() => {
@@ -1095,10 +1095,10 @@ export default function Home() {
     setLoading(true);
     setVerificationResult('Verificando...');
     try {
-      const { data, error } = await supabase
-        .from('personal')
-        .select('name, name_inc, status')
-        .eq('code', verificationCode)
+      const { data, error } = await supabaseEtiquetas
+        .from('v_code')
+        .select('code_i')
+        .eq('code_i', verificationCode)
         .single();
 
       if (error && error.code !== 'PGRST116') {
@@ -1106,9 +1106,9 @@ export default function Home() {
       }
 
       if (data) {
-        setVerificationResult(`Código encontrado. Asignado a: ${data.name} por ${data.name_inc}. Estado: ${data.status}`);
+        setVerificationResult(`Código Válido: ${data.code_i}`);
       } else {
-        setVerificationResult('Código no encontrado o no asignado aún.');
+        setVerificationResult('Código Inválido.');
       }
     } catch (e: any) {
       setVerificationResult(`Error al verificar: ${e.message}`);
@@ -1318,7 +1318,7 @@ export default function Home() {
                                 </Button>
                             </div>
                             {verificationResult && (
-                                <Alert variant={verificationResult.startsWith('Error') || verificationResult.includes('no encontrado') ? 'destructive' : 'default'} className="mt-2 text-sm">
+                                <Alert variant={verificationResult.includes('Inválido') ? 'destructive' : 'default'} className="mt-2 text-sm">
                                     <AlertDescription>{verificationResult}</AlertDescription>
                                 </Alert>
                             )}
@@ -1608,5 +1608,3 @@ export default function Home() {
     </>
   );
 }
-
-    
