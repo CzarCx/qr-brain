@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/select"
 import { Button } from '@/components/ui/button';
 import { Input } from "@/components/ui/input";
-import { Zap, ZoomIn, UserPlus, PlusCircle, Clock, AlertTriangle, Wifi, WifiOff, Search } from 'lucide-react';
+import { Zap, ZoomIn, UserPlus, PlusCircle, Clock, AlertTriangle, Wifi, WifiOff, Search, XCircle, CheckCircle } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Combobox } from '@/components/ui/combobox';
 import {
@@ -115,6 +115,8 @@ export default function Home() {
   const [verificationCode, setVerificationCode] = useState('');
   const [verificationResult, setVerificationResult] = useState<string | null>(null);
   const [isVerifying, setIsVerifying] = useState(false);
+  const [showNotification, setShowNotification] = useState(false);
+  const [notification, setNotification] = useState({ title: '', message: '', variant: 'default' as 'default' | 'destructive' | 'success' });
 
 
   // Refs para elementos del DOM y la instancia del escáner
@@ -191,6 +193,11 @@ export default function Home() {
 
   const showAppMessage = (text: React.ReactNode, type: 'success' | 'duplicate' | 'info') => {
     setMessage({text, type});
+  };
+
+  const showModalNotification = (title: string, message: string, variant: 'default' | 'destructive' | 'success' = 'default') => {
+    setNotification({ title, message, variant });
+    setShowNotification(true);
   };
 
   const invalidateCSV = () => {
@@ -326,11 +333,11 @@ export default function Home() {
 
   const associateNameToScans = useCallback(async (name: string, pendingScans: ScannedItem[]) => {
     if (pendingScans.length === 0) {
-      showAppMessage(`${name} escaneado, pero no había códigos pendientes.`, 'info');
+      showModalNotification('Sin Códigos', `${name} escaneado, pero no había códigos pendientes.`, 'destructive');
       return;
     }
      if (pendingScans.some(item => item.esti_time === null || item.esti_time === undefined)) {
-      showAppMessage('Por favor, completa todos los campos de "Tiempo Estimado" antes de asociar.', 'duplicate');
+      showModalNotification('Faltan Datos', 'Por favor, completa todos los campos de "Tiempo Estimado" antes de asociar.', 'destructive');
       return;
     }
   
@@ -417,7 +424,7 @@ export default function Home() {
                   }
               } catch (e: any) {
                   console.error(`Error al buscar el código ${item.code}:`, e.message);
-                  showAppMessage(`Error al buscar ${item.code}: ${e.message}`, 'duplicate');
+                  showModalNotification('Error de Búsqueda', `Error al buscar ${item.code}: ${e.message}`, 'destructive');
               }
           } else {
               sku = item.sku;
@@ -451,9 +458,9 @@ export default function Home() {
         scannedCodesRef.current.clear();
         setMelCodesCount(0);
         setOtherCodesCount(0);
-        showAppMessage(`Se asociaron ${newPersonalScans.length} códigos a ${name}.`, 'success');
+        showModalNotification('¡Éxito!', `Se asociaron ${newPersonalScans.length} códigos a ${name}.`, 'success');
     } catch (e: any) {
-      showAppMessage(`Error al procesar los códigos: ${e.message}`, 'duplicate');
+      showModalNotification('Error', `Error al procesar los códigos: ${e.message}`, 'destructive');
     } finally {
       setLoading(false);
     }
@@ -461,15 +468,15 @@ export default function Home() {
 
   const handleManualAssociate = () => {
     if (!selectedPersonal) {
-        showAppMessage('Por favor, selecciona un miembro del personal.', 'duplicate');
+        showModalNotification('Falta Selección', 'Por favor, selecciona un miembro del personal.', 'destructive');
         return;
     }
     if (scannedData.length === 0) {
-        showAppMessage('No hay etiquetas pendientes para asociar.', 'info');
+        showModalNotification('Lista Vacía', 'No hay etiquetas pendientes para asociar.', 'info');
         return;
     }
     if (scannedData.some(item => item.esti_time === null || item.esti_time === undefined)) {
-        showAppMessage('Por favor, completa todos los campos de "Tiempo Estimado" antes de asociar.', 'duplicate');
+        showModalNotification('Faltan Datos', 'Por favor, completa todos los campos de "Tiempo Estimado" antes de asociar.', 'destructive');
         return;
     }
     associateNameToScans(selectedPersonal, scannedData);
@@ -1639,6 +1646,21 @@ export default function Home() {
                 <div className="overlay-spinner"></div>
                 <p className="text-lg font-semibold">Enviando registros...</p>
             </div>}
+
+            {showNotification && (
+                <div id="notification-overlay" className="p-4 fixed inset-0 bg-black/75 flex justify-center items-center z-[100]" onClick={() => setShowNotification(false)}>
+                     <div className="bg-starbucks-white rounded-lg shadow-xl p-6 w-full max-w-sm text-center space-y-4" onClick={(e) => e.stopPropagation()}>
+                        <Alert variant={notification.variant as any} className={notification.variant === 'success' ? 'border-green-500 text-green-700 [&>svg]:text-green-700' : ''}>
+                            {notification.variant === 'destructive' ? <XCircle className="h-5 w-5" /> : notification.variant === 'success' ? <CheckCircle className="h-5 w-5"/> : <AlertTriangle className="h-5 w-5" />}
+                            <AlertTitle className="font-bold">{notification.title}</AlertTitle>
+                            <AlertDescription>{notification.message}</AlertDescription>
+                        </Alert>
+                        <div className="flex justify-center gap-4 mt-4">
+                           <Button onClick={() => setShowNotification(false)}>Cerrar</Button>
+                        </div>
+                    </div>
+                </div>
+            )}
             
             {confirmation.isOpen && <div id="qr-confirmation-overlay" className="p-4" style={{display: 'flex'}}>
                  <div className="bg-starbucks-white rounded-lg shadow-xl p-6 w-full max-w-sm text-center space-y-4">
