@@ -14,6 +14,8 @@ import {
 } from "@/components/ui/select"
 import { Button } from '@/components/ui/button';
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { Zap, ZoomIn, UserPlus, PlusCircle, Clock, AlertTriangle, Wifi, WifiOff, Search, XCircle, CheckCircle } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Combobox } from '@/components/ui/combobox';
@@ -116,6 +118,7 @@ export default function Home() {
   const [isVerifying, setIsVerifying] = useState(false);
   const [showNotification, setShowNotification] = useState(false);
   const [notification, setNotification] = useState({ title: '', message: '', variant: 'default' as 'default' | 'destructive' | 'success' });
+  const [scanMode, setScanMode] = useState<'assign' | 'unassign'>('assign');
 
 
   // Refs para elementos del DOM y la instancia del escáner
@@ -501,9 +504,45 @@ export default function Home() {
 
  const processScan = useCallback(async (decodedText: string) => {
     setLoading(true);
-    try {
-        const finalCode = String(decodedText).trim();
+    const finalCode = String(decodedText).trim();
 
+    if (scanMode === 'unassign') {
+        try {
+            const { data: existing, error: findError } = await supabase
+                .from('personal')
+                .select('code')
+                .eq('code', finalCode)
+                .single();
+
+            if (findError && findError.code !== 'PGRST116') throw findError;
+
+            if (!existing) {
+                showModalNotification('No Encontrado', `El código ${finalCode} no está asignado a nadie.`, 'destructive');
+                playErrorSound();
+                return;
+            }
+
+            const { error: deleteError } = await supabase
+                .from('personal')
+                .delete()
+                .eq('code', finalCode);
+
+            if (deleteError) throw deleteError;
+
+            showModalNotification('¡Éxito!', `El código ${finalCode} ha sido desasignado.`, 'success');
+            playBeep();
+
+        } catch (error: any) {
+            showModalNotification('Error', `No se pudo desasignar el código: ${error.message}`, 'destructive');
+            playErrorSound();
+        } finally {
+            setLoading(false);
+        }
+        return;
+    }
+    
+    // Logic for 'assign' mode
+    try {
         if (scannedCodesRef.current.has(finalCode) || finalCode === lastSuccessfullyScannedCodeRef.current) {
             if (scannedCodesRef.current.has(finalCode)) {
                 showAppMessage(<>DUPLICADO: {finalCode}</>, 'duplicate');
@@ -565,7 +604,7 @@ export default function Home() {
     } finally {
         setLoading(false);
     }
-}, [addCodeAndUpdateCounters, associateNameToScans, scannedData, personalList]);
+}, [addCodeAndUpdateCounters, associateNameToScans, scannedData, personalList, scanMode]);
 
   useEffect(() => {
     if(lastScannedCode) {
@@ -1230,6 +1269,18 @@ export default function Home() {
                                 </SelectContent>
                             </Select>
                         </div>
+
+                         <div className="flex items-center space-x-2 bg-gray-100 p-3 rounded-lg">
+                            <Switch 
+                                id="scan-mode" 
+                                checked={scanMode === 'unassign'}
+                                onCheckedChange={(checked) => setScanMode(checked ? 'unassign' : 'assign')}
+                                disabled={scannerActive}
+                            />
+                            <Label htmlFor="scan-mode" className="text-sm font-medium">
+                                {scanMode === 'assign' ? 'Modo: Asignar' : 'Modo: Desasignar'}
+                            </Label>
+                        </div>
                         
                         <div className="p-4 bg-gray-100 rounded-lg space-y-3">
                             <label htmlFor="verify-code-input" className="block text-sm font-bold text-starbucks-dark">Verificar Código</label>
@@ -1268,9 +1319,11 @@ export default function Home() {
                         </div>
 
                         {/* Contenedor de Registros para Móvil */}
-                        <div className="md:hidden">
-                          {RegistrosPendientesSection}
-                        </div>
+                        {scanMode === 'assign' && (
+                            <div className="md:hidden">
+                                {RegistrosPendientesSection}
+                            </div>
+                        )}
                     </div>
                     
                     {/* Columna Derecha: Escáner */}
@@ -1331,20 +1384,22 @@ export default function Home() {
                     <div id="message" className={`p-3 rounded-lg text-center font-semibold text-base transition-all duration-300 ${messageClasses[message.type]}`}>
                         {message.text}
                     </div>
-                    <div className="grid grid-cols-3 gap-2 text-center">
-                        <div className="bg-starbucks-cream p-2 rounded-lg">
-                            <h3 className="font-bold text-starbucks-dark uppercase text-xs">Total</h3>
-                            <p id="total-scans" className="text-2xl font-mono text-starbucks-green">{melCodesCount + otherCodesCount}</p>
+                     {scanMode === 'assign' && (
+                        <div className="grid grid-cols-3 gap-2 text-center">
+                            <div className="bg-starbucks-cream p-2 rounded-lg">
+                                <h3 className="font-bold text-starbucks-dark uppercase text-xs">Total</h3>
+                                <p id="total-scans" className="text-2xl font-mono text-starbucks-green">{melCodesCount + otherCodesCount}</p>
+                            </div>
+                            <div className="bg-starbucks-cream p-2 rounded-lg">
+                                <h3 className="font-bold text-starbucks-dark uppercase text-xs">Otros</h3>
+                                <p id="other-scans" className="text-2xl font-mono text-yellow-500">{otherCodesCount}</p>
+                            </div>
+                            <div className="bg-starbucks-cream p-2 rounded-lg">
+                                <h3 className="font-bold text-starbucks-dark uppercase text-xs">MEL</h3>
+                                <p id="unique-scans" className="text-2xl font-mono text-starbucks-accent">{melCodesCount}</p>
+                            </div>
                         </div>
-                        <div className="bg-starbucks-cream p-2 rounded-lg">
-                            <h3 className="font-bold text-starbucks-dark uppercase text-xs">Otros</h3>
-                            <p id="other-scans" className="text-2xl font-mono text-yellow-500">{otherCodesCount}</p>
-                        </div>
-                        <div className="bg-starbucks-cream p-2 rounded-lg">
-                            <h3 className="font-bold text-starbucks-dark uppercase text-xs">MEL</h3>
-                            <p id="unique-scans" className="text-2xl font-mono text-starbucks-accent">{melCodesCount}</p>
-                        </div>
-                    </div>
+                    )}
                 </div>
                 
                 <div className="space-y-4">
@@ -1370,9 +1425,11 @@ export default function Home() {
                         </div>
                     </div>
                     {/* Contenedor de Registros para Escritorio */}
-                    <div className="hidden md:block">
-                      {RegistrosPendientesSection}
-                    </div>
+                    {scanMode === 'assign' && (
+                        <div className="hidden md:block">
+                            {RegistrosPendientesSection}
+                        </div>
+                    )}
 
                 </div>
             </div>
