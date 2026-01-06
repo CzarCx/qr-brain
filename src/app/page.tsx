@@ -1205,7 +1205,7 @@ export default function Home() {
                 )}
 
                 <div className="grid md:grid-cols-2 gap-4">
-                    <div className="flex flex-col md:flex-col-reverse">
+                    <div className="flex flex-col-reverse md:flex-col">
                         <div className="space-y-4">
                              <div>
                                 <label htmlFor="encargado" className="block text-sm font-bold text-starbucks-dark mb-1">Nombre del Encargado:</label>
@@ -1260,9 +1260,9 @@ export default function Home() {
                             </div>
                         </div>
                     </div>
-
-                    <div className="bg-starbucks-cream p-4 rounded-lg">
-                        <div className="scanner-container relative w-full h-auto aspect-video md:aspect-auto md:h-full">
+                    
+                    <div className="bg-starbucks-cream p-4 rounded-lg flex flex-col">
+                        <div className="scanner-container relative w-full h-64 md:h-full flex-grow">
                             <div id="reader" ref={readerRef} className="w-full h-full" style={{ display: selectedScannerMode === 'camara' && scannerActive ? 'block' : 'none' }}></div>
                             {scannerActive && selectedScannerMode === 'camara' && <div id="laser-line"></div>}
                             <input type="text" id="physical-scanner-input" ref={physicalScannerInputRef} className="hidden-input" autoComplete="off" />
