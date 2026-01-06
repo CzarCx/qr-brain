@@ -1205,67 +1205,69 @@ export default function Home() {
                 )}
 
                 <div className="grid md:grid-cols-2 gap-4">
-                    <div className="space-y-4">
-                        <div>
-                            <label htmlFor="encargado" className="block text-sm font-bold text-starbucks-dark mb-1">Nombre del Encargado:</label>
-                            <Select onValueChange={setEncargado} value={encargado} disabled={scannerActive}>
-                                <SelectTrigger className="bg-transparent hover:bg-gray-50 border border-input">
-                                    <SelectValue placeholder="Selecciona un encargado" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {encargadosList.map((enc) => (
-                                        <SelectItem key={enc.name} value={enc.name}>
-                                            {enc.name}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
-                        
-                        <div className="p-4 bg-gray-100 rounded-lg space-y-3">
-                            <label htmlFor="verify-code-input" className="block text-sm font-bold text-starbucks-dark">Verificar Código</label>
-                            <div className="flex items-center gap-2">
-                                <Input
-                                    id="verify-code-input"
-                                    type="text"
-                                    value={verificationCode}
-                                    onChange={(e) => setVerificationCode(e.target.value)}
-                                    placeholder="Ingresa código a verificar"
-                                    className="bg-white"
-                                    disabled={isVerifying}
-                                />
-                                <Button onClick={handleVerifyCode} disabled={isVerifying || !verificationCode} className="bg-blue-600 hover:bg-blue-700">
-                                    {isVerifying ? (
-                                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                                    ) : (
-                                        <Search className="h-4 w-4" />
-                                    )}
-                                    <span className="ml-2">Verificar</span>
-                                </Button>
+                    <div className="flex flex-col md:flex-col-reverse">
+                        <div className="space-y-4">
+                             <div>
+                                <label htmlFor="encargado" className="block text-sm font-bold text-starbucks-dark mb-1">Nombre del Encargado:</label>
+                                <Select onValueChange={setEncargado} value={encargado} disabled={scannerActive}>
+                                    <SelectTrigger className="bg-transparent hover:bg-gray-50 border border-input">
+                                        <SelectValue placeholder="Selecciona un encargado" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {encargadosList.map((enc) => (
+                                            <SelectItem key={enc.name} value={enc.name}>
+                                                {enc.name}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
                             </div>
-                            {verificationResult && (
-                                <Alert variant={verificationResult.includes('Inválido') ? 'destructive' : 'default'} className="mt-2 text-sm">
-                                    <AlertDescription>{verificationResult}</AlertDescription>
-                                </Alert>
-                            )}
-                        </div>
+                            
+                            <div className="p-4 bg-gray-100 rounded-lg space-y-3">
+                                <label htmlFor="verify-code-input" className="block text-sm font-bold text-starbucks-dark">Verificar Código</label>
+                                <div className="flex items-center gap-2">
+                                    <Input
+                                        id="verify-code-input"
+                                        type="text"
+                                        value={verificationCode}
+                                        onChange={(e) => setVerificationCode(e.target.value)}
+                                        placeholder="Ingresa código a verificar"
+                                        className="bg-white"
+                                        disabled={isVerifying}
+                                    />
+                                    <Button onClick={handleVerifyCode} disabled={isVerifying || !verificationCode} className="bg-blue-600 hover:bg-blue-700">
+                                        {isVerifying ? (
+                                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                                        ) : (
+                                            <Search className="h-4 w-4" />
+                                        )}
+                                        <span className="ml-2">Verificar</span>
+                                    </Button>
+                                </div>
+                                {verificationResult && (
+                                    <Alert variant={verificationResult.includes('Inválido') ? 'destructive' : 'default'} className="mt-2 text-sm">
+                                        <AlertDescription>{verificationResult}</AlertDescription>
+                                    </Alert>
+                                )}
+                            </div>
 
-                        <div>
-                            <label className="block text-sm font-bold text-starbucks-dark mb-1">Método de Escaneo:</label>
-                            <div className="grid grid-cols-2 gap-2">
-                                <button onClick={() => setSelectedScannerMode('camara')} className={`area-btn w-full px-4 py-3 text-sm rounded-md shadow-sm focus:outline-none ${selectedScannerMode === 'camara' ? 'scanner-mode-selected' : ''}`} disabled={scannerActive}>CÁMARA</button>
-                                <button onClick={() => setSelectedScannerMode('fisico')} className={`area-btn w-full px-4 py-3 text-sm rounded-md shadow-sm focus:outline-none ${selectedScannerMode === 'fisico' ? 'scanner-mode-selected' : ''}`} disabled={scannerActive}>ESCÁNER FÍSICO</button>
+                            <div>
+                                <label className="block text-sm font-bold text-starbucks-dark mb-1">Método de Escaneo:</label>
+                                <div className="grid grid-cols-2 gap-2">
+                                    <button onClick={() => setSelectedScannerMode('camara')} className={`area-btn w-full px-4 py-3 text-sm rounded-md shadow-sm focus:outline-none ${selectedScannerMode === 'camara' ? 'scanner-mode-selected' : ''}`} disabled={scannerActive}>CÁMARA</button>
+                                    <button onClick={() => setSelectedScannerMode('fisico')} className={`area-btn w-full px-4 py-3 text-sm rounded-md shadow-sm focus:outline-none ${selectedScannerMode === 'fisico' ? 'scanner-mode-selected' : ''}`} disabled={scannerActive}>ESCÁNER FÍSICO</button>
+                                </div>
                             </div>
                         </div>
                     </div>
 
                     <div className="bg-starbucks-cream p-4 rounded-lg">
-                        <div className="scanner-container relative">
-                            <div id="reader" ref={readerRef} style={{ display: selectedScannerMode === 'camara' && scannerActive ? 'block' : 'none' }}></div>
+                        <div className="scanner-container relative w-full h-auto aspect-video md:aspect-auto md:h-full">
+                            <div id="reader" ref={readerRef} className="w-full h-full" style={{ display: selectedScannerMode === 'camara' && scannerActive ? 'block' : 'none' }}></div>
                             {scannerActive && selectedScannerMode === 'camara' && <div id="laser-line"></div>}
                             <input type="text" id="physical-scanner-input" ref={physicalScannerInputRef} className="hidden-input" autoComplete="off" />
                             {selectedScannerMode === 'camara' && !scannerActive && (
-                                <div className="text-center p-8 border-2 border-dashed border-gray-300 rounded-lg">
+                                <div className="text-center p-8 border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center w-full h-full">
                                     <p className="text-gray-500">La cámara está desactivada.</p>
                                 </div>
                             )}
