@@ -91,20 +91,16 @@ export default function CalificarPage() {
     const fetchEncargados = async () => {
         const { data, error } = await supabase
             .from('personal_name')
-            .select('name, rol');
+            .select('name, rol')
+            .eq('rol', 'barra');
 
         if (error) {
             setDbError('Error al cargar encargados. Revisa los permisos RLS de la tabla `personal_name`.');
-        } else if (data) {
+        } else if (data && data.length > 0) {
              const uniqueEncargados = Array.from(new Map(data.map(item => [item.name, item])).values());
-             const barras = uniqueEncargados.filter(enc => enc.rol === 'barra') as Encargado[];
-             if (barras.length === 0) {
-                setDbError('No se encontraron encargados con el rol "barra". Revisa los datos o los permisos RLS.');
-            } else {
-                setEncargadosList(barras || []);
-            }
+             setEncargadosList(uniqueEncargados as Encargado[] || []);
         } else {
-             setDbError('No se encontraron encargados. Revisa los datos o los permisos RLS.');
+             setDbError('No se encontraron encargados con el rol "barra". Revisa los datos o los permisos RLS.');
         }
     };
     fetchEncargados();
