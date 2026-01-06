@@ -86,7 +86,6 @@ export default function Home() {
   const [personalList, setPersonalList] = useState<Encargado[]>([]);
   const [selectedPersonal, setSelectedPersonal] = useState('');
   const [scannedData, setScannedData] = useState<ScannedItem[]>([]);
-  const [personalScans, setPersonalScans] = useState<PersonalScanItem[]>([]);
   const [melCodesCount, setMelCodesCount] = useState(0);
   const [otherCodesCount, setOtherCodesCount] = useState(0);
   const [selectedScannerMode, setSelectedScannerMode] = useState('camara');
@@ -207,7 +206,6 @@ export default function Home() {
   const clearSessionData = () => {
     scannedCodesRef.current.clear();
     setScannedData([]);
-    setPersonalScans([]);
     setMelCodesCount(0);
     setOtherCodesCount(0);
     lastSuccessfullyScannedCodeRef.current = null;
@@ -342,7 +340,7 @@ export default function Home() {
     }
   
     setLoading(true);
-    showAppMessage('Asociando códigos y consultando base de datos...', 'info');
+    showAppMessage('Asociando y guardando códigos en la base de datos...', 'info');
   
     try {
         const sortedScans = [...pendingScans].sort((a, b) => new Date(`1970/01/01 ${a.hora}`).valueOf() - new Date(`1970/01/01 ${b.hora}`).valueOf());
@@ -371,7 +369,7 @@ export default function Home() {
             lastFinishTime = new Date();
         }
 
-        const newPersonalScansPromises = sortedScans.map(async (item, index) => {
+        const dataToInsertPromises = sortedScans.map(async (item, index) => {
           let sku: string | null = '';
           let producto: string | null = '';
           let cantidad: number | null = 0;
@@ -381,18 +379,17 @@ export default function Home() {
           let date_ini: string | null = null;
           let date_esti: string | null = null;
 
-          // Calculate start time
           let startTime: Date;
           if (index === 0) {
               startTime = lastFinishTime;
           } else {
               startTime = lastFinishTime!;
           }
+
           if (!isNaN(startTime.getTime())) {
             date_ini = startTime.toISOString();
           }
 
-          // Calculate end time
           if (!isNaN(startTime.getTime()) && item.esti_time) {
               const endDate = new Date(startTime.getTime() + item.esti_time * 60000);
               date_esti = endDate.toISOString();
@@ -410,21 +407,18 @@ export default function Home() {
                   .single();
           
                   if (error && error.code !== 'PGRST116') {
-                  throw error;
+                    throw error;
                   }
           
                   if (data) {
-                  sku = data.sku || '';
-                  producto = data.product || '';
-                  cantidad = data.quantity || 0;
-                  empresa = data.organization || '';
-                  venta = data.sales_num ? String(data.sales_num) : '';
-                  } else {
-                  showAppMessage(`Código ${item.code} no encontrado. Se añade sin detalles.`, 'info');
+                    sku = data.sku || '';
+                    producto = data.product || '';
+                    cantidad = data.quantity || 0;
+                    empresa = data.organization || '';
+                    venta = data.sales_num ? String(data.sales_num) : '';
                   }
               } catch (e: any) {
                   console.error(`Error al buscar el código ${item.code}:`, e.message);
-                  showModalNotification('Error de Búsqueda', `Error al buscar ${item.code}: ${e.message}`, 'destructive');
               }
           } else {
               sku = item.sku;
@@ -435,36 +429,38 @@ export default function Home() {
           }
       
           return {
-              code: item.code,
+              code: String(item.code),
+              name: name, 
+              name_inc: item.encargado,
               sku: sku,
-              personal: name, 
-              encargado: item.encargado,
               product: producto,
               quantity: cantidad,
-              organization: empresa,
-              venta: venta,
-              date: new Date().toISOString(),
               status: 'ASIGNADO',
+              organization: empresa,
+              sales_num: Number(venta),
+              date: new Date().toISOString(),
               esti_time: item.esti_time,
               date_esti: date_esti,
               date_ini: date_ini,
           };
         });
-  
-        const newPersonalScans = await Promise.all(newPersonalScansPromises);
-    
-        setPersonalScans(prev => [...prev, ...newPersonalScans].sort((a, b) => new Date(a.date_ini!).valueOf() - new Date(b.date_ini!).valueOf()));
-        setScannedData([]);
-        scannedCodesRef.current.clear();
-        setMelCodesCount(0);
-        setOtherCodesCount(0);
-        showModalNotification('¡Éxito!', `Se asociaron ${newPersonalScans.length} códigos a ${name}.`, 'success');
+        
+        const dataToInsert = await Promise.all(dataToInsertPromises);
+
+        const { error: insertError } = await supabase.from('personal').insert(dataToInsert);
+        if (insertError) {
+          console.error("Error en insert:", insertError);
+          throw new Error(`Error al guardar en 'personal': ${insertError.message}`);
+        }
+
+        clearSessionData();
+        showModalNotification('¡Éxito!', `Se asociaron y guardaron ${pendingScans.length} códigos a ${name}.`, 'success');
     } catch (e: any) {
-      showModalNotification('Error', `Error al procesar los códigos: ${e.message}`, 'destructive');
+      showModalNotification('Error', `Error al procesar y guardar los códigos: ${e.message}`, 'destructive');
     } finally {
       setLoading(false);
     }
-  }, [currentTime]);
+  }, []);
 
   const handleManualAssociate = () => {
     if (!selectedPersonal) {
@@ -824,113 +820,6 @@ export default function Home() {
     }
   };
 
- const handleSavePersonal = async () => {
-    if (personalScans.length === 0) {
-      showAppMessage('No hay datos de personal para guardar.', 'info');
-      return;
-    }
-    setLoading(true);
-    showAppMessage('Guardando registros de personal...', 'info');
-
-    try {
-      const personName = personalScans[0]?.personal;
-      if (!personName) {
-        throw new Error("No se pudo determinar el nombre del personal.");
-      }
-
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-
-      const { data: lastScan, error: lastScanError } = await supabase
-        .from('personal')
-        .select('date_esti')
-        .eq('name', personName)
-        .gte('date', today.toISOString())
-        .order('date_esti', { ascending: false })
-        .limit(1)
-        .single();
-      
-      if (lastScanError && lastScanError.code !== 'PGRST116') {
-        throw new Error(`Error al buscar el último registro: ${lastScanError.message}`);
-      }
-      
-      let lastFinishTime: Date;
-        if (lastScan && lastScan.date_esti) {
-            const lastEstiDate = new Date(lastScan.date_esti);
-            lastFinishTime = lastEstiDate > new Date() ? lastEstiDate : new Date();
-        } else {
-            lastFinishTime = new Date();
-        }
-
-      const sortedScans = [...personalScans].sort((a, b) => new Date(a.date_ini!).valueOf() - new Date(b.date_ini!).valueOf());
-
-      const dataToInsert = sortedScans.map((item) => {
-        const startTime = lastFinishTime;
-        let date_esti_str: string | null = null;
-        
-        if (!isNaN(startTime.getTime()) && item.esti_time) {
-          const endDate = new Date(startTime.getTime() + item.esti_time * 60000);
-          date_esti_str = endDate.toISOString();
-          lastFinishTime = endDate; // Chain the next start time
-        } else {
-          lastFinishTime = startTime;
-        }
-        
-        return {
-          code: String(item.code),
-          name: item.personal,
-          name_inc: item.encargado,
-          sku: item.sku,
-          product: item.product,
-          quantity: item.quantity,
-          status: 'ASIGNADO',
-          organization: item.organization,
-          sales_num: Number(item.venta),
-          date: item.date,
-          esti_time: item.esti_time,
-          date_esti: date_esti_str,
-          date_ini: startTime.toISOString(),
-        };
-      });
-
-      const { error: insertError } = await supabase.from('personal').insert(dataToInsert);
-      if (insertError) {
-        console.error("Error en insert:", insertError);
-        throw new Error(`Error al guardar en 'personal': ${insertError.message}`);
-      }
-
-      const salesNumbersToDelete = [...new Set(personalScans.map(item => item.venta).filter(Boolean))];
-
-      if (salesNumbersToDelete.length > 0) {
-        const { error: deleteError } = await supabase
-          .from('personal_prog')
-          .delete()
-          .in('sales_num', salesNumbersToDelete as (string | number)[]);
-        
-        if (deleteError) {
-          console.error("Error en delete:", deleteError);
-          showAppMessage(`Registros guardados, pero hubo un error al limpiar 'personal_prog': ${deleteError.message}`, 'info');
-        }
-      }
-      
-      showAppMessage('Registros guardados y programación limpiada exitosamente.', 'success');
-      setPersonalScans([]);
-
-    } catch (error: any) {
-      console.error("Error en handleSavePersonal:", error);
-      showAppMessage(`Error al procesar: ${error.message}`, 'duplicate');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleClearPersonalAsignado = () => {
-    if (window.confirm('¿Estás seguro de que quieres limpiar la lista de personal asignado?')) {
-        setPersonalScans([]);
-        showAppMessage('La lista de personal asignado ha sido limpiada.', 'info');
-    }
-  };
-
  const handleProduccionProgramada = async () => {
     if (scannedData.length === 0) {
       showAppMessage('No hay registros pendientes para programar.', 'info');
@@ -1025,53 +914,29 @@ export default function Home() {
         return;
       }
       
-      let lastFinishTime: Date;
-      const loadedScans = data.sort((a,b) => new Date(a.date).valueOf() - new Date(b.date).valueOf())
-        .map((item, index) => {
-          let startTime: Date;
-          if (index === 0) {
-            startTime = new Date(); // La primera tarea inicia ahora
-          } else {
-            startTime = lastFinishTime; // Las siguientes inician cuando termina la anterior
-          }
-
-          let date_esti: string | null = null;
-          if (!isNaN(startTime.getTime()) && item.esti_time) {
-            const endDate = new Date(startTime.getTime() + item.esti_time * 60000);
-            date_esti = endDate.toISOString();
-            lastFinishTime = endDate;
-          } else {
-            lastFinishTime = startTime;
-          }
-          
-          return {
-            ...item,
-            date_ini: startTime.toISOString(),
-            date_esti: date_esti,
-          };
-      });
-
-      // Mapeo para que coincida con PersonalScanItem
-      const newPersonalScans = loadedScans.map(item => ({
+      const { error: deleteError } = await supabase
+        .from('personal_prog')
+        .delete()
+        .eq('name', selectedPersonalParaCargar);
+      
+      if (deleteError) {
+        throw new Error(`Error al limpiar 'personal_prog': ${deleteError.message}`);
+      }
+      
+      await associateNameToScans(selectedPersonalParaCargar, data.map(item => ({
         code: item.code,
-        sku: item.sku,
-        personal: item.name,
+        fecha: new Date(item.date).toLocaleDateString('es-MX'),
+        hora: new Date(item.date).toLocaleTimeString('es-MX'),
         encargado: item.name_inc,
-        product: item.product,
-        quantity: item.quantity,
-        organization: item.organization,
-        venta: item.sales_num,
-        date: item.date,
-        status: 'ASIGNADO',
+        area: 'CARGA_PROGRAMADA',
+        sku: item.sku,
+        cantidad: item.quantity,
+        producto: item.product,
+        empresa: item.organization,
+        venta: item.sales_num ? String(item.sales_num) : '',
         esti_time: item.esti_time,
-        date_esti: item.date_esti,
-        date_ini: item.date_ini,
-      }));
+      })));
 
-
-      setPersonalScans(prev => [...prev, ...newPersonalScans].sort((a, b) => new Date(a.date_ini!).valueOf() - new Date(b.date_ini!).valueOf()));
-
-      showAppMessage(`Se cargaron ${data.length} registros programados para ${selectedPersonalParaCargar}.`, 'success');
       setIsCargarModalOpen(false);
       setSelectedPersonalParaCargar('');
 
@@ -1081,32 +946,6 @@ export default function Home() {
     } finally {
       setLoading(false);
     }
-  };
-
-  const handlePersonalChange = (code: string | number, newPersonal: string) => {
-    setPersonalScans(prevScans => 
-        prevScans.map(scan => 
-            scan.code === code ? { ...scan, personal: newPersonal } : scan
-        )
-    );
-    showAppMessage(`Se actualizó el personal para el código ${code}.`, 'info');
-  };
-  
-  const handleBulkPersonalChange = () => {
-    if (!selectedBulkPersonal) {
-        showAppMessage('Por favor, selecciona una persona para el cambio masivo.', 'info');
-        return;
-    }
-    if (personalScans.length === 0) {
-        showAppMessage('No hay registros en la lista para cambiar.', 'info');
-        return;
-    }
-
-    setPersonalScans(prevScans => 
-        prevScans.map(scan => ({ ...scan, personal: selectedBulkPersonal }))
-    );
-    showAppMessage(`Todos los registros han sido asignados a ${selectedBulkPersonal}.`, 'success');
-    setSelectedBulkPersonal('');
   };
 
   const handleVerifyCode = async () => {
@@ -1159,15 +998,11 @@ export default function Home() {
       info: 'scan-info'
   };
   
-  const isAssociationDisabled = scannedData.length > 0 && scannedData.some(item => item.esti_time === null || item.esti_time === undefined);
+  const isAssociationDisabled = scannedData.length === 0 || scannedData.some(item => item.esti_time === null || item.esti_time === undefined);
 
   const totalEstimatedTime = useMemo(() => {
     return scannedData.reduce((acc, item) => acc + (item.esti_time || 0), 0);
   }, [scannedData]);
-
-  const totalPersonalEstimatedTime = useMemo(() => {
-    return personalScans.reduce((acc, item) => acc + (item.esti_time || 0), 0);
-  }, [personalScans]);
 
   const formatTotalTime = (totalMinutes: number) => {
     if (totalMinutes === 0) return null;
@@ -1235,132 +1070,11 @@ export default function Home() {
     })
   };
 
-  const renderPersonalScans = () => {
-    const sortedScans = [...personalScans].sort((a, b) => new Date(a.date_ini!).valueOf() - new Date(b.date_ini!).valueOf());
-    let lastFinishTime: Date | null = null;
-
-    return sortedScans.map((data, index) => {
-        let horaInicio: Date;
-        if (index === 0 && sortedScans.length > 0) {
-            horaInicio = currentTime; // The first task's start time is now (real-time)
-        } else if (lastFinishTime) {
-            horaInicio = lastFinishTime; // Subsequent tasks start when the previous one ends
-        } else {
-            horaInicio = new Date(data.date_ini!); // Fallback to stored time
-        }
-
-        let horaFin: Date | null = null;
-        if (!isNaN(horaInicio.getTime()) && data.esti_time) {
-            horaFin = new Date(horaInicio.getTime() + data.esti_time * 60000);
-        }
-        
-        lastFinishTime = horaFin || horaInicio;
-
-        const horaInicioStr = !isNaN(horaInicio.getTime()) 
-            ? horaInicio.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })
-            : 'N/A';
-        const horaFinStr = horaFin
-            ? horaFin.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })
-            : 'N/A';
-
-        return (
-            <tr key={`${data.code}-${index}`}>
-                <td className="px-4 py-3 whitespace-nowrap font-mono text-sm">{data.code}</td>
-                <td className="px-4 py-3 whitespace-nowrap text-sm">
-                    <Combobox
-                        options={personalList.map(p => ({ value: p.name, label: p.name }))}
-                        value={data.personal}
-                        onValueChange={(newPersonal) => handlePersonalChange(data.code, newPersonal)}
-                        placeholder="Selecciona personal..."
-                        emptyMessage="No se encontró personal."
-                        buttonClassName="bg-transparent border-0 hover:bg-gray-100"
-                    />
-                </td>
-                <td className="px-4 py-3 whitespace-nowrap text-sm">{data.product}</td>
-                <td className="px-4 py-3 whitespace-nowrap text-sm">{horaInicioStr}</td>
-                <td className="px-4 py-3 whitespace-nowrap text-sm">{horaFinStr}</td>
-            </tr>
-        );
-    });
-};
-
-
   const RegistrosPendientesSection = (
     <div>
         <div className="flex flex-wrap justify-between items-center mb-2 gap-2">
             <h2 className="text-lg font-bold text-starbucks-dark">Registros Pendientes</h2>
-            <div className="flex flex-wrap gap-2">
-                <button id="export-csv" onClick={exportCsv} className="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg shadow-sm text-xs transition-colors duration-200">1. Exportar</button>
-                <button id="ingresar-datos" onClick={ingresarDatos} disabled={!ingresarDatosEnabled} className="flex items-center gap-1 px-3 py-1.5 bg-purple-600 text-white font-semibold rounded-lg shadow-sm text-xs transition-colors duration-200 disabled:bg-gray-400">2. Ingresar</button>
-                <button id="clear-data" onClick={() => { if(window.confirm('¿Estás seguro?')) clearSessionData() }} className="px-3 py-1.5 bg-yellow-500 hover:bg-yellow-600 text-white font-semibold rounded-lg shadow-sm text-xs transition-colors duration-200">Limpiar</button>
-            </div>
-        </div>
-
-        <div className="p-4 bg-starbucks-cream rounded-lg mt-4 space-y-2 md:flex md:items-center md:gap-4 md:space-y-0">
-            <label className="block text-sm font-bold text-starbucks-dark flex-shrink-0">Asociar Pendientes a:</label>
-            <div className="flex-grow">
-                <Combobox
-                    options={personalList.map(p => ({ value: p.name, label: p.name }))}
-                    value={selectedPersonal}
-                    onValueChange={setSelectedPersonal}
-                    placeholder="Selecciona o busca personal..."
-                    emptyMessage="No se encontró personal."
-                    buttonClassName="bg-transparent border-input"
-                />
-            </div>
-            <div className="flex gap-2 flex-wrap">
-                <Button onClick={handleManualAssociate} disabled={isAssociationDisabled} className="bg-starbucks-accent hover:bg-starbucks-green text-white w-full sm:w-auto">
-                    <UserPlus className="mr-2 h-4 w-4" /> Asociar
-                </Button>
-                  <Button onClick={handleProduccionProgramada} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg shadow-sm text-sm transition-colors duration-200 w-full sm:w-auto" disabled={loading || isAssociationDisabled}>
-                    Producción Programada
-                  </Button>
-            </div>
-        </div>
-          {isAssociationDisabled && (
-            <p className="text-xs text-red-600 mt-2">Completa todos los campos de "Tiempo Estimado" para poder asociar.</p>
-        )}
-        
-
-        {totalEstimatedTime > 0 && (
-            <div className="mt-4 p-3 bg-blue-100 border border-blue-300 rounded-lg text-center">
-                <p className="font-semibold text-blue-800 flex items-center justify-center gap-2">
-                    <Clock className="h-5 w-5"/>
-                    Tiempo Total Asignado: <span className="font-bold">{formatTotalTime(totalEstimatedTime)}</span>
-                </p>
-            </div>
-        )}
-
-        <div className="table-container border border-gray-200 rounded-lg mt-4">
-            <table className="w-full min-w-full divide-y divide-gray-200">
-                <thead className="bg-starbucks-cream sticky top-0 z-10">
-                    <tr>
-                        <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">CODIGO</th>
-                        <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">TIEMPO ESTIMADO</th>
-                        <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">PRODUCTO</th>
-                        <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">SKU</th>
-                        <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">CANT</th>
-                        <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">EMPRESA</th>
-                        <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">Venta</th>
-                        <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">HORA DE ASIGNACION</th>
-                        <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">HORA INICIO</th>
-                        <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">HORA FIN</th>
-                        <th scope="col" className="px-4 py-2 text-center text-xs font-medium text-starbucks-dark uppercase tracking-wider">ACCION</th>
-                    </tr>
-                </thead>
-                <tbody id="scanned-list" className="bg-starbucks-white divide-y divide-gray-200">
-                    {renderPendingRecords()}
-                </tbody>
-            </table>
-        </div>
-    </div>
-  );
-
-  const PersonalAsignadoSection = (
-     <div>
-        <div className="flex flex-wrap justify-between items-center mb-2 gap-4">
-            <h2 className="text-lg font-bold text-starbucks-dark">Personal Asignado</h2>
-            <div className="flex gap-2 items-center">
+             <div className="flex flex-wrap gap-2">
                 <Dialog open={isCargarModalOpen} onOpenChange={setIsCargarModalOpen}>
                     <DialogTrigger asChild>
                         <Button onClick={handleOpenCargarModal} className="px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white font-semibold rounded-lg shadow-sm text-sm transition-colors duration-200" disabled={loading}>
@@ -1393,53 +1107,64 @@ export default function Home() {
                         </DialogFooter>
                     </DialogContent>
                 </Dialog>
-                <Button onClick={handleSavePersonal} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-sm text-sm transition-colors duration-200" disabled={loading}>
-                    Guardar
-                </Button>
-                <Button onClick={handleClearPersonalAsignado} variant="destructive" className="px-4 py-2 font-semibold rounded-lg shadow-sm text-sm transition-colors duration-200" disabled={loading}>
-                    Limpiar
-                </Button>
+                <button id="clear-data" onClick={() => { if(window.confirm('¿Estás seguro?')) clearSessionData() }} className="px-3 py-1.5 bg-yellow-500 hover:bg-yellow-600 text-white font-semibold rounded-lg shadow-sm text-xs transition-colors duration-200">Limpiar</button>
             </div>
         </div>
 
-          <div className="p-4 bg-gray-100 rounded-lg mb-4 space-y-2 md:space-y-0 md:flex md:items-center md:justify-between md:gap-4">
-            <label className="block text-sm font-bold text-starbucks-dark">Cambiar todos a:</label>
-            <div className="flex-grow md:max-w-xs">
+        <div className="p-4 bg-starbucks-cream rounded-lg mt-4 space-y-2 md:flex md:items-center md:gap-4 md:space-y-0">
+            <label className="block text-sm font-bold text-starbucks-dark flex-shrink-0">Asociar Pendientes a:</label>
+            <div className="flex-grow">
                 <Combobox
                     options={personalList.map(p => ({ value: p.name, label: p.name }))}
-                    value={selectedBulkPersonal}
-                    onValueChange={setSelectedBulkPersonal}
-                    placeholder="Selecciona personal..."
+                    value={selectedPersonal}
+                    onValueChange={setSelectedPersonal}
+                    placeholder="Selecciona o busca personal..."
                     emptyMessage="No se encontró personal."
-                    buttonClassName="bg-transparent border-input hover:bg-gray-100"
+                    buttonClassName="bg-transparent border-input"
                 />
             </div>
-            <Button onClick={handleBulkPersonalChange} disabled={!selectedBulkPersonal || personalScans.length === 0} className="w-full md:w-auto bg-teal-600 hover:bg-teal-700 text-white">
-                Cambiar Todos
-            </Button>
+            <div className="flex gap-2 flex-wrap">
+                <Button onClick={handleManualAssociate} disabled={isAssociationDisabled || loading} className="bg-starbucks-accent hover:bg-starbucks-green text-white w-full sm:w-auto">
+                    <UserPlus className="mr-2 h-4 w-4" /> Asociar y Guardar
+                </Button>
+                  <Button onClick={handleProduccionProgramada} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg shadow-sm text-sm transition-colors duration-200 w-full sm:w-auto" disabled={loading || isAssociationDisabled}>
+                    Producción Programada
+                  </Button>
+            </div>
         </div>
+          {isAssociationDisabled && scannedData.length > 0 && (
+            <p className="text-xs text-red-600 mt-2">Completa todos los campos de "Tiempo Estimado" para poder asociar.</p>
+        )}
         
-        {totalPersonalEstimatedTime > 0 && (
-            <div className="mb-4 p-3 bg-blue-100 border border-blue-300 rounded-lg text-center">
+
+        {totalEstimatedTime > 0 && (
+            <div className="mt-4 p-3 bg-blue-100 border border-blue-300 rounded-lg text-center">
                 <p className="font-semibold text-blue-800 flex items-center justify-center gap-2">
                     <Clock className="h-5 w-5"/>
-                    Tiempo Total Asignado: <span className="font-bold">{formatTotalTime(totalPersonalEstimatedTime)}</span>
+                    Tiempo Total Estimado: <span className="font-bold">{formatTotalTime(totalEstimatedTime)}</span>
                 </p>
             </div>
         )}
-        <div className="table-container border border-gray-200 rounded-lg">
+
+        <div className="table-container border border-gray-200 rounded-lg mt-4">
             <table className="w-full min-w-full divide-y divide-gray-200">
                 <thead className="bg-starbucks-cream sticky top-0 z-10">
                     <tr>
-                        <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">Codigo</th>
-                        <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">Personal</th>
-                        <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">Producto</th>
-                        <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">Hora Inicio</th>
-                        <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">Hora Fin</th>
+                        <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">CODIGO</th>
+                        <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">TIEMPO ESTIMADO</th>
+                        <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">PRODUCTO</th>
+                        <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">SKU</th>
+                        <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">CANT</th>
+                        <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">EMPRESA</th>
+                        <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">Venta</th>
+                        <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">HORA DE ASIGNACION</th>
+                        <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">HORA INICIO</th>
+                        <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">HORA FIN</th>
+                        <th scope="col" className="px-4 py-2 text-center text-xs font-medium text-starbucks-dark uppercase tracking-wider">ACCION</th>
                     </tr>
                 </thead>
-                <tbody className="bg-starbucks-white divide-y divide-gray-200">
-                    {renderPersonalScans()}
+                <tbody id="scanned-list" className="bg-starbucks-white divide-y divide-gray-200">
+                    {renderPendingRecords()}
                 </tbody>
             </table>
         </div>
@@ -1630,15 +1355,10 @@ export default function Home() {
                         </div>
                     </div>
 
-                    <div className="flex flex-col md:hidden space-y-8">
+                    <div className="flex flex-col space-y-8">
                       {RegistrosPendientesSection}
-                      {PersonalAsignadoSection}
                     </div>
 
-                    <div className="hidden md:flex md:flex-col md:space-y-8">
-                       {PersonalAsignadoSection}
-                       {RegistrosPendientesSection}
-                    </div>
                 </div>
             </div>
 
@@ -1677,5 +1397,3 @@ export default function Home() {
     </>
   );
 }
-
-    
