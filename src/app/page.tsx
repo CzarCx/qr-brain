@@ -678,8 +678,8 @@ export default function Home() {
     setScannerActive(true);
     if(selectedScannerMode === 'camara') {
       showAppMessage('Cámara activada. Apunta al código.', 'info');
-      if (isMobile && readerRef.current) {
-        readerRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      if (isMobile && scannerSectionRef.current) {
+        scannerSectionRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }
     } else {
       physicalScannerInputRef.current?.focus();
@@ -1213,7 +1213,7 @@ export default function Home() {
                 )}
 
                 <div className="grid md:grid-cols-2 gap-4">
-                    <div className="flex flex-col-reverse md:flex-col">
+                    <div className="flex flex-col">
                         <div className="space-y-4">
                              <div>
                                 <label htmlFor="encargado" className="block text-sm font-bold text-starbucks-dark mb-1">Nombre del Encargado:</label>
