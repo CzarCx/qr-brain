@@ -122,6 +122,8 @@ export default function Home() {
   const html5QrCodeRef = useRef<Html5Qrcode | null>(null);
   const physicalScannerInputRef = useRef<HTMLInputElement | null>(null);
   const readerRef = useRef<HTMLDivElement | null>(null);
+  const scannerSectionRef = useRef<HTMLDivElement | null>(null);
+
 
   // Refs para valores que no necesitan re-renderizar el componente
   const lastScanTimeRef = useRef(Date.now());
@@ -154,6 +156,12 @@ export default function Home() {
     };
     checkDbConnections();
   }, []);
+  
+  useEffect(() => {
+    if (isMobile && encargado && scannerSectionRef.current) {
+      scannerSectionRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, [encargado, isMobile]);
 
   useEffect(() => {
     const fetchPersonal = async () => {
@@ -1259,10 +1267,13 @@ export default function Home() {
                                 </div>
                             </div>
                         </div>
+                        <div className="md:hidden mt-4">
+                            {RegistrosPendientesSection}
+                        </div>
                     </div>
                     
-                    <div className="bg-starbucks-cream p-4 rounded-lg flex flex-col">
-                        <div className="scanner-container relative w-full h-64 md:h-full flex-grow">
+                     <div ref={scannerSectionRef} className="bg-starbucks-cream p-4 rounded-lg flex flex-col md:h-full">
+                        <div className="scanner-container relative w-full flex-grow h-64 md:h-auto">
                             <div id="reader" ref={readerRef} className="w-full h-full" style={{ display: selectedScannerMode === 'camara' && scannerActive ? 'block' : 'none' }}></div>
                             {scannerActive && selectedScannerMode === 'camara' && <div id="laser-line"></div>}
                             <input type="text" id="physical-scanner-input" ref={physicalScannerInputRef} className="hidden-input" autoComplete="off" />
@@ -1357,7 +1368,7 @@ export default function Home() {
                         </div>
                     </div>
 
-                    <div className="flex flex-col space-y-8">
+                    <div className="hidden md:block">
                       {RegistrosPendientesSection}
                     </div>
 
