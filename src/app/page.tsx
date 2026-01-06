@@ -667,6 +667,9 @@ export default function Home() {
     setScannerActive(true);
     if(selectedScannerMode === 'camara') {
       showAppMessage('Cámara activada. Apunta al código.', 'info');
+      if (isMobile && readerRef.current) {
+        readerRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
     } else {
       physicalScannerInputRef.current?.focus();
       showAppMessage('Escáner físico activo. Escanea códigos.', 'info');
@@ -1275,6 +1278,168 @@ export default function Home() {
 };
 
 
+  const RegistrosPendientesSection = (
+    <div>
+        <div className="flex flex-wrap justify-between items-center mb-2 gap-2">
+            <h2 className="text-lg font-bold text-starbucks-dark">Registros Pendientes</h2>
+            <div className="flex flex-wrap gap-2">
+                <button id="export-csv" onClick={exportCsv} className="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg shadow-sm text-xs transition-colors duration-200">1. Exportar</button>
+                <button id="ingresar-datos" onClick={ingresarDatos} disabled={!ingresarDatosEnabled} className="flex items-center gap-1 px-3 py-1.5 bg-purple-600 text-white font-semibold rounded-lg shadow-sm text-xs transition-colors duration-200 disabled:bg-gray-400">2. Ingresar</button>
+                <button id="clear-data" onClick={() => { if(window.confirm('¿Estás seguro?')) clearSessionData() }} className="px-3 py-1.5 bg-yellow-500 hover:bg-yellow-600 text-white font-semibold rounded-lg shadow-sm text-xs transition-colors duration-200">Limpiar</button>
+            </div>
+        </div>
+
+        <div className="p-4 bg-starbucks-cream rounded-lg mt-4 space-y-2 md:flex md:items-center md:gap-4 md:space-y-0">
+            <label className="block text-sm font-bold text-starbucks-dark flex-shrink-0">Asociar Pendientes a:</label>
+            <div className="flex-grow">
+                <Combobox
+                    options={personalList.map(p => ({ value: p.name, label: p.name }))}
+                    value={selectedPersonal}
+                    onValueChange={setSelectedPersonal}
+                    placeholder="Selecciona o busca personal..."
+                    emptyMessage="No se encontró personal."
+                    buttonClassName="bg-transparent border-input"
+                />
+            </div>
+            <div className="flex gap-2 flex-wrap">
+                <Button onClick={handleManualAssociate} disabled={isAssociationDisabled} className="bg-starbucks-accent hover:bg-starbucks-green text-white w-full sm:w-auto">
+                    <UserPlus className="mr-2 h-4 w-4" /> Asociar
+                </Button>
+                  <Button onClick={handleProduccionProgramada} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg shadow-sm text-sm transition-colors duration-200 w-full sm:w-auto" disabled={loading || isAssociationDisabled}>
+                    Producción Programada
+                  </Button>
+            </div>
+        </div>
+          {isAssociationDisabled && (
+            <p className="text-xs text-red-600 mt-2">Completa todos los campos de "Tiempo Estimado" para poder asociar.</p>
+        )}
+        
+
+        {totalEstimatedTime > 0 && (
+            <div className="mt-4 p-3 bg-blue-100 border border-blue-300 rounded-lg text-center">
+                <p className="font-semibold text-blue-800 flex items-center justify-center gap-2">
+                    <Clock className="h-5 w-5"/>
+                    Tiempo Total Asignado: <span className="font-bold">{formatTotalTime(totalEstimatedTime)}</span>
+                </p>
+            </div>
+        )}
+
+        <div className="table-container border border-gray-200 rounded-lg mt-4">
+            <table className="w-full min-w-full divide-y divide-gray-200">
+                <thead className="bg-starbucks-cream sticky top-0 z-10">
+                    <tr>
+                        <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">CODIGO</th>
+                        <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">TIEMPO ESTIMADO</th>
+                        <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">PRODUCTO</th>
+                        <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">SKU</th>
+                        <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">CANT</th>
+                        <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">EMPRESA</th>
+                        <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">Venta</th>
+                        <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">HORA DE ASIGNACION</th>
+                        <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">HORA INICIO</th>
+                        <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">HORA FIN</th>
+                        <th scope="col" className="px-4 py-2 text-center text-xs font-medium text-starbucks-dark uppercase tracking-wider">ACCION</th>
+                    </tr>
+                </thead>
+                <tbody id="scanned-list" className="bg-starbucks-white divide-y divide-gray-200">
+                    {renderPendingRecords()}
+                </tbody>
+            </table>
+        </div>
+    </div>
+  );
+
+  const PersonalAsignadoSection = (
+     <div>
+        <div className="flex flex-wrap justify-between items-center mb-2 gap-4">
+            <h2 className="text-lg font-bold text-starbucks-dark">Personal Asignado</h2>
+            <div className="flex gap-2 items-center">
+                <Dialog open={isCargarModalOpen} onOpenChange={setIsCargarModalOpen}>
+                    <DialogTrigger asChild>
+                        <Button onClick={handleOpenCargarModal} className="px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white font-semibold rounded-lg shadow-sm text-sm transition-colors duration-200" disabled={loading}>
+                            Cargar
+                        </Button>
+                    </DialogTrigger>
+                    <DialogContent>
+                        <DialogHeader>
+                            <DialogTitle>Cargar Producción Programada</DialogTitle>
+                            <DialogDescription>
+                                Selecciona el personal del cual quieres cargar la producción que fue previamente programada.
+                            </DialogDescription>
+                        </DialogHeader>
+                        {loadingProgramadosPersonal ? <p>Cargando personal...</p> :
+                            <Select onValueChange={setSelectedPersonalParaCargar} value={selectedPersonalParaCargar}>
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Selecciona una persona" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {programadosPersonalList.map((p) => (
+                                        <SelectItem key={p.name} value={p.name}>{p.name}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        }
+                        <DialogFooter>
+                            <Button onClick={handleCargarProgramada} disabled={loading || !selectedPersonalParaCargar}>
+                                {loading ? 'Cargando...' : 'Cargar Producción'}
+                            </Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
+                <Button onClick={handleSavePersonal} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-sm text-sm transition-colors duration-200" disabled={loading}>
+                    Guardar
+                </Button>
+                <Button onClick={handleClearPersonalAsignado} variant="destructive" className="px-4 py-2 font-semibold rounded-lg shadow-sm text-sm transition-colors duration-200" disabled={loading}>
+                    Limpiar
+                </Button>
+            </div>
+        </div>
+
+          <div className="p-4 bg-gray-100 rounded-lg mb-4 space-y-2 md:space-y-0 md:flex md:items-center md:justify-between md:gap-4">
+            <label className="block text-sm font-bold text-starbucks-dark">Cambiar todos a:</label>
+            <div className="flex-grow md:max-w-xs">
+                <Combobox
+                    options={personalList.map(p => ({ value: p.name, label: p.name }))}
+                    value={selectedBulkPersonal}
+                    onValueChange={setSelectedBulkPersonal}
+                    placeholder="Selecciona personal..."
+                    emptyMessage="No se encontró personal."
+                    buttonClassName="bg-transparent border-input hover:bg-gray-100"
+                />
+            </div>
+            <Button onClick={handleBulkPersonalChange} disabled={!selectedBulkPersonal || personalScans.length === 0} className="w-full md:w-auto bg-teal-600 hover:bg-teal-700 text-white">
+                Cambiar Todos
+            </Button>
+        </div>
+        
+        {totalPersonalEstimatedTime > 0 && (
+            <div className="mb-4 p-3 bg-blue-100 border border-blue-300 rounded-lg text-center">
+                <p className="font-semibold text-blue-800 flex items-center justify-center gap-2">
+                    <Clock className="h-5 w-5"/>
+                    Tiempo Total Asignado: <span className="font-bold">{formatTotalTime(totalPersonalEstimatedTime)}</span>
+                </p>
+            </div>
+        )}
+        <div className="table-container border border-gray-200 rounded-lg">
+            <table className="w-full min-w-full divide-y divide-gray-200">
+                <thead className="bg-starbucks-cream sticky top-0 z-10">
+                    <tr>
+                        <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">Codigo</th>
+                        <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">Personal</th>
+                        <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">Producto</th>
+                        <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">Hora Inicio</th>
+                        <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">Hora Fin</th>
+                    </tr>
+                </thead>
+                <tbody className="bg-starbucks-white divide-y divide-gray-200">
+                    {renderPersonalScans()}
+                </tbody>
+            </table>
+        </div>
+    </div>
+  );
+
+
   return (
     <>
         <Head>
@@ -1458,161 +1623,14 @@ export default function Home() {
                         </div>
                     </div>
 
-                    <div>
-                        <div className="flex flex-wrap justify-between items-center mb-2 gap-4">
-                           <h2 className="text-lg font-bold text-starbucks-dark">Personal Asignado</h2>
-                            <div className="flex gap-2 items-center">
-                                <Dialog open={isCargarModalOpen} onOpenChange={setIsCargarModalOpen}>
-                                    <DialogTrigger asChild>
-                                        <Button onClick={handleOpenCargarModal} className="px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white font-semibold rounded-lg shadow-sm text-sm transition-colors duration-200" disabled={loading}>
-                                            Cargar
-                                        </Button>
-                                    </DialogTrigger>
-                                    <DialogContent>
-                                        <DialogHeader>
-                                            <DialogTitle>Cargar Producción Programada</DialogTitle>
-                                            <DialogDescription>
-                                                Selecciona el personal del cual quieres cargar la producción que fue previamente programada.
-                                            </DialogDescription>
-                                        </DialogHeader>
-                                        {loadingProgramadosPersonal ? <p>Cargando personal...</p> :
-                                            <Select onValueChange={setSelectedPersonalParaCargar} value={selectedPersonalParaCargar}>
-                                                <SelectTrigger>
-                                                    <SelectValue placeholder="Selecciona una persona" />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    {programadosPersonalList.map((p) => (
-                                                        <SelectItem key={p.name} value={p.name}>{p.name}</SelectItem>
-                                                    ))}
-                                                </SelectContent>
-                                            </Select>
-                                        }
-                                        <DialogFooter>
-                                            <Button onClick={handleCargarProgramada} disabled={loading || !selectedPersonalParaCargar}>
-                                                {loading ? 'Cargando...' : 'Cargar Producción'}
-                                            </Button>
-                                        </DialogFooter>
-                                    </DialogContent>
-                                </Dialog>
-                                <Button onClick={handleSavePersonal} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-sm text-sm transition-colors duration-200" disabled={loading}>
-                                    Guardar
-                                </Button>
-                                <Button onClick={handleClearPersonalAsignado} variant="destructive" className="px-4 py-2 font-semibold rounded-lg shadow-sm text-sm transition-colors duration-200" disabled={loading}>
-                                    Limpiar
-                                </Button>
-                            </div>
-                        </div>
-
-                         <div className="p-4 bg-gray-100 rounded-lg mb-4 space-y-2 md:space-y-0 md:flex md:items-center md:justify-between md:gap-4">
-                            <label className="block text-sm font-bold text-starbucks-dark">Cambiar todos a:</label>
-                            <div className="flex-grow md:max-w-xs">
-                                <Combobox
-                                    options={personalList.map(p => ({ value: p.name, label: p.name }))}
-                                    value={selectedBulkPersonal}
-                                    onValueChange={setSelectedBulkPersonal}
-                                    placeholder="Selecciona personal..."
-                                    emptyMessage="No se encontró personal."
-                                    buttonClassName="bg-transparent border-input hover:bg-gray-100"
-                                />
-                            </div>
-                            <Button onClick={handleBulkPersonalChange} disabled={!selectedBulkPersonal || personalScans.length === 0} className="w-full md:w-auto bg-teal-600 hover:bg-teal-700 text-white">
-                                Cambiar Todos
-                            </Button>
-                        </div>
-                        
-                        {totalPersonalEstimatedTime > 0 && (
-                            <div className="mb-4 p-3 bg-blue-100 border border-blue-300 rounded-lg text-center">
-                                <p className="font-semibold text-blue-800 flex items-center justify-center gap-2">
-                                    <Clock className="h-5 w-5"/>
-                                    Tiempo Total Asignado: <span className="font-bold">{formatTotalTime(totalPersonalEstimatedTime)}</span>
-                                </p>
-                            </div>
-                        )}
-                        <div className="table-container border border-gray-200 rounded-lg">
-                            <table className="w-full min-w-full divide-y divide-gray-200">
-                                <thead className="bg-starbucks-cream sticky top-0 z-10">
-                                    <tr>
-                                        <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">Codigo</th>
-                                        <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">Personal</th>
-                                        <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">Producto</th>
-                                        <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">Hora Inicio</th>
-                                        <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">Hora Fin</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="bg-starbucks-white divide-y divide-gray-200">
-                                    {renderPersonalScans()}
-                                </tbody>
-                            </table>
-                        </div>
+                    <div className="flex flex-col md:hidden space-y-8">
+                      {RegistrosPendientesSection}
+                      {PersonalAsignadoSection}
                     </div>
 
-                    <div>
-                        <div className="flex flex-wrap justify-between items-center mb-2 gap-2">
-                            <h2 className="text-lg font-bold text-starbucks-dark">Registros Pendientes</h2>
-                            <div className="flex flex-wrap gap-2">
-                                <button id="export-csv" onClick={exportCsv} className="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg shadow-sm text-xs transition-colors duration-200">1. Exportar</button>
-                                <button id="ingresar-datos" onClick={ingresarDatos} disabled={!ingresarDatosEnabled} className="flex items-center gap-1 px-3 py-1.5 bg-purple-600 text-white font-semibold rounded-lg shadow-sm text-xs transition-colors duration-200 disabled:bg-gray-400">2. Ingresar</button>
-                                <button id="clear-data" onClick={() => { if(window.confirm('¿Estás seguro?')) clearSessionData() }} className="px-3 py-1.5 bg-yellow-500 hover:bg-yellow-600 text-white font-semibold rounded-lg shadow-sm text-xs transition-colors duration-200">Limpiar</button>
-                            </div>
-                        </div>
-
-                        <div className="p-4 bg-starbucks-cream rounded-lg mt-4 space-y-2 md:flex md:items-center md:gap-4 md:space-y-0">
-                            <label className="block text-sm font-bold text-starbucks-dark flex-shrink-0">Asociar Pendientes a:</label>
-                            <div className="flex-grow">
-                                <Combobox
-                                    options={personalList.map(p => ({ value: p.name, label: p.name }))}
-                                    value={selectedPersonal}
-                                    onValueChange={setSelectedPersonal}
-                                    placeholder="Selecciona o busca personal..."
-                                    emptyMessage="No se encontró personal."
-                                    buttonClassName="bg-transparent border-input"
-                                />
-                            </div>
-                            <div className="flex gap-2 flex-wrap">
-                                <Button onClick={handleManualAssociate} disabled={isAssociationDisabled} className="bg-starbucks-accent hover:bg-starbucks-green text-white w-full sm:w-auto">
-                                    <UserPlus className="mr-2 h-4 w-4" /> Asociar
-                                </Button>
-                                 <Button onClick={handleProduccionProgramada} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg shadow-sm text-sm transition-colors duration-200 w-full sm:w-auto" disabled={loading || isAssociationDisabled}>
-                                    Producción Programada
-                                 </Button>
-                            </div>
-                        </div>
-                         {isAssociationDisabled && (
-                            <p className="text-xs text-red-600 mt-2">Completa todos los campos de "Tiempo Estimado" para poder asociar.</p>
-                        )}
-                        
-
-                        {totalEstimatedTime > 0 && (
-                            <div className="mt-4 p-3 bg-blue-100 border border-blue-300 rounded-lg text-center">
-                                <p className="font-semibold text-blue-800 flex items-center justify-center gap-2">
-                                    <Clock className="h-5 w-5"/>
-                                    Tiempo Total Asignado: <span className="font-bold">{formatTotalTime(totalEstimatedTime)}</span>
-                                </p>
-                            </div>
-                        )}
-
-                        <div className="table-container border border-gray-200 rounded-lg mt-4">
-                            <table className="w-full min-w-full divide-y divide-gray-200">
-                                <thead className="bg-starbucks-cream sticky top-0 z-10">
-                                    <tr>
-                                        <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">CODIGO</th>
-                                        <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">TIEMPO ESTIMADO</th>
-                                        <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">PRODUCTO</th>
-                                        <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">SKU</th>
-                                        <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">CANT</th>
-                                        <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">EMPRESA</th>
-                                        <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">Venta</th>
-                                        <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">HORA DE ASIGNACION</th>
-                                        <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">HORA INICIO</th>
-                                        <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">HORA FIN</th>
-                                        <th scope="col" className="px-4 py-2 text-center text-xs font-medium text-starbucks-dark uppercase tracking-wider">ACCION</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="scanned-list" className="bg-starbucks-white divide-y divide-gray-200">
-                                    {renderPendingRecords()}
-                                </tbody>
-                            </table>
-                        </div>
+                    <div className="hidden md:flex md:flex-col md:space-y-8">
+                       {PersonalAsignadoSection}
+                       {RegistrosPendientesSection}
                     </div>
                 </div>
             </div>
