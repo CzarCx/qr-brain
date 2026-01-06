@@ -1079,7 +1079,7 @@ export default function Home() {
   };
 
   const RegistrosPendientesSection = (
-    <div>
+    <div className="w-full">
         <div className="flex flex-wrap justify-between items-center mb-2 gap-2">
             <h2 className="text-lg font-bold text-starbucks-dark">Registros Pendientes</h2>
              <div className="flex flex-wrap gap-2">
@@ -1212,68 +1212,70 @@ export default function Home() {
                     </Alert>
                 )}
 
-                <div className="grid md:grid-cols-2 gap-4">
-                    <div className="flex flex-col">
-                        <div className="space-y-4">
-                             <div>
-                                <label htmlFor="encargado" className="block text-sm font-bold text-starbucks-dark mb-1">Nombre del Encargado:</label>
-                                <Select onValueChange={setEncargado} value={encargado} disabled={scannerActive}>
-                                    <SelectTrigger className="bg-transparent hover:bg-gray-50 border border-input">
-                                        <SelectValue placeholder="Selecciona un encargado" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {encargadosList.map((enc) => (
-                                            <SelectItem key={enc.name} value={enc.name}>
-                                                {enc.name}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Columna Izquierda: Controles */}
+                    <div className="space-y-4">
+                         <div>
+                            <label htmlFor="encargado" className="block text-sm font-bold text-starbucks-dark mb-1">Nombre del Encargado:</label>
+                            <Select onValueChange={setEncargado} value={encargado} disabled={scannerActive}>
+                                <SelectTrigger className="bg-transparent hover:bg-gray-50 border border-input">
+                                    <SelectValue placeholder="Selecciona un encargado" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {encargadosList.map((enc) => (
+                                        <SelectItem key={enc.name} value={enc.name}>
+                                            {enc.name}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        
+                        <div className="p-4 bg-gray-100 rounded-lg space-y-3">
+                            <label htmlFor="verify-code-input" className="block text-sm font-bold text-starbucks-dark">Verificar Código</label>
+                            <div className="flex items-center gap-2">
+                                <Input
+                                    id="verify-code-input"
+                                    type="text"
+                                    value={verificationCode}
+                                    onChange={(e) => setVerificationCode(e.target.value)}
+                                    placeholder="Ingresa código a verificar"
+                                    className="bg-white"
+                                    disabled={isVerifying}
+                                />
+                                <Button onClick={handleVerifyCode} disabled={isVerifying || !verificationCode} className="bg-blue-600 hover:bg-blue-700">
+                                    {isVerifying ? (
+                                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                                    ) : (
+                                        <Search className="h-4 w-4" />
+                                    )}
+                                    <span className="ml-2 hidden sm:inline">Verificar</span>
+                                </Button>
                             </div>
-                            
-                            <div className="p-4 bg-gray-100 rounded-lg space-y-3">
-                                <label htmlFor="verify-code-input" className="block text-sm font-bold text-starbucks-dark">Verificar Código</label>
-                                <div className="flex items-center gap-2">
-                                    <Input
-                                        id="verify-code-input"
-                                        type="text"
-                                        value={verificationCode}
-                                        onChange={(e) => setVerificationCode(e.target.value)}
-                                        placeholder="Ingresa código a verificar"
-                                        className="bg-white"
-                                        disabled={isVerifying}
-                                    />
-                                    <Button onClick={handleVerifyCode} disabled={isVerifying || !verificationCode} className="bg-blue-600 hover:bg-blue-700">
-                                        {isVerifying ? (
-                                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                                        ) : (
-                                            <Search className="h-4 w-4" />
-                                        )}
-                                        <span className="ml-2">Verificar</span>
-                                    </Button>
-                                </div>
-                                {verificationResult && (
-                                    <Alert variant={verificationResult.includes('Inválido') ? 'destructive' : 'default'} className="mt-2 text-sm">
-                                        <AlertDescription>{verificationResult}</AlertDescription>
-                                    </Alert>
-                                )}
-                            </div>
+                            {verificationResult && (
+                                <Alert variant={verificationResult.includes('Inválido') ? 'destructive' : 'default'} className="mt-2 text-sm">
+                                    <AlertDescription>{verificationResult}</AlertDescription>
+                                </Alert>
+                            )}
+                        </div>
 
-                            <div>
-                                <label className="block text-sm font-bold text-starbucks-dark mb-1">Método de Escaneo:</label>
-                                <div className="grid grid-cols-2 gap-2">
-                                    <button onClick={() => setSelectedScannerMode('camara')} className={`area-btn w-full px-4 py-3 text-sm rounded-md shadow-sm focus:outline-none ${selectedScannerMode === 'camara' ? 'scanner-mode-selected' : ''}`} disabled={scannerActive}>CÁMARA</button>
-                                    <button onClick={() => setSelectedScannerMode('fisico')} className={`area-btn w-full px-4 py-3 text-sm rounded-md shadow-sm focus:outline-none ${selectedScannerMode === 'fisico' ? 'scanner-mode-selected' : ''}`} disabled={scannerActive}>ESCÁNER FÍSICO</button>
-                                </div>
+                        <div>
+                            <label className="block text-sm font-bold text-starbucks-dark mb-1">Método de Escaneo:</label>
+                            <div className="grid grid-cols-2 gap-2">
+                                <button onClick={() => setSelectedScannerMode('camara')} className={`area-btn w-full px-4 py-3 text-sm rounded-md shadow-sm focus:outline-none ${selectedScannerMode === 'camara' ? 'scanner-mode-selected' : ''}`} disabled={scannerActive}>CÁMARA</button>
+                                <button onClick={() => setSelectedScannerMode('fisico')} className={`area-btn w-full px-4 py-3 text-sm rounded-md shadow-sm focus:outline-none ${selectedScannerMode === 'fisico' ? 'scanner-mode-selected' : ''}`} disabled={scannerActive}>ESCÁNER FÍSICO</button>
                             </div>
                         </div>
-                        <div className="md:hidden mt-4">
-                            {RegistrosPendientesSection}
+
+                        {/* Contenedor de Registros para Móvil */}
+                        <div className="md:hidden">
+                          {RegistrosPendientesSection}
                         </div>
                     </div>
                     
-                     <div ref={scannerSectionRef} className="bg-starbucks-cream p-4 rounded-lg flex flex-col md:h-full">
-                        <div className="scanner-container relative w-full flex-grow h-64 md:h-auto">
+                    {/* Columna Derecha: Escáner */}
+                     <div ref={scannerSectionRef} className="bg-starbucks-cream p-4 rounded-lg flex flex-col justify-between">
+                        <div className="scanner-container relative w-full flex-grow min-h-[250px] md:min-h-0">
                             <div id="reader" ref={readerRef} className="w-full h-full" style={{ display: selectedScannerMode === 'camara' && scannerActive ? 'block' : 'none' }}></div>
                             {scannerActive && selectedScannerMode === 'camara' && <div id="laser-line"></div>}
                             <input type="text" id="physical-scanner-input" ref={physicalScannerInputRef} className="hidden-input" autoComplete="off" />
@@ -1367,7 +1369,7 @@ export default function Home() {
                             </Button>
                         </div>
                     </div>
-
+                    {/* Contenedor de Registros para Escritorio */}
                     <div className="hidden md:block">
                       {RegistrosPendientesSection}
                     </div>
@@ -1410,3 +1412,5 @@ export default function Home() {
     </>
   );
 }
+
+    
