@@ -16,7 +16,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Zap, ZoomIn, UserPlus, PlusCircle, Clock, AlertTriangle, Wifi, WifiOff, Search, XCircle, CheckCircle } from 'lucide-react';
+import { Zap, ZoomIn, UserPlus, PlusCircle, Clock, AlertTriangle, Wifi, WifiOff, Search, XCircle, CheckCircle, Trash2 } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Combobox } from '@/components/ui/combobox';
 import {
@@ -1110,7 +1110,9 @@ export default function Home() {
             <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{horaInicioStr}</td>
             <td className="px-4 py-3 whitespace-nowrap text-sm">{horaFinStr}</td>
             <td className="px-4 py-3 whitespace-nowrap text-sm text-center">
-                <button className="delete-btn text-red-500 hover:text-red-700 font-semibold text-xs" onClick={() => deleteRow(data.code)}>Borrar</button>
+                <Button variant="ghost" size="icon" onClick={() => deleteRow(data.code)} className="text-red-500 hover:text-red-700 h-8 w-8">
+                    <Trash2 className="h-4 w-4" />
+                </Button>
             </td>
         </tr>
       );
