@@ -1065,7 +1065,10 @@ export default function Home() {
     const sortedData = [...scannedData].sort((a, b) => new Date(`1970/01/01 ${a.hora}`).valueOf() - new Date(`1970/01/01 ${b.hora}`).valueOf());
     let lastFinishTime: Date | null = null;
     
-    return sortedData.map((data: ScannedItem, index: number) => {
+    // Failsafe to ensure no duplicates are rendered
+    const uniqueData = Array.from(new Map(sortedData.map(item => [item.code, item])).values());
+
+    return uniqueData.map((data: ScannedItem, index: number) => {
         let startTime: Date;
         if (index === 0) {
             startTime = currentTime;
@@ -1471,5 +1474,3 @@ export default function Home() {
     </>
   );
 }
-
-    
