@@ -664,7 +664,6 @@ const handleMassQualify = async () => {
               </div>
           </div>
 
-
           <div id="result-container" className="space-y-4">
             <div className={`p-3 rounded-lg text-center font-semibold text-base transition-all duration-300 ${!lastScannedResult && massScannedCodes.length === 0 ? 'bg-gray-100 text-gray-800' : lastScannedResult?.found ? 'bg-green-100 border-green-400 text-green-700' : 'bg-yellow-100 border-yellow-400 text-yellow-700'}`}>
               {message}
