@@ -625,6 +625,19 @@ export default function Home() {
   }, [zoom, isFlashOn, isMobile]);
   
   useEffect(() => {
+    if (isMobile && scannerActive && selectedScannerMode === 'camara' && html5QrCodeRef.current?.getState() === Html5QrcodeScannerState.SCANNING) {
+      const videoElement = document.getElementById('reader')?.querySelector('video');
+      if (videoElement && videoElement.srcObject) {
+        const stream = videoElement.srcObject as MediaStream;
+        const track = stream.getVideoTracks()[0];
+        if (track) {
+          applyCameraConstraints(track);
+        }
+      }
+    }
+  }, [zoom, isFlashOn, scannerActive, selectedScannerMode, isMobile, applyCameraConstraints]);
+  
+  useEffect(() => {
     if (!isMounted || !readerRef.current) return;
 
     if (!html5QrCodeRef.current) {
@@ -657,6 +670,17 @@ export default function Home() {
           experimentalFeatures: { useBarCodeDetectorIfSupported: true },
         };
         qrCode.start({ facingMode: "environment" }, config, onScanSuccess, (errorMessage) => {})
+        .then(() => {
+            if (isMobile) {
+              const videoElement = document.getElementById('reader')?.querySelector('video');
+              const stream = videoElement?.srcObject as MediaStream;
+              const track = stream?.getVideoTracks()[0];
+              if (track) {
+                const capabilities = track.getCapabilities();
+                setCameraCapabilities(capabilities);
+              }
+            }
+        })
         .catch(err => {
             console.error("Error al iniciar la cámara:", err);
             if (String(err).includes('Cannot transition to a new state')) {
