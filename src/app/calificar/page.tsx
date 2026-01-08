@@ -3,7 +3,7 @@
 import {useEffect, useRef, useState, useCallback} from 'react';
 import Head from 'next/head';
 import { Html5Qrcode, Html5QrcodeScannerState } from 'html5-qrcode';
-import { supabase } from '@/lib/supabaseClient';
+import { supabase, supabaseEtiquetas } from '@/lib/supabaseClient';
 import {
   Dialog,
   DialogContent,
@@ -155,29 +155,29 @@ export default function CalificarPage() {
     
 
     try {
-        const { data, error } = await supabase
+        const { data: personalData, error: personalError } = await supabase
             .from('personal')
             .select('name, product, status, details')
             .eq('code', finalCode)
             .single();
 
-        if (error && error.code !== 'PGRST116') { // PGRST116 means no rows found
-            throw error;
+        if (personalError && personalError.code !== 'PGRST116') { // PGRST116 means no rows found
+            throw personalError;
         }
 
-        if (data) {
+        if (personalData) {
             playBeep();
             const result: ScanResult = {
-                name: data.name,
-                product: data.product,
+                name: personalData.name,
+                product: personalData.product,
                 code: finalCode,
                 found: true,
-                status: data.status,
-                details: data.details,
+                status: personalData.status,
+                details: personalData.details,
             };
 
-            if (data.status === 'CALIFICADO') {
-                setMessage(`Etiqueta ya procesada (Estado: ${data.status}).`);
+            if (personalData.status === 'CALIFICADO') {
+                setMessage(`Etiqueta ya procesada (Estado: ${personalData.status}).`);
                 setLastScannedResult(result);
             } else {
                  if (scanMode === 'individual') {
@@ -185,7 +185,7 @@ export default function CalificarPage() {
                     setMessage('Etiqueta confirmada correctamente.');
                     setIsRatingModalOpen(true);
                 } else { // Mass scanning mode
-                    if (data.status === 'REPORTADO') {
+                    if (personalData.status === 'REPORTADO') {
                        setMessage(`Añadido (Reportado): ${finalCode}`);
                     } else {
                        setMessage(`Añadido a la lista: ${finalCode}`);
@@ -195,17 +195,68 @@ export default function CalificarPage() {
                 }
             }
         } else {
-            playWarningSound();
-            const result: ScanResult = {
-                name: null,
-                product: null,
-                code: finalCode,
-                found: false,
-            };
-            setLastScannedResult(result);
-            setMessage('Esta etiqueta todavía no ha sido asignada.');
+            // Not in 'personal' table, check 'etiquetas_i'
+            const { data: etiquetaData, error: etiquetaError } = await supabaseEtiquetas
+                .from('etiquetas_i')
+                .select('code, sku, product, quantity, organization, sales_num')
+                .eq('code', finalCode)
+                .single();
+
+            if (etiquetaError && etiquetaError.code !== 'PGRST116') {
+                throw etiquetaError;
+            }
+
+            if (etiquetaData) {
+                // Found in 'etiquetas_i', so create a new 'personal' record with status CALIFICADO
+                const qualificationTimestamp = new Date().toISOString();
+                const newPersonalRecord = {
+                    code: etiquetaData.code,
+                    name: 'N/A', // No hay personal asignado aún
+                    name_inc: encargado || 'N/A',
+                    sku: etiquetaData.sku,
+                    product: etiquetaData.product,
+                    quantity: etiquetaData.quantity,
+                    organization: etiquetaData.organization,
+                    sales_num: etiquetaData.sales_num,
+                    status: 'CALIFICADO',
+                    date: qualificationTimestamp,
+                    date_cal: qualificationTimestamp,
+                };
+
+                const { error: insertError } = await supabase
+                    .from('personal')
+                    .insert(newPersonalRecord);
+
+                if (insertError) {
+                    throw insertError;
+                }
+                
+                playBeep();
+                const result: ScanResult = {
+                    name: newPersonalRecord.name,
+                    product: newPersonalRecord.product,
+                    code: finalCode,
+                    found: true,
+                    status: 'CALIFICADO'
+                };
+                setLastScannedResult(result);
+                setMessage('Etiqueta no asignada, calificada automáticamente.');
+
+            } else {
+                // Not found in either table
+                playWarningSound();
+                const result: ScanResult = {
+                    name: null,
+                    product: null,
+                    code: finalCode,
+                    found: false,
+                };
+                setLastScannedResult(result);
+                setMessage('Esta etiqueta no existe en el sistema.');
+            }
         }
     } catch (e: any) {
+        playWarningSound();
         const result: ScanResult = {
             name: null,
             product: null,
@@ -218,7 +269,7 @@ export default function CalificarPage() {
     } finally {
         setLoading(false);
     }
-  }, [loading, scanMode]);
+  }, [loading, scanMode, encargado]);
   
     useEffect(() => {
         const handlePhysicalScannerInput = (event: KeyboardEvent) => {
@@ -714,5 +765,3 @@ const handleMassQualify = async () => {
     </>
   );
 }
-
-    
