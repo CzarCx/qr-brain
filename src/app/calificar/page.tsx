@@ -14,6 +14,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
+import { Input } from '@/components/ui/input';
 import {
   Select,
   SelectContent,
@@ -32,7 +33,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertTriangle, Trash2, Zap, ZoomIn } from 'lucide-react';
+import { AlertTriangle, Trash2, Zap, ZoomIn, PlusCircle } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
 
 
@@ -510,6 +511,23 @@ const handleMassQualify = async () => {
     }
   }, [isRatingModalOpen, showReportSelect, reportReasons.length]);
 
+  const handleManualAdd = async () => {
+    const manualCodeInput = document.getElementById('manual-code-input-calificar') as HTMLInputElement;
+    if (!encargado.trim()) {
+      setMessage('Por favor, selecciona un encargado.');
+      return;
+    }
+
+    const manualCode = manualCodeInput.value.trim();
+    if (!manualCode) {
+      setMessage('Por favor, ingresa un código para agregar.');
+      return;
+    }
+    
+    await onScanSuccess(manualCode);
+    manualCodeInput.value = '';
+    manualCodeInput.focus();
+  };
 
   return (
     <>
@@ -624,6 +642,28 @@ const handleMassQualify = async () => {
                 Escáner físico listo.
             </div>
           </div>
+          
+           <div className="p-4 bg-starbucks-cream rounded-lg">
+              <label htmlFor="manual-code-input-calificar" className="block text-sm font-bold text-starbucks-dark mb-1">Ingreso Manual:</label>
+              <div className="relative mt-1 flex items-center rounded-lg border border-input bg-background focus-within:ring-2 focus-within:ring-ring">
+                  <Input
+                      type="text"
+                      id="manual-code-input-calificar"
+                      className="w-full border-0 bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0"
+                      placeholder="Escriba el código..."
+                      onKeyDown={(e) => e.key === 'Enter' && handleManualAdd()}
+                  />
+                  <Button
+                      type="button"
+                      onClick={handleManualAdd}
+                      size="icon"
+                      className="h-8 w-8 bg-starbucks-green hover:bg-starbucks-dark text-white rounded-md mr-1"
+                  >
+                      <PlusCircle className="h-5 w-5" />
+                  </Button>
+              </div>
+          </div>
+
 
           <div id="result-container" className="space-y-4">
             <div className={`p-3 rounded-lg text-center font-semibold text-base transition-all duration-300 ${!lastScannedResult && massScannedCodes.length === 0 ? 'bg-gray-100 text-gray-800' : lastScannedResult?.found ? 'bg-green-100 border-green-400 text-green-700' : 'bg-yellow-100 border-yellow-400 text-yellow-700'}`}>
