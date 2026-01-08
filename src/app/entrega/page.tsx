@@ -258,6 +258,17 @@ export default function Home() {
           qrbox: { width: 250, height: 250 },
         };
         qrCode.start({ facingMode: "environment" }, config, onScanSuccess, (e: any) => {})
+        .then(() => {
+            if (isMobile) {
+              const videoElement = document.getElementById('reader')?.querySelector('video');
+              const stream = videoElement?.srcObject as MediaStream;
+              const track = stream?.getVideoTracks()[0];
+              if (track) {
+                const capabilities = track.getCapabilities();
+                setCameraCapabilities(capabilities);
+              }
+            }
+        })
         .catch(err => {
             console.error("Error al iniciar camara:", err);
             if (String(err).includes('Cannot transition to a new state')) {
@@ -607,5 +618,7 @@ export default function Home() {
     </>
   );
 }
+
+    
 
     
