@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from '@/components/ui/input';
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -77,6 +78,7 @@ export default function CalificarPage() {
   const [zoom, setZoom] = useState(1);
   const isMobile = useIsMobile();
   const [dbError, setDbError] = useState<string | null>(null);
+  const [loteId, setLoteId] = useState('');
 
 
   const html5QrCodeRef = useRef<Html5Qrcode | null>(null);
@@ -458,6 +460,10 @@ const handleMassQualify = async () => {
         alert("No hay códigos en la lista para calificar.");
         return;
     }
+     if (!loteId.trim()) {
+        alert("Por favor, ingresa un identificador de lote/tanda.");
+        return;
+    }
     setLoading(true);
     try {
         const codesToUpdate = massScannedCodes.map(item => item.code);
@@ -465,16 +471,22 @@ const handleMassQualify = async () => {
 
         const { error } = await supabase
             .from('personal')
-            .update({ status: 'CALIFICADO', details: null, date_cal: qualificationTimestamp })
+            .update({ 
+                status: 'CALIFICADO', 
+                details: null, 
+                date_cal: qualificationTimestamp,
+                lote: loteId,
+             })
             .in('code', codesToUpdate);
 
         if (error) {
             throw error;
         }
 
-        alert(`Se calificaron ${massScannedCodes.length} etiquetas correctamente.`);
+        alert(`Se calificaron ${massScannedCodes.length} etiquetas correctamente con el lote ${loteId}.`);
         setMassScannedCodes([]); // Clear the list
         massScannedCodesRef.current.clear();
+        setLoteId(''); // Clear lote id
 
     } catch (e: any) {
         console.error('Error en la calificación masiva:', e);
@@ -759,6 +771,18 @@ const handleMassQualify = async () => {
              {/* Mass Scan Results */}
              {scanMode === 'masivo' && (
                 <div className="space-y-4">
+                    <div className="space-y-2">
+                         <Label htmlFor="lote-id" className="font-bold text-starbucks-dark">Lote / Tanda:</Label>
+                         <Input
+                           id="lote-id"
+                           type="text"
+                           value={loteId}
+                           onChange={(e) => setLoteId(e.target.value)}
+                           placeholder="Ingresa un identificador de lote"
+                           className="bg-transparent"
+                           disabled={loading}
+                         />
+                    </div>
                     <div className="flex flex-col sm:flex-row justify-end items-center gap-2">
                         <Button onClick={handleMassQualify} disabled={loading || massScannedCodes.length === 0} className="bg-green-600 hover:bg-green-700 w-full sm:w-auto">
                             {loading ? 'Calificando...' : 'Calificar Todos'}
