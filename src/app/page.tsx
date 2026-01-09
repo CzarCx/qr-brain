@@ -119,6 +119,8 @@ export default function Home() {
   const [showNotification, setShowNotification] = useState(false);
   const [notification, setNotification] = useState({ title: '', message: '', variant: 'default' as 'default' | 'destructive' | 'success' });
   const [scanMode, setScanMode] = useState<'assign' | 'unassign' | 'update_date'>('assign');
+  const [loadedProgData, setLoadedProgData] = useState<any[]>([]);
+  const [personToAssign, setPersonToAssign] = useState('');
 
 
   // Refs para elementos del DOM y la instancia del escáner
@@ -1019,32 +1021,9 @@ export default function Home() {
         setLoading(false);
         return;
       }
-      
-      const { error: deleteError } = await supabase
-        .from('personal_prog')
-        .delete()
-        .eq('name', selectedPersonalParaCargar);
-      
-      if (deleteError) {
-        throw new Error(`Error al limpiar 'personal_prog': ${deleteError.message}`);
-      }
-      
-      await associateNameToScans(selectedPersonalParaCargar, data.map(item => ({
-        code: item.code,
-        fecha: new Date(item.date).toLocaleDateString('es-MX'),
-        hora: new Date(item.date).toLocaleTimeString('es-MX'),
-        encargado: item.name_inc,
-        area: 'CARGA_PROGRAMADA',
-        sku: item.sku,
-        cantidad: item.quantity,
-        producto: item.product,
-        empresa: item.organization,
-        venta: item.sales_num ? String(item.sales_num) : '',
-        esti_time: item.esti_time,
-      })));
+      setLoadedProgData(data);
+      setPersonToAssign(selectedPersonalParaCargar);
 
-      setIsCargarModalOpen(false);
-      setSelectedPersonalParaCargar('');
 
     } catch (error: any) {
       console.error("Error al cargar producción programada:", error);
@@ -1053,6 +1032,51 @@ export default function Home() {
       setLoading(false);
     }
   };
+
+  const handleFinalizeAssociation = async () => {
+      if (!personToAssign || loadedProgData.length === 0) {
+          showModalNotification('Error', 'No hay datos o persona seleccionada para asociar.', 'destructive');
+          return;
+      }
+      setLoading(true);
+
+      try {
+          const { error: deleteError } = await supabase
+              .from('personal_prog')
+              .delete()
+              .eq('name', selectedPersonalParaCargar); // Use original name for deletion
+          
+          if (deleteError) {
+              throw new Error(`Error al limpiar 'personal_prog': ${deleteError.message}`);
+          }
+          
+          await associateNameToScans(personToAssign, loadedProgData.map(item => ({
+              code: item.code,
+              fecha: new Date(item.date).toLocaleDateString('es-MX'),
+              hora: new Date(item.date).toLocaleTimeString('es-MX'),
+              encargado: item.name_inc,
+              area: 'CARGA_PROGRAMADA',
+              sku: item.sku,
+              cantidad: item.quantity,
+              producto: item.product,
+              empresa: item.organization,
+              venta: item.sales_num ? String(item.sales_num) : '',
+              esti_time: item.esti_time,
+          })));
+
+          // Reset modal state
+          setIsCargarModalOpen(false);
+          setLoadedProgData([]);
+          setPersonToAssign('');
+          setSelectedPersonalParaCargar('');
+
+      } catch (error: any) {
+          showModalNotification('Error', `Error al asociar: ${error.message}`, 'destructive');
+      } finally {
+          setLoading(false);
+      }
+  };
+
 
   const handleVerifyCode = async () => {
     if (!verificationCode) {
@@ -1186,36 +1210,90 @@ export default function Home() {
         <div className="flex flex-wrap justify-between items-center mb-2 gap-2">
             <h2 className="text-lg font-bold text-starbucks-dark">Registros Pendientes</h2>
              <div className="flex flex-wrap gap-2">
-                <Dialog open={isCargarModalOpen} onOpenChange={setIsCargarModalOpen}>
+                <Dialog open={isCargarModalOpen} onOpenChange={(isOpen) => {
+                  if (!isOpen) {
+                    setLoadedProgData([]);
+                    setPersonToAssign('');
+                    setSelectedPersonalParaCargar('');
+                  }
+                  setIsCargarModalOpen(isOpen);
+                }}>
                     <DialogTrigger asChild>
                         <Button onClick={handleOpenCargarModal} className="px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white font-semibold rounded-lg shadow-sm text-sm transition-colors duration-200" disabled={loading}>
                             Cargar
                         </Button>
                     </DialogTrigger>
-                    <DialogContent>
+                    <DialogContent className="max-w-4xl">
                         <DialogHeader>
                             <DialogTitle>Cargar Producción Programada</DialogTitle>
                             <DialogDescription>
-                                Selecciona el personal del cual quieres cargar la producción que fue previamente programada.
+                                {loadedProgData.length === 0 ? 'Selecciona el personal del cual quieres cargar la producción que fue previamente programada.' : 'Revisa la producción a cargar y reasigna si es necesario.'}
                             </DialogDescription>
                         </DialogHeader>
-                        {loadingProgramadosPersonal ? <p>Cargando personal...</p> :
-                            <Select onValueChange={setSelectedPersonalParaCargar} value={selectedPersonalParaCargar}>
-                                <SelectTrigger>
-                                    <SelectValue placeholder="Selecciona una persona" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {programadosPersonalList.map((p) => (
-                                        <SelectItem key={p.name} value={p.name}>{p.name}</SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        }
-                        <DialogFooter>
-                            <Button onClick={handleCargarProgramada} disabled={loading || !selectedPersonalParaCargar}>
-                                {loading ? 'Cargando...' : 'Cargar Producción'}
-                            </Button>
-                        </DialogFooter>
+
+                        {loadedProgData.length === 0 ? (
+                          <>
+                            {loadingProgramadosPersonal ? <p>Cargando personal...</p> :
+                                <Select onValueChange={setSelectedPersonalParaCargar} value={selectedPersonalParaCargar}>
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Selecciona una persona" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {programadosPersonalList.map((p) => (
+                                            <SelectItem key={p.name} value={p.name}>{p.name}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            }
+                            <DialogFooter>
+                                <Button onClick={handleCargarProgramada} disabled={loading || !selectedPersonalParaCargar}>
+                                    {loading ? 'Cargando...' : 'Cargar Producción'}
+                                </Button>
+                            </DialogFooter>
+                          </>
+                        ) : (
+                          <div className="space-y-4">
+                              <div className="space-y-2">
+                                  <Label>Reasignar producción a:</Label>
+                                   <Combobox
+                                      options={personalList.map(p => ({ value: p.name, label: p.name }))}
+                                      value={personToAssign}
+                                      onValueChange={setPersonToAssign}
+                                      placeholder="Selecciona para reasignar..."
+                                      emptyMessage="No se encontró personal."
+                                  />
+                                  <p className="text-xs text-gray-500">Originalmente asignado a: <span className="font-semibold">{selectedPersonalParaCargar}</span></p>
+                              </div>
+
+                              <div className="max-h-64 overflow-auto border rounded-lg">
+                                  <table className="w-full text-sm">
+                                      <thead className="sticky top-0 bg-gray-100">
+                                          <tr>
+                                              <th className="px-2 py-1 text-left">Código</th>
+                                              <th className="px-2 py-1 text-left">Producto</th>
+                                              <th className="px-2 py-1 text-left">T. Est.</th>
+                                          </tr>
+                                      </thead>
+                                      <tbody>
+                                          {loadedProgData.map(item => (
+                                              <tr key={item.code} className="border-b">
+                                                  <td className="px-2 py-1 font-mono">{item.code}</td>
+                                                  <td className="px-2 py-1">{item.product}</td>
+                                                  <td className="px-2 py-1">{item.esti_time} min</td>
+                                              </tr>
+                                          ))}
+                                      </tbody>
+                                  </table>
+                              </div>
+                              
+                              <DialogFooter>
+                                <Button variant="outline" onClick={() => { setLoadedProgData([]); setPersonToAssign(''); setSelectedPersonalParaCargar(''); }}>Cancelar</Button>
+                                <Button onClick={handleFinalizeAssociation} disabled={loading || !personToAssign}>
+                                    {loading ? 'Asociando...' : 'Asociar y Guardar Producción'}
+                                </Button>
+                              </DialogFooter>
+                          </div>
+                        )}
                     </DialogContent>
                 </Dialog>
                 <button id="clear-data" onClick={() => { if(window.confirm('¿Estás seguro?')) clearSessionData() }} className="px-3 py-1.5 bg-yellow-500 hover:bg-yellow-600 text-white font-semibold rounded-lg shadow-sm text-xs transition-colors duration-200">Limpiar</button>
