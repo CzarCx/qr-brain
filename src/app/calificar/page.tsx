@@ -149,14 +149,12 @@ export default function CalificarPage() {
 
     let finalCode = String(decodedText).trim();
     
-    // Prevent duplicates in mass scanning mode
     if (scanMode === 'masivo' && massScannedCodesRef.current.has(finalCode)) {
         setMessage(`Código duplicado: ${finalCode}`);
         setLoading(false);
         return;
     }
     
-
     try {
         const { data: personalData, error: personalError } = await supabase
             .from('personal')
@@ -210,11 +208,10 @@ export default function CalificarPage() {
             }
 
             if (etiquetaData) {
-                // Found in 'etiquetas_i', so create a new 'personal' record with status CALIFICADO
                 const qualificationTimestamp = new Date().toISOString();
                 const newPersonalRecord = {
                     code: etiquetaData.code,
-                    name: 'N/A', // No hay personal asignado aún
+                    name: 'N/A',
                     name_inc: encargado || 'N/A',
                     sku: etiquetaData.sku,
                     product: etiquetaData.product,
@@ -226,13 +223,8 @@ export default function CalificarPage() {
                     date_cal: qualificationTimestamp,
                 };
 
-                const { error: insertError } = await supabase
-                    .from('personal')
-                    .insert(newPersonalRecord);
-
-                if (insertError) {
-                    throw insertError;
-                }
+                const { error: insertError } = await supabase.from('personal').insert(newPersonalRecord);
+                if (insertError) throw insertError;
                 
                 playBeep();
                 const result: ScanResult = {
@@ -242,18 +234,18 @@ export default function CalificarPage() {
                     found: true,
                     status: 'CALIFICADO'
                 };
-                setLastScannedResult(result);
-                setMessage('Etiqueta no asignada, calificada automáticamente.');
-
+                
+                if (scanMode === 'individual') {
+                    setLastScannedResult(result);
+                    setMessage('Etiqueta no asignada, calificada automáticamente.');
+                } else { // Mass mode
+                    setMessage(`Añadido (Auto-Calificado): ${finalCode}`);
+                    setMassScannedCodes(prev => [result, ...prev]);
+                    massScannedCodesRef.current.add(finalCode);
+                }
             } else {
-                // Not found in either table
                 playWarningSound();
-                const result: ScanResult = {
-                    name: null,
-                    product: null,
-                    code: finalCode,
-                    found: false,
-                };
+                const result: ScanResult = { name: null, product: null, code: finalCode, found: false };
                 setLastScannedResult(result);
                 setMessage('Esta etiqueta no existe en el sistema.');
             }
