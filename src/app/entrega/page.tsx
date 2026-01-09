@@ -8,7 +8,7 @@ import { supabase } from '@/lib/supabaseClient';
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { XCircle, PackageCheck, AlertTriangle, Trash2, Zap, ZoomIn, PlusCircle } from 'lucide-react';
+import { XCircle, PackageCheck, AlertTriangle, Trash2, Zap, ZoomIn, PlusCircle, Download } from 'lucide-react';
 import {
   Select,
   SelectContent,
@@ -54,6 +54,7 @@ export default function Home() {
   const [isDeliveryModalOpen, setIsDeliveryModalOpen] = useState(false);
   const [driverName, setDriverName] = useState('');
   const [driverPlate, setDriverPlate] = useState('');
+  const [loteId, setLoteId] = useState('');
 
 
   // Refs
@@ -375,6 +376,60 @@ export default function Home() {
       manualCodeInput.focus();
   };
 
+  const handleLoadLote = async () => {
+    if (!loteId.trim()) {
+      showAppMessage('Por favor, ingresa un identificador de lote.', 'warning');
+      return;
+    }
+    setLoading(true);
+    showAppMessage(`Buscando paquetes del lote ${loteId}...`, 'info');
+
+    try {
+      const { data, error } = await supabase
+        .from('personal')
+        .select('code, product, name, status')
+        .eq('lote', loteId.trim());
+
+      if (error) throw error;
+
+      if (!data || data.length === 0) {
+        showAppMessage(`No se encontraron paquetes para el lote ${loteId}.`, 'warning');
+        return;
+      }
+
+      let addedCount = 0;
+      let skippedCount = 0;
+
+      const newItems = data.reduce((acc: DeliveryItem[], item) => {
+        if (!scannedCodesRef.current.has(item.code)) {
+           // Aquí podrías añadir lógica para filtrar por status si es necesario
+          scannedCodesRef.current.add(item.code);
+          addedCount++;
+          acc.push({
+            code: item.code,
+            product: item.product,
+            name: item.name,
+          });
+        } else {
+          skippedCount++;
+        }
+        return acc;
+      }, []);
+
+      if (newItems.length > 0) {
+        setDeliveryList(prev => [...newItems, ...prev]);
+      }
+      
+      showAppMessage(`Lote cargado: ${addedCount} paquetes añadidos, ${skippedCount} ya estaban en la lista.`, 'success');
+      setLoteId('');
+
+    } catch (e: any) {
+      showAppMessage(`Error al cargar el lote: ${e.message}`, 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
 
   const messageClasses: any = {
       success: 'bg-green-100 border-green-400 text-green-800',
@@ -484,6 +539,31 @@ export default function Home() {
                     </div>
                 </div>
                 
+                <div className="p-4 bg-starbucks-cream rounded-lg">
+                    <Label htmlFor="lote-id-entrega" className="block text-sm font-bold text-starbucks-dark mb-1">Cargar Lote:</Label>
+                    <div className="relative mt-1 flex items-center rounded-lg border border-input bg-background focus-within:ring-2 focus-within:ring-ring">
+                        <Input
+                            type="text"
+                            id="lote-id-entrega"
+                            value={loteId}
+                            onChange={(e) => setLoteId(e.target.value)}
+                            className="w-full border-0 bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0"
+                            placeholder="Escriba el ID del lote..."
+                            onKeyDown={(e) => e.key === 'Enter' && handleLoadLote()}
+                            disabled={loading}
+                        />
+                        <Button
+                            type="button"
+                            onClick={handleLoadLote}
+                            size="icon"
+                            className="h-8 w-8 bg-blue-600 hover:bg-blue-700 text-white rounded-md mr-1"
+                            disabled={loading || !loteId}
+                        >
+                            <Download className="h-5 w-5" />
+                        </Button>
+                    </div>
+                </div>
+
                  <div className="p-4 bg-starbucks-cream rounded-lg">
                     <label htmlFor="manual-code-input-entrega" className="block text-sm font-bold text-starbucks-dark mb-1">Ingreso Manual:</label>
                     <div className="relative mt-1 flex items-center rounded-lg border border-input bg-background focus-within:ring-2 focus-within:ring-ring">
