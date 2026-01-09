@@ -221,6 +221,7 @@ export default function CalificarPage() {
                     status: 'CALIFICADO',
                     date: qualificationTimestamp,
                     date_cal: qualificationTimestamp,
+                    details: 'Esta etiqueta fue asignada y calificada al mismo tiempo',
                 };
 
                 const { error: insertError } = await supabase.from('personal').insert(newPersonalRecord);
@@ -232,7 +233,8 @@ export default function CalificarPage() {
                     product: newPersonalRecord.product,
                     code: finalCode,
                     found: true,
-                    status: 'CALIFICADO'
+                    status: 'CALIFICADO',
+                    details: newPersonalRecord.details,
                 };
                 
                 if (scanMode === 'individual') {
