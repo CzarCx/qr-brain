@@ -55,6 +55,7 @@ export default function Home() {
   const [driverName, setDriverName] = useState('');
   const [driverPlate, setDriverPlate] = useState('');
   const [loteId, setLoteId] = useState('');
+  const [lotesCargadosCount, setLotesCargadosCount] = useState(0);
 
 
   // Refs
@@ -349,6 +350,7 @@ export default function Home() {
       scannedCodesRef.current.clear();
       setDriverName('');
       setDriverPlate('');
+      setLotesCargadosCount(0); // Reset lotes count
       showAppMessage('Esperando para escanear...', 'info');
 
     } catch (e: any) {
@@ -418,6 +420,7 @@ export default function Home() {
 
       if (newItems.length > 0) {
         setDeliveryList(prev => [...newItems, ...prev]);
+        setLotesCargadosCount(prev => prev + 1);
       }
       
       showAppMessage(`Lote cargado: ${addedCount} paquetes añadidos, ${skippedCount} ya estaban en la lista.`, 'success');
@@ -541,6 +544,7 @@ export default function Home() {
                 
                 <div className="p-4 bg-starbucks-cream rounded-lg">
                     <Label htmlFor="lote-id-entrega" className="block text-sm font-bold text-starbucks-dark mb-1">Cargar Lote:</Label>
+                    <span className="text-xs text-gray-500">Lotes cargados: {lotesCargadosCount}</span>
                     <div className="relative mt-1 flex items-center rounded-lg border border-input bg-background focus-within:ring-2 focus-within:ring-ring">
                         <Input
                             type="text"
