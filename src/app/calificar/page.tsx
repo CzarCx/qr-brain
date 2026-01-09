@@ -46,6 +46,11 @@ type ScanResult = {
     error?: string;
     status?: string | null;
     details?: string | null;
+    sku?: string | null;
+    quantity?: number | null;
+    organization?: string | null;
+    sales_num?: string | number | null;
+    isNew?: boolean;
 };
 
 type ReportReason = {
@@ -208,38 +213,43 @@ export default function CalificarPage() {
             }
 
             if (etiquetaData) {
-                const qualificationTimestamp = new Date().toISOString();
-                const newPersonalRecord = {
+                playBeep();
+                const result: ScanResult = {
                     code: etiquetaData.code,
                     name: 'N/A',
-                    name_inc: encargado || 'N/A',
-                    sku: etiquetaData.sku,
                     product: etiquetaData.product,
+                    sku: etiquetaData.sku,
                     quantity: etiquetaData.quantity,
                     organization: etiquetaData.organization,
                     sales_num: etiquetaData.sales_num,
-                    status: 'CALIFICADO',
-                    date: qualificationTimestamp,
-                    date_cal: qualificationTimestamp,
-                    details: 'Esta etiqueta fue asignada y calificada al mismo tiempo',
-                };
-
-                const { error: insertError } = await supabase.from('personal').insert(newPersonalRecord);
-                if (insertError) throw insertError;
-                
-                playBeep();
-                const result: ScanResult = {
-                    name: newPersonalRecord.name,
-                    product: newPersonalRecord.product,
-                    code: finalCode,
                     found: true,
                     status: 'CALIFICADO',
-                    details: newPersonalRecord.details,
+                    details: "Esta etiqueta fue asignada y calificada al mismo tiempo",
+                    isNew: true, // Mark as new record
                 };
                 
                 if (scanMode === 'individual') {
+                     const qualificationTimestamp = new Date().toISOString();
+                     const newPersonalRecord = {
+                        code: result.code,
+                        name: result.name,
+                        name_inc: encargado || 'N/A',
+                        sku: result.sku,
+                        product: result.product,
+                        quantity: result.quantity,
+                        organization: result.organization,
+                        sales_num: result.sales_num,
+                        status: 'CALIFICADO',
+                        date: qualificationTimestamp,
+                        date_cal: qualificationTimestamp,
+                        details: result.details,
+                    };
+                    const { error: insertError } = await supabase.from('personal').insert(newPersonalRecord);
+                    if (insertError) throw insertError;
+                    
                     setLastScannedResult(result);
                     setMessage('Etiqueta no asignada, calificada automáticamente.');
+
                 } else { // Mass mode
                     setMessage(`Añadido (Auto-Calificado): ${finalCode}`);
                     setMassScannedCodes(prev => [result, ...prev]);
@@ -454,30 +464,74 @@ const handleMassQualify = async () => {
         alert("No hay códigos en la lista para calificar.");
         return;
     }
-     if (!loteId.trim()) {
+    if (!loteId.trim()) {
         alert("Por favor, ingresa un identificador de lote/tanda.");
         return;
     }
     setLoading(true);
     try {
-        const codesToUpdate = massScannedCodes.map(item => item.code);
         const qualificationTimestamp = new Date().toISOString();
+        
+        // Separate new records from existing records
+        const recordsToInsert = massScannedCodes.filter(item => item.isNew);
+        const codesToUpdate = massScannedCodes.filter(item => !item.isNew).map(item => item.code);
 
-        const { error } = await supabase
-            .from('personal')
-            .update({ 
-                status: 'CALIFICADO', 
-                details: null, 
+        let errorCount = 0;
+        let successCount = 0;
+
+        // Batch insert new records
+        if (recordsToInsert.length > 0) {
+            const newPersonalRecords = recordsToInsert.map(item => ({
+                code: item.code,
+                name: item.name,
+                name_inc: encargado || 'N/A',
+                sku: item.sku,
+                product: item.product,
+                quantity: item.quantity,
+                organization: item.organization,
+                sales_num: item.sales_num,
+                status: 'CALIFICADO',
+                date: qualificationTimestamp,
                 date_cal: qualificationTimestamp,
+                details: item.details,
                 lote: loteId,
-             })
-            .in('code', codesToUpdate);
+            }));
 
-        if (error) {
-            throw error;
+            const { error: insertError } = await supabase.from('personal').insert(newPersonalRecords);
+            if (insertError) {
+                console.error('Error en la inserción masiva:', insertError);
+                errorCount += recordsToInsert.length;
+            } else {
+                successCount += recordsToInsert.length;
+            }
         }
 
-        alert(`Se calificaron ${massScannedCodes.length} etiquetas correctamente con el lote ${loteId}.`);
+        // Batch update existing records
+        if (codesToUpdate.length > 0) {
+            const { error: updateError } = await supabase
+                .from('personal')
+                .update({ 
+                    status: 'CALIFICADO', 
+                    details: null, 
+                    date_cal: qualificationTimestamp,
+                    lote: loteId,
+                 })
+                .in('code', codesToUpdate);
+            
+            if (updateError) {
+                console.error('Error en la actualización masiva:', updateError);
+                errorCount += codesToUpdate.length;
+            } else {
+                successCount += codesToUpdate.length;
+            }
+        }
+
+        if (errorCount > 0) {
+            alert(`Se procesaron ${successCount} etiquetas con éxito, pero ${errorCount} fallaron. Revisa la consola.`);
+        } else {
+            alert(`Se calificaron ${successCount} etiquetas correctamente con el lote ${loteId}.`);
+        }
+
         setMassScannedCodes([]); // Clear the list
         massScannedCodesRef.current.clear();
         setLoteId(''); // Clear lote id
