@@ -15,7 +15,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Zap, ZoomIn, UserPlus, PlusCircle, Clock, AlertTriangle, Wifi, WifiOff, Search, XCircle, CheckCircle, Trash2 } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Combobox } from '@/components/ui/combobox';
@@ -118,7 +118,7 @@ export default function Home() {
   const [isVerifying, setIsVerifying] = useState(false);
   const [showNotification, setShowNotification] = useState(false);
   const [notification, setNotification] = useState({ title: '', message: '', variant: 'default' as 'default' | 'destructive' | 'success' });
-  const [scanMode, setScanMode] = useState<'assign' | 'unassign'>('assign');
+  const [scanMode, setScanMode] = useState<'assign' | 'unassign' | 'update_date'>('assign');
 
 
   // Refs para elementos del DOM y la instancia del escáner
@@ -534,6 +534,41 @@ export default function Home() {
 
         } catch (error: any) {
             showModalNotification('Error', `No se pudo desasignar el código: ${error.message}`, 'destructive');
+            playErrorSound();
+        } finally {
+            setLoading(false);
+        }
+        return;
+    }
+
+    if (scanMode === 'update_date') {
+        try {
+            const { data, error } = await supabaseEtiquetas
+                .from('etiquetas_i')
+                .select('code')
+                .eq('code', finalCode)
+                .single();
+
+            if (error && error.code !== 'PGRST116') throw error;
+
+            if (!data) {
+                showModalNotification('No Encontrado', `El código ${finalCode} no existe en la base de datos de etiquetas.`, 'destructive');
+                playErrorSound();
+                return;
+            }
+
+            const { error: updateError } = await supabaseEtiquetas
+                .from('etiquetas_i')
+                .update({ imp_date: new Date().toISOString() })
+                .eq('code', finalCode);
+
+            if (updateError) throw updateError;
+            
+            showModalNotification('¡Éxito!', `Se actualizó la fecha de impresión para el código ${finalCode}.`, 'success');
+            playBeep();
+
+        } catch (error: any) {
+            showModalNotification('Error', `No se pudo actualizar la fecha: ${error.message}`, 'destructive');
             playErrorSound();
         } finally {
             setLoading(false);
@@ -1298,19 +1333,28 @@ export default function Home() {
                                 </SelectContent>
                             </Select>
                         </div>
-
-                         <div className="flex items-center space-x-2 bg-gray-100 p-3 rounded-lg">
-                            <Switch 
-                                id="scan-mode" 
-                                checked={scanMode === 'unassign'}
-                                onCheckedChange={(checked) => setScanMode(checked ? 'unassign' : 'assign')}
-                                disabled={scannerActive}
-                            />
-                            <Label htmlFor="scan-mode" className="text-sm font-medium">
-                                {scanMode === 'assign' ? 'Modo: Asignar' : 'Modo: Desasignar'}
-                            </Label>
-                        </div>
                         
+                        <RadioGroup value={scanMode} onValueChange={(value) => setScanMode(value as any)} className="grid grid-cols-3 gap-2 bg-gray-100 p-2 rounded-lg">
+                          <div>
+                              <RadioGroupItem value="assign" id="assign" className="sr-only" />
+                              <Label htmlFor="assign" className={`block w-full text-center p-2 rounded-md cursor-pointer text-sm font-medium ${scanMode === 'assign' ? 'bg-starbucks-green text-white shadow' : 'bg-white'}`}>
+                                  Asignar
+                              </Label>
+                          </div>
+                          <div>
+                              <RadioGroupItem value="unassign" id="unassign" className="sr-only" />
+                              <Label htmlFor="unassign" className={`block w-full text-center p-2 rounded-md cursor-pointer text-sm font-medium ${scanMode === 'unassign' ? 'bg-starbucks-green text-white shadow' : 'bg-white'}`}>
+                                  Desasignar
+                              </Label>
+                          </div>
+                          <div>
+                              <RadioGroupItem value="update_date" id="update_date" className="sr-only" />
+                              <Label htmlFor="update_date" className={`block w-full text-center p-2 rounded-md cursor-pointer text-sm font-medium ${scanMode === 'update_date' ? 'bg-starbucks-green text-white shadow' : 'bg-white'}`}>
+                                  Actualizar Fecha
+                              </Label>
+                          </div>
+                        </RadioGroup>
+
                         <div className="p-4 bg-gray-100 rounded-lg space-y-3">
                             <label htmlFor="verify-code-input" className="block text-sm font-bold text-starbucks-dark">Verificar Código</label>
                             <div className="flex items-center gap-2">
