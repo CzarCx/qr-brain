@@ -34,8 +34,9 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertTriangle, Trash2, Zap, ZoomIn, PlusCircle } from 'lucide-react';
+import { AlertTriangle, Trash2, Zap, ZoomIn, PlusCircle, Download } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { Switch } from '@/components/ui/switch';
 
 
 type ScanResult = {
@@ -84,6 +85,8 @@ export default function CalificarPage() {
   const isMobile = useIsMobile();
   const [dbError, setDbError] = useState<string | null>(null);
   const [loteId, setLoteId] = useState('');
+  const [isNextDayDelivery, setIsNextDayDelivery] = useState(false);
+  const [loteToLoad, setLoteToLoad] = useState('');
 
 
   const html5QrCodeRef = useRef<Html5Qrcode | null>(null);
@@ -229,7 +232,10 @@ export default function CalificarPage() {
                 };
                 
                 if (scanMode === 'individual') {
-                     const qualificationTimestamp = new Date().toISOString();
+                     const qualificationTimestamp = new Date();
+                     if (isNextDayDelivery) {
+                        qualificationTimestamp.setDate(qualificationTimestamp.getDate() + 1);
+                     }
                      const newPersonalRecord = {
                         code: result.code,
                         name: result.name,
@@ -240,8 +246,8 @@ export default function CalificarPage() {
                         organization: result.organization,
                         sales_num: result.sales_num,
                         status: 'CALIFICADO',
-                        date: qualificationTimestamp,
-                        date_cal: qualificationTimestamp,
+                        date: qualificationTimestamp.toISOString(),
+                        date_cal: qualificationTimestamp.toISOString(),
                         details: result.details,
                     };
                     const { error: insertError } = await supabase.from('personal').insert(newPersonalRecord);
@@ -276,7 +282,7 @@ export default function CalificarPage() {
     } finally {
         setLoading(false);
     }
-  }, [loading, scanMode, encargado]);
+  }, [loading, scanMode, encargado, isNextDayDelivery]);
   
     useEffect(() => {
         const handlePhysicalScannerInput = (event: KeyboardEvent) => {
@@ -438,10 +444,14 @@ export default function CalificarPage() {
     if (!lastScannedResult?.code) return;
     setLoading(true);
     try {
-        const qualificationTimestamp = new Date().toISOString();
+        const qualificationTimestamp = new Date();
+        if (isNextDayDelivery) {
+            qualificationTimestamp.setDate(qualificationTimestamp.getDate() + 1);
+        }
+
         const { error } = await supabase
             .from('personal')
-            .update({ status: 'CALIFICADO', details: null, date_cal: qualificationTimestamp })
+            .update({ status: 'CALIFICADO', details: null, date_cal: qualificationTimestamp.toISOString() })
             .eq('code', lastScannedResult.code);
 
         if (error) {
@@ -470,7 +480,10 @@ const handleMassQualify = async () => {
     }
     setLoading(true);
     try {
-        const qualificationTimestamp = new Date().toISOString();
+        const qualificationTimestamp = new Date();
+        if (isNextDayDelivery) {
+            qualificationTimestamp.setDate(qualificationTimestamp.getDate() + 1);
+        }
         
         // Separate new records from existing records
         const recordsToInsert = massScannedCodes.filter(item => item.isNew);
@@ -491,8 +504,8 @@ const handleMassQualify = async () => {
                 organization: item.organization,
                 sales_num: item.sales_num,
                 status: 'CALIFICADO',
-                date: qualificationTimestamp,
-                date_cal: qualificationTimestamp,
+                date: qualificationTimestamp.toISOString(),
+                date_cal: qualificationTimestamp.toISOString(),
                 details: item.details,
                 lote: loteId,
             }));
@@ -513,7 +526,7 @@ const handleMassQualify = async () => {
                 .update({ 
                     status: 'CALIFICADO', 
                     details: null, 
-                    date_cal: qualificationTimestamp,
+                    date_cal: qualificationTimestamp.toISOString(),
                     lote: loteId,
                  })
                 .in('code', codesToUpdate);
@@ -588,6 +601,64 @@ const handleMassQualify = async () => {
     manualCodeInput.value = '';
     manualCodeInput.focus();
   };
+  
+    const handleLoadLote = async () => {
+    if (!loteToLoad.trim()) {
+      setMessage('Por favor, ingresa un identificador de lote para cargar.');
+      return;
+    }
+    setLoading(true);
+    setMessage(`Cargando paquetes del lote ${loteToLoad}...`);
+
+    try {
+      const { data, error } = await supabase
+        .from('personal')
+        .select('*')
+        .eq('lote', loteToLoad.trim());
+
+      if (error) throw error;
+
+      if (!data || data.length === 0) {
+        setMessage(`No se encontraron paquetes para el lote ${loteToLoad}.`);
+        return;
+      }
+      
+      const newItems: ScanResult[] = data.map(item => ({
+        code: item.code,
+        name: item.name,
+        product: item.product,
+        status: item.status,
+        details: item.details,
+        sku: item.sku,
+        quantity: item.quantity,
+        organization: item.organization,
+        sales_num: item.sales_num,
+        found: true,
+        isNew: false,
+      }));
+      
+      let addedCount = 0;
+      const currentCodes = new Set(massScannedCodes.map(c => c.code));
+
+      const itemsToAdd = newItems.filter(item => {
+        if (!currentCodes.has(item.code)) {
+          addedCount++;
+          massScannedCodesRef.current.add(item.code);
+          return true;
+        }
+        return false;
+      });
+
+      setMassScannedCodes(prev => [...prev, ...itemsToAdd]);
+      setMessage(`Se agregaron ${addedCount} nuevos paquetes del lote ${loteToLoad}.`);
+      setLoteToLoad('');
+
+    } catch (e: any) {
+      setMessage(`Error al cargar el lote: ${e.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <>
@@ -641,6 +712,11 @@ const handleMassQualify = async () => {
                       <button onClick={() => setScanMode('masivo')} className={`area-btn w-full px-4 py-3 text-sm rounded-md shadow-sm focus:outline-none ${scanMode === 'masivo' ? 'scanner-mode-selected' : ''}`} disabled={scannerActive}>Masivo</button>
                   </div>
               </div>
+
+             <div className="flex items-center space-x-2 bg-blue-100 border border-blue-300 p-3 rounded-lg">
+                <Switch id="next-day-delivery" checked={isNextDayDelivery} onCheckedChange={setIsNextDayDelivery} />
+                <Label htmlFor="next-day-delivery" className="text-sm font-medium text-blue-800">Marcar como entrega para día siguiente</Label>
+            </div>
           </div>
           
           {scanMode === 'masivo' && (
@@ -819,6 +895,30 @@ const handleMassQualify = async () => {
              {/* Mass Scan Results */}
              {scanMode === 'masivo' && (
                 <div className="space-y-4">
+                     <div className="p-4 bg-starbucks-cream rounded-lg">
+                        <Label htmlFor="lote-id-entrega" className="block text-sm font-bold text-starbucks-dark mb-1">Cargar Lote:</Label>
+                        <div className="relative mt-1 flex items-center rounded-lg border border-input bg-background focus-within:ring-2 focus-within:ring-ring">
+                            <Input
+                                type="text"
+                                id="lote-id-load"
+                                value={loteToLoad}
+                                onChange={(e) => setLoteToLoad(e.target.value)}
+                                className="w-full border-0 bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0"
+                                placeholder="Escriba el ID del lote..."
+                                onKeyDown={(e) => e.key === 'Enter' && handleLoadLote()}
+                                disabled={loading}
+                            />
+                            <Button
+                                type="button"
+                                onClick={handleLoadLote}
+                                size="icon"
+                                className="h-8 w-8 bg-blue-600 hover:bg-blue-700 text-white rounded-md mr-1"
+                                disabled={loading || !loteToLoad}
+                            >
+                                <Download className="h-5 w-5" />
+                            </Button>
+                        </div>
+                    </div>
                     <div className="space-y-2">
                          <Label htmlFor="lote-id" className="font-bold text-starbucks-dark">Lote / Tanda:</Label>
                          <Input
