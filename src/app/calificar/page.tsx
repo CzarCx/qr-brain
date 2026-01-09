@@ -317,7 +317,7 @@ export default function CalificarPage() {
         }
       }
     }
-  }, [zoom, isFlashOn, scannerActive, selectedScannerMode, isMobile, applyCameraConstraints]);
+  }, [zoom, isFlashOn, scannerActive, selectedScannerMode, isMobile, applyCameraConstraints, massScannedCodes]);
   
   useEffect(() => {
     if (!isMounted || !readerRef.current) return;
