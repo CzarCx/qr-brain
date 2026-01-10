@@ -64,6 +64,12 @@ type Encargado = {
   rol: string;
 };
 
+type LoteConfirmationState = {
+  isOpen: boolean;
+  existingCount: number;
+  newCount: number;
+};
+
 export default function CalificarPage() {
   const [isMounted, setIsMounted] = useState(false);
   const [message, setMessage] = useState('Apunte la cámara a un código QR.');
@@ -87,6 +93,7 @@ export default function CalificarPage() {
   const [loteId, setLoteId] = useState('');
   const [isNextDayDelivery, setIsNextDayDelivery] = useState(false);
   const [loteToLoad, setLoteToLoad] = useState('');
+  const [loteConfirmation, setLoteConfirmation] = useState<LoteConfirmationState>({ isOpen: false, existingCount: 0, newCount: 0 });
 
 
   const html5QrCodeRef = useRef<Html5Qrcode | null>(null);
@@ -484,14 +491,7 @@ export default function CalificarPage() {
   };
 
 const handleMassQualify = async () => {
-    if (massScannedCodes.length === 0) {
-        alert("No hay códigos en la lista para calificar.");
-        return;
-    }
-    if (!loteId.trim()) {
-        alert("Por favor, ingresa un identificador de lote/tanda.");
-        return;
-    }
+    setLoteConfirmation({ isOpen: false, existingCount: 0, newCount: 0 }); // Close modal first
     setLoading(true);
     try {
         const qualificationTimestamp = new Date();
@@ -499,14 +499,12 @@ const handleMassQualify = async () => {
             qualificationTimestamp.setDate(qualificationTimestamp.getDate() + 1);
         }
         
-        // Separate new records from existing records
         const recordsToInsert = massScannedCodes.filter(item => item.isNew);
         const codesToUpdate = massScannedCodes.filter(item => !item.isNew).map(item => item.code);
 
         let errorCount = 0;
         let successCount = 0;
 
-        // Batch insert new records
         if (recordsToInsert.length > 0) {
             const newPersonalRecords = recordsToInsert.map(item => ({
                 code: item.code,
@@ -533,7 +531,6 @@ const handleMassQualify = async () => {
             }
         }
 
-        // Batch update existing records
         if (codesToUpdate.length > 0) {
             const { error: updateError } = await supabase
                 .from('personal')
@@ -560,14 +557,52 @@ const handleMassQualify = async () => {
             alert(`Se calificaron ${successCount} etiquetas correctamente con el lote ${loteId}.`);
         }
 
-        setMassScannedCodes([]); // Clear the list
+        setMassScannedCodes([]);
         massScannedCodesRef.current.clear();
-        setLoteId(''); // Clear lote id
+        setLoteId('');
 
     } catch (e: any) {
         console.error('Error en la calificación masiva:', e);
         const errorMessage = e.message || JSON.stringify(e);
         alert(`Error al calificar masivamente: ${errorMessage}`);
+    } finally {
+        setLoading(false);
+    }
+};
+
+const triggerMassQualify = async () => {
+    if (massScannedCodes.length === 0) {
+        alert("No hay códigos en la lista para calificar.");
+        return;
+    }
+    if (!loteId.trim()) {
+        alert("Por favor, ingresa un identificador de lote/tanda.");
+        return;
+    }
+    setLoading(true);
+    try {
+        const { count, error } = await supabase
+            .from('personal')
+            .select('code', { count: 'exact', head: true })
+            .eq('lote', loteId.trim());
+
+        if (error) {
+            throw new Error(`Error al verificar el lote: ${error.message}`);
+        }
+
+        if (count && count > 0) {
+            // Lote existe, mostrar modal de confirmación
+            setLoteConfirmation({
+                isOpen: true,
+                existingCount: count,
+                newCount: massScannedCodes.length,
+            });
+        } else {
+            // Lote no existe, proceder directamente
+            await handleMassQualify();
+        }
+    } catch (e: any) {
+        alert(`Error: ${e.message}`);
     } finally {
         setLoading(false);
     }
@@ -947,7 +982,7 @@ const handleMassQualify = async () => {
                          />
                     </div>
                     <div className="flex flex-col sm:flex-row justify-end items-center gap-2">
-                        <Button onClick={handleMassQualify} disabled={loading || massScannedCodes.length === 0} className="bg-green-600 hover:bg-green-700 w-full sm:w-auto">
+                        <Button onClick={triggerMassQualify} disabled={loading || massScannedCodes.length === 0} className="bg-green-600 hover:bg-green-700 w-full sm:w-auto">
                             {loading ? 'Calificando...' : 'Calificar Todos'}
                         </Button>
                     </div>
@@ -988,6 +1023,32 @@ const handleMassQualify = async () => {
           </div>
         </div>
       </main>
+
+       <Dialog open={loteConfirmation.isOpen} onOpenChange={(isOpen) => setLoteConfirmation(prev => ({...prev, isOpen}))}>
+          <DialogContent>
+              <DialogHeader>
+                  <DialogTitle>Confirmar Anexión a Lote Existente</DialogTitle>
+                  <DialogDescription className="pt-4">
+                      <Alert variant="destructive" className="mb-4">
+                          <AlertTriangle className="h-4 w-4" />
+                          <AlertTitle>¡Atención!</AlertTitle>
+                          <AlertDescription>
+                              El lote <span className="font-bold">{loteId}</span> ya existe.
+                          </AlertDescription>
+                      </Alert>
+                      <p>Este lote contiene actualmente <span className="font-bold">{loteConfirmation.existingCount}</span> etiqueta(s).</p>
+                      <p>Estás a punto de anexar <span className="font-bold">{loteConfirmation.newCount}</span> nueva(s) etiqueta(s).</p>
+                      <p className="mt-4">¿Deseas continuar y anexar estas etiquetas al lote existente?</p>
+                  </DialogDescription>
+              </DialogHeader>
+              <DialogFooter>
+                  <Button variant="outline" onClick={() => setLoteConfirmation(prev => ({...prev, isOpen: false}))}>Cancelar</Button>
+                  <Button onClick={handleMassQualify} disabled={loading} className="bg-orange-500 hover:bg-orange-600">
+                      {loading ? 'Anexando...' : 'Confirmar y Anexar'}
+                  </Button>
+              </DialogFooter>
+          </DialogContent>
+      </Dialog>
     </>
   );
 }
