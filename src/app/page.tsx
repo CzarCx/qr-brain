@@ -106,12 +106,14 @@ export default function Home() {
   const [zoom, setZoom] = useState(1);
   const isMobile = useIsMobile();
   const [programadosPersonalList, setProgramadosPersonalList] = useState<{ name: string }[]>([]);
-  const [loadingProgramadosPersonal, setLoadingProgramadosPersonal] = useState(false);
+  const [programadosLotesList, setProgramadosLotesList] = useState<{ lote_p: string }[]>([]);
+  const [loadingProgramados, setLoadingProgramados] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [selectedBulkPersonal, setSelectedBulkPersonal] = useState('');
   const [dbError, setDbError] = useState<string | null>(null);
   const [dbStatus, setDbStatus] = useState<DbStatus>({ personalDb: 'connecting', etiquetasDb: 'connecting' });
   const [selectedPersonalParaCargar, setSelectedPersonalParaCargar] = useState('');
+  const [selectedLoteParaCargar, setSelectedLoteParaCargar] = useState('');
   const [verificationCode, setVerificationCode] = useState('');
   const [verificationResult, setVerificationResult] = useState<string | null>(null);
   const [isVerifying, setIsVerifying] = useState(false);
@@ -122,6 +124,7 @@ export default function Home() {
   const [personToAssign, setPersonToAssign] = useState('');
   const [showCargarProduccion, setShowCargarProduccion] = useState(false);
   const [loteProgramado, setLoteProgramado] = useState('');
+  const [cargaFilterType, setCargaFilterType] = useState<'persona' | 'lote'>('persona');
 
 
   // Refs para elementos del DOM y la instancia del escáner
@@ -989,57 +992,70 @@ export default function Home() {
 
   const handleOpenCargarSeccion = async () => {
     setShowCargarProduccion(true);
-    setLoadingProgramadosPersonal(true);
+    setLoadingProgramados(true);
     try {
-        const { data, error } = await supabase
-            .from('personal_prog')
-            .select('name');
-
-        if (error) throw error;
-
-        // Get unique names
-        const uniqueNames = [...new Map(data.map(item => [item.name, item])).values()];
+        // Fetch unique names
+        const { data: namesData, error: namesError } = await supabase.from('personal_prog').select('name');
+        if (namesError) throw namesError;
+        const uniqueNames = [...new Map(namesData.map(item => [item.name, item])).values()];
         setProgramadosPersonalList(uniqueNames);
 
+        // Fetch unique lotes
+        const { data: lotesData, error: lotesError } = await supabase.from('personal_prog').select('lote_p');
+        if (lotesError) throw lotesError;
+        const uniqueLotes = [...new Map(lotesData.filter(item => item.lote_p).map(item => [item.lote_p, item])).values()];
+        setProgramadosLotesList(uniqueLotes);
+
+
     } catch (error: any) {
-        showAppMessage('Error al cargar la lista de personal programado.', 'duplicate');
+        showAppMessage('Error al cargar la lista de producción programada.', 'duplicate');
     } finally {
-        setLoadingProgramadosPersonal(false);
+        setLoadingProgramados(false);
     }
 };
 
   const handleCargarProgramada = async () => {
-      if (!selectedPersonalParaCargar) {
-        showAppMessage('Por favor, selecciona una persona para cargar su producción.', 'info');
+    const byPerson = cargaFilterType === 'persona';
+    const filterValue = byPerson ? selectedPersonalParaCargar : selectedLoteParaCargar;
+
+    if (!filterValue) {
+        showAppMessage('Por favor, selecciona una persona o lote para cargar.', 'info');
         return;
     }
     setLoading(true);
     showAppMessage('Cargando producción programada...', 'info');
 
     try {
-      const { data, error } = await supabase
-        .from('personal_prog')
-        .select('*')
-        .eq('name', selectedPersonalParaCargar);
+        let query = supabase.from('personal_prog').select('*');
+        if (byPerson) {
+            query = query.eq('name', filterValue);
+        } else {
+            query = query.eq('lote_p', filterValue);
+        }
 
-      if (error) throw error;
+        const { data, error } = await query;
+        if (error) throw error;
 
-      if (data.length === 0) {
-        showAppMessage('No hay producción programada para cargar para esta persona.', 'info');
-        setLoading(false);
-        return;
-      }
-      setLoadedProgData(data);
-      setPersonToAssign(selectedPersonalParaCargar);
+        if (data.length === 0) {
+            showAppMessage(`No hay producción programada para ${filterValue}.`, 'info');
+            setLoading(false);
+            return;
+        }
 
+        setLoadedProgData(data);
+        // If loading by lot, we still might want to reassign.
+        // Let's set the first person found as the default person to assign, or leave it blank.
+        const originalAssignee = byPerson ? filterValue : (data.length > 0 ? data[0].name : '');
+        setPersonToAssign(originalAssignee);
 
     } catch (error: any) {
-      console.error("Error al cargar producción programada:", error);
-      showAppMessage(`Error al cargar: ${error.message}`, 'duplicate');
+        console.error("Error al cargar producción programada:", error);
+        showAppMessage(`Error al cargar: ${error.message}`, 'duplicate');
     } finally {
-      setLoading(false);
+        setLoading(false);
     }
-  };
+};
+
 
   const handleFinalizeAssociation = async () => {
       if (!personToAssign || loadedProgData.length === 0) {
@@ -1049,10 +1065,11 @@ export default function Home() {
       setLoading(true);
 
       try {
+          const codesToDelete = loadedProgData.map(item => item.code);
           const { error: deleteError } = await supabase
               .from('personal_prog')
               .delete()
-              .eq('name', selectedPersonalParaCargar); // Use original name for deletion
+              .in('code', codesToDelete);
           
           if (deleteError) {
               throw new Error(`Error al limpiar 'personal_prog': ${deleteError.message}`);
@@ -1077,6 +1094,7 @@ export default function Home() {
           setLoadedProgData([]);
           setPersonToAssign('');
           setSelectedPersonalParaCargar('');
+          setSelectedLoteParaCargar('');
 
       } catch (error: any) {
           showModalNotification('Error', `Error al asociar: ${error.message}`, 'destructive');
@@ -1217,26 +1235,61 @@ export default function Home() {
     <div className="w-full mt-4 p-4 border-t-2 border-dashed border-gray-300">
         <h3 className="text-lg font-bold text-starbucks-dark mb-2">Cargar Producción Programada</h3>
         {loadedProgData.length === 0 ? (
+          <>
+            <RadioGroup value={cargaFilterType} onValueChange={(v) => setCargaFilterType(v as any)} className="grid grid-cols-2 gap-2 mb-4">
+              <div>
+                <RadioGroupItem value="persona" id="persona" className="sr-only" />
+                <Label htmlFor="persona" className={`block w-full text-center p-2 rounded-md cursor-pointer text-sm font-medium ${cargaFilterType === 'persona' ? 'bg-starbucks-green text-white shadow' : 'bg-white'}`}>
+                    Por Persona
+                </Label>
+              </div>
+               <div>
+                <RadioGroupItem value="lote" id="lote" className="sr-only" />
+                <Label htmlFor="lote" className={`block w-full text-center p-2 rounded-md cursor-pointer text-sm font-medium ${cargaFilterType === 'lote' ? 'bg-starbucks-green text-white shadow' : 'bg-white'}`}>
+                    Por Lote
+                </Label>
+              </div>
+            </RadioGroup>
+
             <div className="flex items-end gap-2">
                 <div className="flex-grow">
-                    <Label htmlFor="select-personal-cargar">Selecciona Personal</Label>
-                    {loadingProgramadosPersonal ? <p>Cargando...</p> :
-                        <Select onValueChange={setSelectedPersonalParaCargar} value={selectedPersonalParaCargar}>
-                            <SelectTrigger id="select-personal-cargar">
-                                <SelectValue placeholder="Selecciona una persona" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {programadosPersonalList.map((p) => (
-                                    <SelectItem key={p.name} value={p.name}>{p.name}</SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    }
+                     {loadingProgramados ? <p>Cargando...</p> : (
+                       cargaFilterType === 'persona' ? (
+                          <>
+                           <Label htmlFor="select-personal-cargar">Selecciona Personal</Label>
+                           <Select onValueChange={setSelectedPersonalParaCargar} value={selectedPersonalParaCargar}>
+                              <SelectTrigger id="select-personal-cargar">
+                                  <SelectValue placeholder="Selecciona una persona" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                  {programadosPersonalList.map((p) => (
+                                      <SelectItem key={p.name} value={p.name}>{p.name}</SelectItem>
+                                  ))}
+                              </SelectContent>
+                          </Select>
+                          </>
+                       ) : (
+                          <>
+                          <Label htmlFor="select-lote-cargar">Selecciona Lote</Label>
+                           <Select onValueChange={setSelectedLoteParaCargar} value={selectedLoteParaCargar}>
+                              <SelectTrigger id="select-lote-cargar">
+                                  <SelectValue placeholder="Selecciona un lote" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                  {programadosLotesList.map((l) => (
+                                      <SelectItem key={l.lote_p} value={l.lote_p}>{l.lote_p}</SelectItem>
+                                  ))}
+                              </SelectContent>
+                          </Select>
+                          </>
+                       )
+                     )}
                 </div>
-                <Button onClick={handleCargarProgramada} disabled={loading || !selectedPersonalParaCargar}>
+                <Button onClick={handleCargarProgramada} disabled={loading || (cargaFilterType === 'persona' && !selectedPersonalParaCargar) || (cargaFilterType === 'lote' && !selectedLoteParaCargar)}>
                     {loading ? 'Cargando...' : 'Cargar Producción'}
                 </Button>
             </div>
+            </>
         ) : (
           <div className="space-y-4">
               <div className="space-y-2">
@@ -1248,7 +1301,7 @@ export default function Home() {
                       placeholder="Selecciona para reasignar..."
                       emptyMessage="No se encontró personal."
                   />
-                  <p className="text-xs text-gray-500">Originalmente asignado a: <span className="font-semibold">{selectedPersonalParaCargar}</span></p>
+                  <p className="text-xs text-gray-500">Originalmente asignado a: <span className="font-semibold">{selectedPersonalParaCargar || `Lote: ${selectedLoteParaCargar}`}</span></p>
               </div>
 
               <div className="max-h-64 overflow-auto border rounded-lg">
@@ -1273,7 +1326,7 @@ export default function Home() {
               </div>
               
               <div className="flex gap-2 justify-end">
-                <Button variant="outline" onClick={() => { setLoadedProgData([]); setPersonToAssign(''); setSelectedPersonalParaCargar(''); }}>Cancelar</Button>
+                <Button variant="outline" onClick={() => { setLoadedProgData([]); setPersonToAssign(''); setSelectedPersonalParaCargar(''); setSelectedLoteParaCargar(''); }}>Cancelar</Button>
                 <Button onClick={handleFinalizeAssociation} disabled={loading || !personToAssign}>
                     {loading ? 'Asociando...' : 'Asociar y Guardar Producción'}
                 </Button>
@@ -1285,6 +1338,7 @@ export default function Home() {
             setLoadedProgData([]);
             setPersonToAssign('');
             setSelectedPersonalParaCargar('');
+            setSelectedLoteParaCargar('');
         }}>Cerrar</Button>
     </div>
   );
