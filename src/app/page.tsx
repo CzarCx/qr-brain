@@ -191,7 +191,7 @@ export default function Home() {
              const uniquePersonal = Array.from(new Map(data.map(item => [item.name, item])).values());
              setPersonalList((uniquePersonal as Encargado[]) || []);
         } else {
-            setDbError('No se encontró personal con el rol "operativo". Revisa los datos o los permisos RLS.');
+            setDbError('No se encontró personal con el rol "operativo". Revisa los permisos RLS.');
         }
     };
     const fetchEncargados = async () => {
@@ -1209,7 +1209,7 @@ export default function Home() {
       info: 'scan-info'
   };
   
-  const isAssociationDisabled = scannedData.length === 0 || scannedData.some(item => item.esti_time === null || item.esti_time === undefined) || !isUnlocked;
+  const isAssociationDisabled = scannedData.length === 0 || scannedData.some(item => item.esti_time === null || item.esti_time === undefined);
 
   const totalEstimatedTime = useMemo(() => {
     return scannedData.reduce((acc, item) => acc + (item.esti_time || 0), 0);
@@ -1449,9 +1449,7 @@ export default function Home() {
           {(isAssociationDisabled && scannedData.length > 0) && (
             <p className="text-xs text-red-600 mt-2">Completa todos los campos de "Tiempo Estimado" para poder asociar.</p>
         )}
-         {!isUnlocked && scannedData.length > 0 && (
-             <p className="text-xs text-red-600 mt-2">Verifica un código de corte válido para habilitar la asociación.</p>
-         )}
+        
         
 
         {totalEstimatedTime > 0 && (
