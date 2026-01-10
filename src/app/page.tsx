@@ -16,7 +16,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Zap, ZoomIn, UserPlus, PlusCircle, Clock, AlertTriangle, Wifi, WifiOff, Search, XCircle, CheckCircle, Trash2 } from 'lucide-react';
+import { Zap, ZoomIn, UserPlus, PlusCircle, Clock, AlertTriangle, Wifi, WifiOff, Search, XCircle, CheckCircle, Trash2, Lock, Unlock } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Combobox } from '@/components/ui/combobox';
 import {
@@ -125,6 +125,7 @@ export default function Home() {
   const [showCargarProduccion, setShowCargarProduccion] = useState(false);
   const [loteProgramado, setLoteProgramado] = useState('');
   const [cargaFilterType, setCargaFilterType] = useState<'persona' | 'lote'>('persona');
+  const [isUnlocked, setIsUnlocked] = useState(false);
 
 
   // Refs para elementos del DOM y la instancia del escáner
@@ -1116,7 +1117,7 @@ export default function Home() {
     try {
         const { data, error } = await supabaseEtiquetas
             .from('v_code')
-            .select('code_i, corte_etiquetas')
+            .select('code_i')
             .eq('code_i', verificationCode)
             .single();
 
@@ -1125,23 +1126,17 @@ export default function Home() {
         }
 
         if (data) {
-            const { error: updateError } = await supabaseEtiquetas
-                .from('v_code')
-                .update({ corte_etiquetas: new Date().toISOString() })
-                .eq('code_i', verificationCode);
-            
-            if (updateError) {
-                throw new Error(`Error al actualizar la hora: ${updateError.message}`);
-            }
-
-            setVerificationResult(`Código Válido. Hora de corte guardada.`);
+            setIsUnlocked(true);
+            setVerificationResult('Código válido. Sistema desbloqueado.');
         } else {
-            setVerificationResult('Código Inválido o no encontrado.');
+            setIsUnlocked(false);
+            setVerificationResult('Código Inválido o no encontrado. El sistema permanece bloqueado.');
         }
 
     } catch (e: any) {
         console.error("Error al verificar:", e);
         setVerificationResult(e.message || 'Ocurrió un error inesperado.');
+        setIsUnlocked(false);
     } finally {
         setIsVerifying(false);
     }
@@ -1211,6 +1206,7 @@ export default function Home() {
                     className="w-24 bg-transparent"
                     placeholder="min"
                     min="1"
+                    disabled={!isUnlocked}
                 />
             </td>
             <td className="px-4 py-3 whitespace-nowrap text-sm">{data.producto}</td>
@@ -1222,7 +1218,7 @@ export default function Home() {
             <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{horaInicioStr}</td>
             <td className="px-4 py-3 whitespace-nowrap text-sm">{horaFinStr}</td>
             <td className="px-4 py-3 whitespace-nowrap text-sm text-center">
-                <Button variant="ghost" size="icon" onClick={() => deleteRow(data.code)} className="text-red-500 hover:text-red-700 h-8 w-8">
+                <Button variant="ghost" size="icon" onClick={() => deleteRow(data.code)} className="text-red-500 hover:text-red-700 h-8 w-8" disabled={!isUnlocked}>
                     <Trash2 className="h-4 w-4" />
                 </Button>
             </td>
@@ -1348,10 +1344,10 @@ export default function Home() {
         <div className="flex flex-wrap justify-between items-center mb-2 gap-2">
             <h2 className="text-lg font-bold text-starbucks-dark">Registros Pendientes</h2>
              <div className="flex flex-wrap gap-2">
-                <Button onClick={handleOpenCargarSeccion} className="px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white font-semibold rounded-lg shadow-sm text-sm transition-colors duration-200" disabled={loading}>
+                <Button onClick={handleOpenCargarSeccion} className="px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white font-semibold rounded-lg shadow-sm text-sm transition-colors duration-200" disabled={loading || !isUnlocked}>
                     Cargar
                 </Button>
-                <button id="clear-data" onClick={() => { if(window.confirm('¿Estás seguro?')) clearSessionData() }} className="px-3 py-1.5 bg-yellow-500 hover:bg-yellow-600 text-white font-semibold rounded-lg shadow-sm text-xs transition-colors duration-200">Limpiar</button>
+                <button id="clear-data" onClick={() => { if(window.confirm('¿Estás seguro?')) clearSessionData() }} className="px-3 py-1.5 bg-yellow-500 hover:bg-yellow-600 text-white font-semibold rounded-lg shadow-sm text-xs transition-colors duration-200" disabled={!isUnlocked}>Limpiar</button>
             </div>
         </div>
         
@@ -1368,9 +1364,10 @@ export default function Home() {
                     placeholder="Selecciona o busca personal..."
                     emptyMessage="No se encontró personal."
                     buttonClassName="bg-transparent border-input"
+                    disabled={!isUnlocked}
                 />
             </div>
-             <Button onClick={handleManualAssociate} disabled={isAssociationDisabled || loading} className="bg-starbucks-accent hover:bg-starbucks-green text-white w-full sm:w-auto">
+             <Button onClick={handleManualAssociate} disabled={isAssociationDisabled || loading || !isUnlocked} className="bg-starbucks-accent hover:bg-starbucks-green text-white w-full sm:w-auto">
                 <UserPlus className="mr-2 h-4 w-4" /> Asociar y Guardar
             </Button>
           </div>
@@ -1383,10 +1380,10 @@ export default function Home() {
                 onChange={(e) => setLoteProgramado(e.target.value)}
                 placeholder="Ej. TANDA-01-AM"
                 className="bg-transparent"
-                disabled={loading}
+                disabled={loading || !isUnlocked}
               />
           </div>
-          <Button onClick={handleProduccionProgramada} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg shadow-sm text-sm transition-colors duration-200 w-full" disabled={loading || isAssociationDisabled}>
+          <Button onClick={handleProduccionProgramada} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg shadow-sm text-sm transition-colors duration-200 w-full" disabled={loading || isAssociationDisabled || !isUnlocked}>
             Guardar como Producción Programada
           </Button>
 
@@ -1484,44 +1481,46 @@ export default function Home() {
                         
                         <RadioGroup value={scanMode} onValueChange={(value) => setScanMode(value as any)} className="grid grid-cols-3 gap-2 bg-gray-100 p-2 rounded-lg">
                           <div>
-                              <RadioGroupItem value="assign" id="assign" className="sr-only" />
-                              <Label htmlFor="assign" className={`block w-full text-center p-2 rounded-md cursor-pointer text-sm font-medium ${scanMode === 'assign' ? 'bg-starbucks-green text-white shadow' : 'bg-white'}`}>
+                              <RadioGroupItem value="assign" id="assign" className="sr-only" disabled={!isUnlocked} />
+                              <Label htmlFor="assign" className={`block w-full text-center p-2 rounded-md cursor-pointer text-sm font-medium ${scanMode === 'assign' ? 'bg-starbucks-green text-white shadow' : 'bg-white'} ${!isUnlocked ? 'cursor-not-allowed opacity-50' : ''}`}>
                                   Asignar
                               </Label>
                           </div>
                           <div>
-                              <RadioGroupItem value="unassign" id="unassign" className="sr-only" />
-                              <Label htmlFor="unassign" className={`block w-full text-center p-2 rounded-md cursor-pointer text-sm font-medium ${scanMode === 'unassign' ? 'bg-starbucks-green text-white shadow' : 'bg-white'}`}>
+                              <RadioGroupItem value="unassign" id="unassign" className="sr-only" disabled={!isUnlocked} />
+                              <Label htmlFor="unassign" className={`block w-full text-center p-2 rounded-md cursor-pointer text-sm font-medium ${scanMode === 'unassign' ? 'bg-starbucks-green text-white shadow' : 'bg-white'} ${!isUnlocked ? 'cursor-not-allowed opacity-50' : ''}`}>
                                   Desasignar
                               </Label>
                           </div>
                           <div>
-                              <RadioGroupItem value="update_date" id="update_date" className="sr-only" />
-                              <Label htmlFor="update_date" className={`block w-full text-center p-2 rounded-md cursor-pointer text-sm font-medium ${scanMode === 'update_date' ? 'bg-starbucks-green text-white shadow' : 'bg-white'}`}>
+                              <RadioGroupItem value="update_date" id="update_date" className="sr-only" disabled={!isUnlocked} />
+                              <Label htmlFor="update_date" className={`block w-full text-center p-2 rounded-md cursor-pointer text-sm font-medium ${scanMode === 'update_date' ? 'bg-starbucks-green text-white shadow' : 'bg-white'} ${!isUnlocked ? 'cursor-not-allowed opacity-50' : ''}`}>
                                   Actualizar Fecha
                               </Label>
                           </div>
                         </RadioGroup>
 
-                        <div className="p-4 bg-gray-100 rounded-lg space-y-3">
-                            <label htmlFor="verify-code-input" className="block text-sm font-bold text-starbucks-dark">Verificar Código</label>
+                        <div className={`p-4 rounded-lg space-y-3 ${isUnlocked ? 'bg-green-100 border-green-300' : 'bg-red-100 border-red-300'}`}>
+                            <label htmlFor="verify-code-input" className="flex items-center gap-2 text-sm font-bold">
+                                {isUnlocked ? <Unlock className="h-5 w-5 text-green-700" /> : <Lock className="h-5 w-5 text-red-700" />}
+                                {isUnlocked ? 'Sistema Desbloqueado' : 'Sistema Bloqueado'}
+                            </label>
                             <div className="flex items-center gap-2">
                                 <Input
                                     id="verify-code-input"
                                     type="text"
                                     value={verificationCode}
                                     onChange={(e) => setVerificationCode(e.target.value)}
-                                    placeholder="Ingresa código a verificar"
+                                    placeholder="Ingresa código de corte..."
                                     className="bg-white"
-                                    disabled={isVerifying}
+                                    disabled={isVerifying || isUnlocked}
                                 />
-                                <Button onClick={handleVerifyCode} disabled={isVerifying || !verificationCode} className="bg-blue-600 hover:bg-blue-700">
+                                <Button onClick={handleVerifyCode} disabled={isVerifying || !verificationCode || isUnlocked} className="bg-blue-600 hover:bg-blue-700">
                                     {isVerifying ? (
                                         <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
                                     ) : (
                                         <Search className="h-4 w-4" />
                                     )}
-                                    <span className="ml-2 hidden sm:inline">Verificar</span>
                                 </Button>
                             </div>
                             {verificationResult && (
@@ -1534,8 +1533,8 @@ export default function Home() {
                         <div>
                             <label className="block text-sm font-bold text-starbucks-dark mb-1">Método de Escaneo:</label>
                             <div className="grid grid-cols-2 gap-2">
-                                <button onClick={() => setSelectedScannerMode('camara')} className={`area-btn w-full px-4 py-3 text-sm rounded-md shadow-sm focus:outline-none ${selectedScannerMode === 'camara' ? 'scanner-mode-selected' : ''}`} disabled={scannerActive}>CÁMARA</button>
-                                <button onClick={() => setSelectedScannerMode('fisico')} className={`area-btn w-full px-4 py-3 text-sm rounded-md shadow-sm focus:outline-none ${selectedScannerMode === 'fisico' ? 'scanner-mode-selected' : ''}`} disabled={scannerActive}>ESCÁNER FÍSICO</button>
+                                <button onClick={() => setSelectedScannerMode('camara')} className={`area-btn w-full px-4 py-3 text-sm rounded-md shadow-sm focus:outline-none ${selectedScannerMode === 'camara' ? 'scanner-mode-selected' : ''}`} disabled={scannerActive || !isUnlocked}>CÁMARA</button>
+                                <button onClick={() => setSelectedScannerMode('fisico')} className={`area-btn w-full px-4 py-3 text-sm rounded-md shadow-sm focus:outline-none ${selectedScannerMode === 'fisico' ? 'scanner-mode-selected' : ''}`} disabled={scannerActive || !isUnlocked}>ESCÁNER FÍSICO</button>
                             </div>
                         </div>
 
@@ -1555,7 +1554,7 @@ export default function Home() {
                             <input type="text" id="physical-scanner-input" ref={physicalScannerInputRef} className="hidden-input" autoComplete="off" />
                             {selectedScannerMode === 'camara' && !scannerActive && (
                                 <div className="text-center p-8 border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center w-full h-full">
-                                    <p className="text-gray-500">La cámara está desactivada.</p>
+                                    <p className="text-gray-500">{isUnlocked ? 'La cámara está desactivada.' : 'Sistema bloqueado. Verifica un código para empezar.'}</p>
                                 </div>
                             )}
                         </div>
@@ -1586,7 +1585,7 @@ export default function Home() {
                         )}
                         
                         <div id="scanner-controls" className="mt-4 flex flex-wrap gap-2 justify-center">
-                            <button onClick={startScanner} disabled={scannerActive || loading || !encargado} className="px-4 py-2 text-white font-semibold rounded-lg shadow-md transition-colors duration-200 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-sm">
+                            <button onClick={startScanner} disabled={scannerActive || loading || !encargado || !isUnlocked} className="px-4 py-2 text-white font-semibold rounded-lg shadow-md transition-colors duration-200 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-sm">
                                 Iniciar
                             </button>
                             <button onClick={stopScanner} disabled={!scannerActive} className="px-4 py-2 text-white font-semibold rounded-lg shadow-md transition-colors duration-200 bg-red-600 hover:bg-red-700 disabled:bg-gray-400 text-sm">
@@ -1633,6 +1632,7 @@ export default function Home() {
                                 className="w-full border-0 bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0"
                                 placeholder="Escriba el código..."
                                 onKeyDown={(e) => e.key === 'Enter' && handleManualAdd()}
+                                disabled={!isUnlocked}
                             />
                             <Button
                                 type="button"
@@ -1640,6 +1640,7 @@ export default function Home() {
                                 onClick={handleManualAdd}
                                 size="icon"
                                 className="h-8 w-8 bg-starbucks-green hover:bg-starbucks-dark text-white rounded-md mr-1"
+                                disabled={!isUnlocked}
                             >
                                 <PlusCircle className="h-5 w-5" />
                             </Button>
@@ -1690,3 +1691,5 @@ export default function Home() {
     </>
   );
 }
+
+    
