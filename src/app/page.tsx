@@ -29,6 +29,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
+import { Checkbox } from '@/components/ui/checkbox';
 
 
 type ScannedItem = {
@@ -127,11 +128,12 @@ export default function Home() {
   const [showCargarProduccion, setShowCargarProduccion] = useState(false);
   const [loteProgramado, setLoteProgramado] = useState('');
   const [cargaFilterType, setCargaFilterType] = useState<'persona' | 'lote'>('persona');
-  const [isUnlocked, setIsUnlocked] = useState(true);
+  const [isUnlocked, setIsUnlocked] = useState(false);
   const [verificationCode, setVerificationCode] = useState('');
   const [isVerifying, setIsVerifying] = useState(false);
   const [verificationResult, setVerificationResult] = useState<VerificationResult>({ status: 'pending', message: 'Ingrese un código de corte para registrar la fecha.' });
   const [selectedArea, setSelectedArea] = useState('');
+  const [skipAreaSelection, setSkipAreaSelection] = useState(false);
 
 
   // Refs para elementos del DOM y la instancia del escáner
@@ -466,7 +468,7 @@ export default function Home() {
               code: String(item.code),
               name: name, 
               name_inc: item.encargado,
-              place: item.area,
+              place: skipAreaSelection ? null : selectedArea,
               sku: sku,
               product: producto,
               quantity: cantidad,
@@ -495,7 +497,7 @@ export default function Home() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [selectedArea, skipAreaSelection]);
 
   const handleManualAssociate = () => {
     if (!selectedPersonal) {
@@ -506,9 +508,9 @@ export default function Home() {
         showModalNotification('Lista Vacía', 'No hay etiquetas pendientes para asociar.', 'info');
         return;
     }
-    if (scannedData.some(item => item.esti_time === null || item.esti_time === undefined)) {
-        showModalNotification('Faltan Datos', 'Por favor, completa todos los campos de "Tiempo Estimado" antes de asociar.', 'destructive');
-        return;
+    if (!selectedArea && !skipAreaSelection) {
+      showModalNotification('Falta Área', 'Por favor, selecciona un área de trabajo o marca la opción para continuar sin una.', 'destructive');
+      return;
     }
     associateNameToScans(selectedPersonal, scannedData);
     setSelectedPersonal(''); // Reset dropdown
@@ -704,7 +706,7 @@ export default function Home() {
     } finally {
         setLoading(false);
     }
-}, [addCodeAndUpdateCounters, associateNameToScans, scannedData, personalList, scanMode, isUnlocked]);
+}, [addCodeAndUpdateCounters, associateNameToScans, scannedData, personalList, scanMode]);
 
 
   useEffect(() => {
@@ -838,8 +840,10 @@ export default function Home() {
     }, [scannerActive, selectedScannerMode, onScanSuccess]);
   
   const startScanner = () => {
-    if (!encargado.trim()) return showAppMessage('Por favor, ingresa el nombre del encargado.', 'duplicate');
-    if (!selectedArea) return showAppMessage('Por favor, selecciona un área de trabajo.', 'duplicate');
+    if (!encargado.trim()) {
+      showAppMessage('Por favor, ingresa el nombre del encargado.', 'duplicate');
+      return;
+    }
     setScannerActive(true);
     if(selectedScannerMode === 'camara') {
       showAppMessage('Cámara activada. Apunta al código.', 'info');
@@ -866,11 +870,16 @@ export default function Home() {
 
   const handleManualAdd = async () => {
       const manualCodeInput = document.getElementById('manual-code-input') as HTMLInputElement;
-      if (!encargado.trim()) return showAppMessage('Por favor, ingresa el nombre del encargado.', 'duplicate');
-      if (!selectedArea) return showAppMessage('Por favor, selecciona un área de trabajo.', 'duplicate');
-
+      if (!encargado.trim()) {
+        showAppMessage('Por favor, ingresa el nombre del encargado.', 'duplicate');
+        return;
+      }
+      
       const manualCode = manualCodeInput.value.trim();
-      if (!manualCode) return showAppMessage('Por favor, ingresa un código para agregar.', 'duplicate');
+      if (!manualCode) {
+        showAppMessage('Por favor, ingresa un código para agregar.', 'duplicate');
+        return;
+      }
       
       await processScan(manualCode);
       manualCodeInput.value = '';
@@ -878,16 +887,22 @@ export default function Home() {
   };
   
 const deleteRow = (codeToDelete: string) => {
-    setScannedData(prevData => prevData.filter(item => item.code !== codeToDelete));
-    scannedCodesRef.current.delete(codeToDelete);
+    setScannedData(prevData => {
+        const newData = prevData.filter(item => item.code !== codeToDelete);
+        
+        // We also need to update the counters after filtering
+        const newMelCount = newData.filter(item => item.code.startsWith('4')).length;
+        const newOtherCount = newData.length - newMelCount;
 
-    if (codeToDelete.startsWith('4')) {
-        setMelCodesCount(prev => prev - 1);
-    } else {
-        setOtherCodesCount(prev => prev - 1);
-    }
-    showAppMessage(`Registro ${codeToDelete} borrado.`, 'info');
-    invalidateCSV();
+        setMelCodesCount(newMelCount);
+        setOtherCodesCount(newOtherCount);
+        
+        scannedCodesRef.current.delete(codeToDelete);
+        showAppMessage(`Registro ${codeToDelete} borrado.`, 'info');
+        invalidateCSV();
+
+        return newData;
+    });
 };
 
   const handleTimeChange = (code: string, value: string) => {
@@ -1001,6 +1016,10 @@ const deleteRow = (codeToDelete: string) => {
       showAppMessage('Por favor, selecciona un miembro del personal.', 'duplicate');
       return;
     }
+    if (!selectedArea && !skipAreaSelection) {
+      showAppMessage('Por favor, selecciona un área de trabajo o marca la opción para continuar sin una.', 'destructive');
+      return;
+    }
     if (scannedData.some(item => item.esti_time === null || item.esti_time === undefined)) {
       showAppMessage('Por favor, completa todos los campos de "Tiempo Estimado" antes de programar.', 'duplicate');
       return;
@@ -1043,7 +1062,7 @@ const deleteRow = (codeToDelete: string) => {
             sku: item.sku,
             name: selectedPersonal,
             name_inc: item.encargado,
-            area: item.area,
+            place: skipAreaSelection ? null : selectedArea,
             product: item.producto,
             quantity: item.cantidad,
             organization: item.empresa,
@@ -1066,6 +1085,8 @@ const deleteRow = (codeToDelete: string) => {
         setOtherCodesCount(0);
         setSelectedPersonal('');
         setLoteProgramado('');
+        setSelectedArea('');
+        setSkipAreaSelection(false);
 
     } catch (error: any) {
         console.error("Error al guardar producción programada:", error);
@@ -1165,7 +1186,7 @@ const deleteRow = (codeToDelete: string) => {
               fecha: new Date(item.date).toLocaleDateString('es-MX'),
               hora: new Date(item.date).toLocaleTimeString('es-MX'),
               encargado: item.name_inc,
-              area: item.area || 'CARGA_PROGRAMADA',
+              area: item.place || 'CARGA_PROGRAMADA',
               sku: item.sku,
               cantidad: item.quantity,
               producto: item.product,
@@ -1225,7 +1246,7 @@ const deleteRow = (codeToDelete: string) => {
       info: 'scan-info'
   };
   
-  const isAssociationDisabled = scannedData.length === 0 || !isUnlocked || scannedData.some(item => item.esti_time === null || item.esti_time === undefined);
+  const isAssociationDisabled = scannedData.length === 0 || loading || (!selectedArea && !skipAreaSelection);
 
   const totalEstimatedTime = useMemo(() => {
     return scannedData.reduce((acc, item) => acc + (item.esti_time || 0), 0);
@@ -1430,14 +1451,21 @@ const deleteRow = (codeToDelete: string) => {
         {showCargarProduccion && CargarProduccionSection}
 
         <div className="p-4 bg-starbucks-cream rounded-lg mt-4 space-y-4">
-            <div>
-                <Label className="block text-sm font-bold text-starbucks-dark mb-2">Área de Trabajo:</Label>
-                <div className="grid grid-cols-3 gap-2">
-                    <button onClick={() => setSelectedArea('VIVERO')} className={`area-btn w-full px-4 py-3 text-sm rounded-md shadow-sm focus:outline-none ${selectedArea === 'VIVERO' ? 'scanner-mode-selected' : ''}`}>VIVERO</button>
-                    <button onClick={() => setSelectedArea('QUINTA')} className={`area-btn w-full px-4 py-3 text-sm rounded-md shadow-sm focus:outline-none ${selectedArea === 'QUINTA' ? 'scanner-mode-selected' : ''}`}>QUINTA</button>
-                    <button onClick={() => setSelectedArea('LAVADO')} className={`area-btn w-full px-4 py-3 text-sm rounded-md shadow-sm focus:outline-none ${selectedArea === 'LAVADO' ? 'scanner-mode-selected' : ''}`}>LAVADO</button>
-                </div>
-            </div>
+          <div>
+              <Label className="block text-sm font-bold text-starbucks-dark mb-2">Área de Trabajo:</Label>
+              <div className="grid grid-cols-3 gap-2">
+                  <button onClick={() => setSelectedArea('VIVERO')} disabled={skipAreaSelection} className={`area-btn w-full px-4 py-3 text-sm rounded-md shadow-sm focus:outline-none disabled:bg-gray-200 disabled:cursor-not-allowed ${selectedArea === 'VIVERO' ? 'scanner-mode-selected' : ''}`}>VIVERO</button>
+                  <button onClick={() => setSelectedArea('QUINTA')} disabled={skipAreaSelection} className={`area-btn w-full px-4 py-3 text-sm rounded-md shadow-sm focus:outline-none disabled:bg-gray-200 disabled:cursor-not-allowed ${selectedArea === 'QUINTA' ? 'scanner-mode-selected' : ''}`}>QUINTA</button>
+                  <button onClick={() => setSelectedArea('LAVADO')} disabled={skipAreaSelection} className={`area-btn w-full px-4 py-3 text-sm rounded-md shadow-sm focus:outline-none disabled:bg-gray-200 disabled:cursor-not-allowed ${selectedArea === 'LAVADO' ? 'scanner-mode-selected' : ''}`}>LAVADO</button>
+              </div>
+              <div className="flex items-center space-x-2 mt-2">
+                  <Checkbox id="skip-area" checked={skipAreaSelection} onCheckedChange={(checked) => setSkipAreaSelection(Boolean(checked))} />
+                  <Label htmlFor="skip-area" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                      Continuar sin asignar área
+                  </Label>
+              </div>
+          </div>
+
           <div className="space-y-2 md:flex md:items-center md:gap-4 md:space-y-0">
             <label className="block text-sm font-bold text-starbucks-dark flex-shrink-0">Asociar Pendientes a:</label>
             <div className="flex-grow">
@@ -1461,7 +1489,7 @@ const deleteRow = (codeToDelete: string) => {
                 type="text"
                 value={loteProgramado}
                 onChange={(e) => setLoteProgramado(e.target.value)}
-                placeholder="Ej. TANDA-01-AM"
+                placeholder="Ej. 12345"
                 className="bg-transparent"
                 disabled={loading}
               />
@@ -1470,12 +1498,7 @@ const deleteRow = (codeToDelete: string) => {
             Guardar como Producción Programada
           </Button>
         </div>
-        {isAssociationDisabled && scannedData.length > 0 && !isUnlocked && (
-            <p className="text-xs text-red-600 mt-2">Verifica un código de corte válido para habilitar la asociación.</p>
-        )}
         
-        
-
         {totalEstimatedTime > 0 && (
             <div className="mt-4 p-3 bg-blue-100 border border-blue-300 rounded-lg text-center">
                 <p className="font-semibold text-blue-800 flex items-center justify-center gap-2">
