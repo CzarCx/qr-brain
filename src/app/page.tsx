@@ -466,7 +466,7 @@ export default function Home() {
               code: String(item.code),
               name: name, 
               name_inc: item.encargado,
-              area: item.area,
+              place: item.area,
               sku: sku,
               product: producto,
               quantity: cantidad,
@@ -1225,7 +1225,7 @@ const deleteRow = (codeToDelete: string) => {
       info: 'scan-info'
   };
   
-  const isAssociationDisabled = scannedData.length === 0 || scannedData.some(item => item.esti_time === null || item.esti_time === undefined);
+  const isAssociationDisabled = scannedData.length === 0 || !isUnlocked || scannedData.some(item => item.esti_time === null || item.esti_time === undefined);
 
   const totalEstimatedTime = useMemo(() => {
     return scannedData.reduce((acc, item) => acc + (item.esti_time || 0), 0);
@@ -1470,8 +1470,8 @@ const deleteRow = (codeToDelete: string) => {
             Guardar como Producción Programada
           </Button>
         </div>
-        {isAssociationDisabled && scannedData.length > 0 && (
-            <p className="text-xs text-red-600 mt-2">Completa todos los campos de "Tiempo Estimado" para poder asociar.</p>
+        {isAssociationDisabled && scannedData.length > 0 && !isUnlocked && (
+            <p className="text-xs text-red-600 mt-2">Verifica un código de corte válido para habilitar la asociación.</p>
         )}
         
         
