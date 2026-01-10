@@ -1209,7 +1209,7 @@ export default function Home() {
       info: 'scan-info'
   };
   
-  const isAssociationDisabled = scannedData.length === 0 || scannedData.some(item => item.esti_time === null || item.esti_time === undefined);
+  const isAssociationDisabled = scannedData.length === 0 || scannedData.some(item => item.esti_time === null || item.esti_time === undefined) || !isUnlocked;
 
   const totalEstimatedTime = useMemo(() => {
     return scannedData.reduce((acc, item) => acc + (item.esti_time || 0), 0);
@@ -1446,9 +1446,12 @@ export default function Home() {
           </Button>
 
         </div>
-          {isAssociationDisabled && scannedData.length > 0 && (
+          {(isAssociationDisabled && scannedData.length > 0) && (
             <p className="text-xs text-red-600 mt-2">Completa todos los campos de "Tiempo Estimado" para poder asociar.</p>
         )}
+         {!isUnlocked && scannedData.length > 0 && (
+             <p className="text-xs text-red-600 mt-2">Verifica un código de corte válido para habilitar la asociación.</p>
+         )}
         
 
         {totalEstimatedTime > 0 && (
@@ -1534,7 +1537,7 @@ export default function Home() {
                             {isVerifying ? 'Verificando...' : <Search className="h-4 w-4"/>}
                         </Button>
                     </div>
-                    <p className={`text-xs mt-2 ${verificationResult.status === 'error' ? 'text-red-600' : 'text-gray-600'}`}>{verificationResult.message}</p>
+                    <p className={`text-xs mt-2 ${verificationResult.status === 'error' || verificationResult.status === 'not-found' ? 'text-red-600' : 'text-gray-600'}`}>{verificationResult.message}</p>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
