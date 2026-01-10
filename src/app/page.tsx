@@ -593,6 +593,7 @@ export default function Home() {
             return;
         }
 
+        // Check if the scanned code is a person's name
         const isKnownPersonal = personalList.some(p => p.name === finalCode);
         if (isKnownPersonal) {
             if ('vibrate' in navigator) navigator.vibrate([100, 50, 100]);
@@ -602,6 +603,43 @@ export default function Home() {
             return;
         }
 
+        // New Validation: Check corte_etiquetas
+        const { data: etiquetaInfo, error: etiquetaInfoError } = await supabaseEtiquetas
+            .from('etiquetas_i')
+            .select('code_i')
+            .eq('code', finalCode)
+            .single();
+
+        if (etiquetaInfoError && etiquetaInfoError.code !== 'PGRST116') {
+            throw new Error(`Error al buscar code_i: ${etiquetaInfoError.message}`);
+        }
+
+        if (!etiquetaInfo || !etiquetaInfo.code_i) {
+            showModalNotification('Error de Etiqueta', `La etiqueta ${finalCode} no tiene un código de corte (code_i) asociado.`, 'destructive');
+            playErrorSound();
+            setLoading(false);
+            return;
+        }
+
+        const { data: vCodeInfo, error: vCodeInfoError } = await supabaseEtiquetas
+            .from('v_code')
+            .select('corte_etiquetas')
+            .eq('code_i', etiquetaInfo.code_i)
+            .single();
+
+        if (vCodeInfoError && vCodeInfoError.code !== 'PGRST116') {
+             throw new Error(`Error al verificar corte: ${vCodeInfoError.message}`);
+        }
+        
+        if (!vCodeInfo || vCodeInfo.corte_etiquetas === null) {
+            showModalNotification('Corte no Realizado', `La etiqueta ${finalCode} no puede ser asignada porque el corte aún no ha sido realizado.`, 'destructive');
+            playErrorSound();
+            setLoading(false);
+            return;
+        }
+
+
+        // Continue with existing assignment checks
         const { data: personalData, error: personalError } = await supabase
             .from('personal')
             .select('code, name, name_inc')
@@ -647,6 +685,7 @@ export default function Home() {
         setLoading(false);
     }
 }, [addCodeAndUpdateCounters, associateNameToScans, scannedData, personalList, scanMode]);
+
 
   useEffect(() => {
     if(lastScannedCode) {
@@ -1715,3 +1754,5 @@ export default function Home() {
     </>
   );
 }
+
+    
