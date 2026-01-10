@@ -70,6 +70,11 @@ type DbStatus = {
     etiquetasDb: 'connecting' | 'success' | 'error';
 };
 
+type VerificationResult = {
+    status: 'verified' | 'not-found' | 'error' | 'pending';
+    message: string;
+};
+
 
 // Helper function to check if a string is likely a name
 const isLikelyName = (text: string): boolean => {
@@ -122,6 +127,10 @@ export default function Home() {
   const [showCargarProduccion, setShowCargarProduccion] = useState(false);
   const [loteProgramado, setLoteProgramado] = useState('');
   const [cargaFilterType, setCargaFilterType] = useState<'persona' | 'lote'>('persona');
+  const [isUnlocked, setIsUnlocked] = useState(false);
+  const [verificationCode, setVerificationCode] = useState('');
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [verificationResult, setVerificationResult] = useState<VerificationResult>({ status: 'pending', message: 'Sistema bloqueado. Verifica un código de corte para continuar.' });
 
 
   // Refs para elementos del DOM y la instancia del escáner
@@ -1163,13 +1172,46 @@ export default function Home() {
       }
   };
 
+  const handleVerifyCode = async () => {
+    if (!verificationCode) {
+        setVerificationResult({ status: 'error', message: 'Por favor, ingresa un código.' });
+        return;
+    }
+    setIsVerifying(true);
+    setVerificationResult({ status: 'pending', message: 'Verificando...' });
+    try {
+        const { data, error } = await supabaseEtiquetas
+            .from('v_code')
+            .select('corte_etiquetas')
+            .eq('code_i', verificationCode)
+            .single();
+
+        if (error && error.code !== 'PGRST116') {
+            throw error;
+        }
+
+        if (data && data.corte_etiquetas !== null) {
+            setIsUnlocked(true);
+            setVerificationResult({ status: 'verified', message: 'Sistema desbloqueado. Puedes asignar producción.' });
+        } else if (data && data.corte_etiquetas === null) {
+            setVerificationResult({ status: 'not-found', message: 'Código válido, pero el corte aún no se ha realizado. La asignación está bloqueada.' });
+        } else {
+            setVerificationResult({ status: 'not-found', message: 'Código de corte no encontrado o inválido.' });
+        }
+    } catch (e: any) {
+        setVerificationResult({ status: 'error', message: `Error al verificar: ${e.message}` });
+    } finally {
+        setIsVerifying(false);
+    }
+  };
+
   const messageClasses: any = {
       success: 'scan-success',
       duplicate: 'scan-duplicate',
       info: 'scan-info'
   };
   
-  const isAssociationDisabled = scannedData.length === 0 || scannedData.some(item => item.esti_time === null || item.esti_time === undefined);
+  const isAssociationDisabled = scannedData.length === 0 || scannedData.some(item => item.esti_time === null || item.esti_time === undefined) || !isUnlocked;
 
   const totalEstimatedTime = useMemo(() => {
     return scannedData.reduce((acc, item) => acc + (item.esti_time || 0), 0);
@@ -1401,7 +1443,7 @@ export default function Home() {
                 disabled={loading}
               />
           </div>
-          <Button onClick={handleProduccionProgramada} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg shadow-sm text-sm transition-colors duration-200 w-full" disabled={loading || isAssociationDisabled}>
+          <Button onClick={handleProduccionProgramada} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg shadow-sm text-sm transition-colors duration-200 w-full" disabled={isAssociationDisabled || loading}>
             Guardar como Producción Programada
           </Button>
 
@@ -1477,6 +1519,29 @@ export default function Home() {
                         <AlertDescription>{dbError}</AlertDescription>
                     </Alert>
                 )}
+                
+                <div className={`p-4 rounded-lg border-2 ${isUnlocked ? 'border-green-400 bg-green-50' : 'border-red-400 bg-red-50'}`}>
+                    <Label className="text-sm font-bold text-starbucks-dark">Verificar Código de Corte</Label>
+                     <div className="flex items-center gap-2 mt-1">
+                        <div className={`flex items-center gap-2 font-semibold p-2 rounded-md text-sm ${isUnlocked ? 'bg-green-200 text-green-800' : 'bg-red-200 text-red-800'}`}>
+                            {isUnlocked ? <Unlock className="h-4 w-4" /> : <Lock className="h-4 w-4" />}
+                            <span>{isUnlocked ? 'Desbloqueado' : 'Bloqueado'}</span>
+                        </div>
+                        <Input
+                            type="text"
+                            value={verificationCode}
+                            onChange={(e) => setVerificationCode(e.target.value)}
+                            className="flex-grow bg-transparent"
+                            placeholder="Ingresa el código de corte..."
+                            onKeyDown={(e) => e.key === 'Enter' && handleVerifyCode()}
+                            disabled={isUnlocked || isVerifying}
+                        />
+                        <Button onClick={handleVerifyCode} disabled={isUnlocked || isVerifying}>
+                            {isVerifying ? 'Verificando...' : <Search className="h-4 w-4"/>}
+                        </Button>
+                    </div>
+                    <p className={`text-xs mt-2 ${verificationResult.status === 'error' ? 'text-red-600' : 'text-gray-600'}`}>{verificationResult.message}</p>
+                </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     {/* Columna Izquierda: Controles */}
