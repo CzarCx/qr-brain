@@ -618,15 +618,16 @@ export default function Home() {
             return;
         }
 
-        // New Validation: Check corte_etiquetas
+        // Strict validation flow
+        // 1. Find code_i from etiquetas_i
         const { data: etiquetaInfo, error: etiquetaInfoError } = await supabaseEtiquetas
             .from('etiquetas_i')
             .select('code_i')
             .eq('code', finalCode)
             .single();
-
+        
         if (etiquetaInfoError && etiquetaInfoError.code !== 'PGRST116') {
-            throw new Error(`Error al buscar code_i: ${etiquetaInfoError.message}`);
+            throw new Error(`Error al buscar en 'etiquetas_i': ${etiquetaInfoError.message}`);
         }
 
         if (!etiquetaInfo || !etiquetaInfo.code_i) {
@@ -636,6 +637,7 @@ export default function Home() {
             return;
         }
 
+        // 2. Find corte_etiquetas from v_code using code_i
         const { data: vCodeInfo, error: vCodeInfoError } = await supabaseEtiquetas
             .from('v_code')
             .select('corte_etiquetas')
@@ -643,10 +645,11 @@ export default function Home() {
             .single();
 
         if (vCodeInfoError && vCodeInfoError.code !== 'PGRST116') {
-             throw new Error(`Error al verificar corte: ${vCodeInfoError.message}`);
+             throw new Error(`Error al verificar el corte en 'v_code': ${vCodeInfoError.message}`);
         }
         
-        if (!isUnlocked && (!vCodeInfo || vCodeInfo.corte_etiquetas === null)) {
+        // 3. Check if corte_etiquetas is null
+        if (!vCodeInfo || vCodeInfo.corte_etiquetas === null) {
             showModalNotification('Corte no Realizado', `La etiqueta ${finalCode} no puede ser asignada porque el corte aún no ha sido realizado.`, 'destructive');
             playErrorSound();
             setLoading(false);
@@ -654,7 +657,7 @@ export default function Home() {
         }
 
 
-        // Continue with existing assignment checks
+        // Continue with existing assignment checks if validation passes
         const { data: personalData, error: personalError } = await supabase
             .from('personal')
             .select('code, name, name_inc')
@@ -675,18 +678,18 @@ export default function Home() {
             return;
         }
 
-        const { data: etiquetaData, error: etiquetaError } = await supabaseEtiquetas
+        const { data: fullEtiquetaData, error: fullEtiquetaError } = await supabaseEtiquetas
             .from('etiquetas_i')
             .select('code, sku, quantity, product, organization, sales_num')
             .eq('code', finalCode)
             .single();
         
-        if (etiquetaError && etiquetaError.code !== 'PGRST116') {
-            throw new Error(`Error al buscar en 'etiquetas_i': ${etiquetaError.message}`);
+        if (fullEtiquetaError && fullEtiquetaError.code !== 'PGRST116') {
+            throw new Error(`Error al buscar detalles en 'etiquetas_i': ${fullEtiquetaError.message}`);
         }
 
-        if (etiquetaData) {
-            const { sku, quantity, product, organization, sales_num } = etiquetaData;
+        if (fullEtiquetaData) {
+            const { sku, quantity, product, organization, sales_num } = fullEtiquetaData;
             await addCodeAndUpdateCounters(finalCode, { sku, cantidad: quantity, producto: product, empresa: organization, venta: sales_num ? String(sales_num) : null });
         } else {
             playErrorSound();
@@ -1217,7 +1220,7 @@ const deleteRow = (codeToDelete: string) => {
       info: 'scan-info'
   };
   
-  const isAssociationDisabled = scannedData.length === 0 || scannedData.some(item => item.esti_time === null || item.esti_time === undefined);
+  const isAssociationDisabled = !isUnlocked || scannedData.length === 0 || scannedData.some(item => item.esti_time === null || item.esti_time === undefined);
 
   const totalEstimatedTime = useMemo(() => {
     return scannedData.reduce((acc, item) => acc + (item.esti_time || 0), 0);
@@ -1745,3 +1748,5 @@ const deleteRow = (codeToDelete: string) => {
     </>
   );
 }
+
+    
