@@ -87,6 +87,20 @@ export default function Home() {
     fetchEncargados();
   }, []);
 
+  useEffect(() => {
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (deliveryList.length > 0) {
+        event.preventDefault();
+        event.returnValue = '¿Estás seguro de refrescar la página? Si refrescas se perderá el progreso de etiquetas escaneadas.';
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [deliveryList]);
+
   const showAppMessage = (text: string, type: 'success' | 'error' | 'info' | 'warning') => {
     setMessage({text, type});
   };

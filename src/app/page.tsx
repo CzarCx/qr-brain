@@ -127,7 +127,7 @@ export default function Home() {
   const [showCargarProduccion, setShowCargarProduccion] = useState(false);
   const [loteProgramado, setLoteProgramado] = useState('');
   const [cargaFilterType, setCargaFilterType] = useState<'persona' | 'lote'>('persona');
-  const [isUnlocked, setIsUnlocked] = useState(false);
+  const [isUnlocked, setIsUnlocked] = useState(true);
   const [verificationCode, setVerificationCode] = useState('');
   const [isVerifying, setIsVerifying] = useState(false);
   const [verificationResult, setVerificationResult] = useState<VerificationResult>({ status: 'pending', message: 'Ingrese un código de corte para registrar la fecha.' });
@@ -177,6 +177,20 @@ export default function Home() {
       scannerSectionRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
   }, [encargado, isMobile]);
+
+  useEffect(() => {
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (scannedData.length > 0) {
+        event.preventDefault();
+        event.returnValue = '¿Estás seguro de refrescar la página? Si refrescas se perderá el progreso de etiquetas escaneadas.';
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [scannedData]);
 
   useEffect(() => {
     const fetchPersonal = async () => {
@@ -330,7 +344,7 @@ export default function Home() {
       hour12: false,
     });
 
-    const newData: ScannedItem = {
+    setScannedData(prevData => [...prevData, {
       code: finalCode,
       fecha: fechaEscaneo,
       hora: horaEscaneo,
@@ -342,9 +356,7 @@ export default function Home() {
       empresa: details.empresa,
       venta: details.venta,
       esti_time: estimatedTime,
-    };
-    
-    setScannedData(prevData => [...prevData, newData]);
+    }]);
 
     invalidateCSV();
     return true;
@@ -858,8 +870,8 @@ export default function Home() {
       manualCodeInput.focus();
   };
   
-  const deleteRow = (codeToDelete: string) => {
-    setScannedData(prev => prev.filter(item => item.code !== codeToDelete));
+const deleteRow = (codeToDelete: string) => {
+    setScannedData(prevData => prevData.filter(item => item.code !== codeToDelete));
     scannedCodesRef.current.delete(codeToDelete);
 
     if (codeToDelete.startsWith('4')) {
@@ -1205,7 +1217,7 @@ export default function Home() {
       info: 'scan-info'
   };
   
-  const isAssociationDisabled = scannedData.length === 0 || scannedData.some(item => item.esti_time === null || item.esti_time === undefined) || !isUnlocked;
+  const isAssociationDisabled = scannedData.length === 0 || scannedData.some(item => item.esti_time === null || item.esti_time === undefined);
 
   const totalEstimatedTime = useMemo(() => {
     return scannedData.reduce((acc, item) => acc + (item.esti_time || 0), 0);
@@ -1224,10 +1236,10 @@ export default function Home() {
   const renderPendingRecords = () => {
     const sortedData = [...scannedData].sort((a, b) => new Date(`1970/01/01 ${a.hora}`).valueOf() - new Date(`1970/01/01 ${b.hora}`).valueOf());
     let lastFinishTime: Date | null = null;
-    const now = new Date();
     
     // Failsafe to ensure no duplicates are rendered
     const uniqueData = Array.from(new Map(sortedData.map(item => [item.code, item])).values());
+    const now = new Date();
 
     return uniqueData.map((data: ScannedItem, index: number) => {
         let startTime: Date;
@@ -1442,10 +1454,7 @@ export default function Home() {
             Guardar como Producción Programada
           </Button>
         </div>
-        {isAssociationDisabled && scannedData.length > 0 && !isUnlocked && (
-          <p className="text-xs text-yellow-600 mt-2 font-semibold">Verifica un código de corte válido para habilitar la asociación.</p>
-        )}
-        {(isAssociationDisabled && scannedData.length > 0 && isUnlocked) && (
+        {(isAssociationDisabled && scannedData.length > 0) && (
             <p className="text-xs text-red-600 mt-2">Completa todos los campos de "Tiempo Estimado" para poder asociar.</p>
         )}
         

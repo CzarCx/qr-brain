@@ -117,6 +117,20 @@ export default function CalificarPage() {
     fetchEncargados();
   }, []);
 
+  useEffect(() => {
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (massScannedCodes.length > 0) {
+        event.preventDefault();
+        event.returnValue = '¿Estás seguro de refrescar la página? Si refrescas se perderá el progreso de etiquetas escaneadas.';
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [massScannedCodes]);
+
   const playBeep = () => {
     const context = new (window.AudioContext || (window as any).webkitAudioContext)();
     if (!context) return;
