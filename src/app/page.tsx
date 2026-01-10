@@ -265,7 +265,7 @@ export default function Home() {
     oscillator.stop(context.currentTime + 0.2);
   };
 
-  const addCodeAndUpdateCounters = useCallback(async (codeToAdd: string, details: { sku: string | null; cantidad: number | null; producto: string | null; empresa: string | null; venta: string | null; }) => {
+ const addCodeAndUpdateCounters = useCallback(async (codeToAdd: string, details: { sku: string | null; cantidad: number | null; producto: string | null; empresa: string | null; venta: string | null; }) => {
     const finalCode = String(codeToAdd).trim();
 
     if (scannedCodesRef.current.has(finalCode)) {
@@ -859,19 +859,17 @@ export default function Home() {
   };
   
   const deleteRow = (codeToDelete: string) => {
-    if (window.confirm(`¿Confirmas que deseas borrar el registro "${codeToDelete}"?`)) {
-        setScannedData(prev => prev.filter(item => item.code !== codeToDelete));
-        scannedCodesRef.current.delete(codeToDelete);
+    setScannedData(prev => prev.filter(item => item.code !== codeToDelete));
+    scannedCodesRef.current.delete(codeToDelete);
 
-        if(codeToDelete.startsWith('4')) {
-            setMelCodesCount(prev => prev - 1);
-        } else {
-            setOtherCodesCount(prev => prev - 1);
-        }
-        showAppMessage(`Registro ${codeToDelete} borrado.`, 'info');
-        invalidateCSV();
+    if (codeToDelete.startsWith('4')) {
+        setMelCodesCount(prev => prev - 1);
+    } else {
+        setOtherCodesCount(prev => prev - 1);
     }
-  };
+    showAppMessage(`Registro ${codeToDelete} borrado.`, 'info');
+    invalidateCSV();
+};
 
   const handleTimeChange = (code: string, value: string) => {
     const time = Number(value);
@@ -1207,7 +1205,7 @@ export default function Home() {
       info: 'scan-info'
   };
   
-  const isAssociationDisabled = scannedData.length === 0 || scannedData.some(item => item.esti_time === null || item.esti_time === undefined);
+  const isAssociationDisabled = scannedData.length === 0 || scannedData.some(item => item.esti_time === null || item.esti_time === undefined) || !isUnlocked;
 
   const totalEstimatedTime = useMemo(() => {
     return scannedData.reduce((acc, item) => acc + (item.esti_time || 0), 0);
@@ -1226,6 +1224,7 @@ export default function Home() {
   const renderPendingRecords = () => {
     const sortedData = [...scannedData].sort((a, b) => new Date(`1970/01/01 ${a.hora}`).valueOf() - new Date(`1970/01/01 ${b.hora}`).valueOf());
     let lastFinishTime: Date | null = null;
+    const now = new Date();
     
     // Failsafe to ensure no duplicates are rendered
     const uniqueData = Array.from(new Map(sortedData.map(item => [item.code, item])).values());
@@ -1233,7 +1232,7 @@ export default function Home() {
     return uniqueData.map((data: ScannedItem, index: number) => {
         let startTime: Date;
         if (index === 0) {
-            startTime = currentTime;
+            startTime = now;
         } else {
             startTime = lastFinishTime!;
         }
@@ -1442,9 +1441,11 @@ export default function Home() {
           <Button onClick={handleProduccionProgramada} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg shadow-sm text-sm transition-colors duration-200 w-full" disabled={isAssociationDisabled || loading}>
             Guardar como Producción Programada
           </Button>
-
         </div>
-          {(isAssociationDisabled && scannedData.length > 0) && (
+        {isAssociationDisabled && scannedData.length > 0 && !isUnlocked && (
+          <p className="text-xs text-yellow-600 mt-2 font-semibold">Verifica un código de corte válido para habilitar la asociación.</p>
+        )}
+        {(isAssociationDisabled && scannedData.length > 0 && isUnlocked) && (
             <p className="text-xs text-red-600 mt-2">Completa todos los campos de "Tiempo Estimado" para poder asociar.</p>
         )}
         
@@ -1735,5 +1736,3 @@ export default function Home() {
     </>
   );
 }
-
-    
