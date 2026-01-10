@@ -1028,17 +1028,19 @@ const triggerMassQualify = async () => {
           <DialogContent>
               <DialogHeader>
                   <DialogTitle>Confirmar Anexión a Lote Existente</DialogTitle>
-                  <DialogDescription className="pt-4">
-                      <Alert variant="destructive" className="mb-4">
-                          <AlertTriangle className="h-4 w-4" />
-                          <AlertTitle>¡Atención!</AlertTitle>
-                          <AlertDescription>
-                              El lote <span className="font-bold">{loteId}</span> ya existe.
-                          </AlertDescription>
-                      </Alert>
-                      <p>Este lote contiene actualmente <span className="font-bold">{loteConfirmation.existingCount}</span> etiqueta(s).</p>
-                      <p>Estás a punto de anexar <span className="font-bold">{loteConfirmation.newCount}</span> nueva(s) etiqueta(s).</p>
-                      <p className="mt-4">¿Deseas continuar y anexar estas etiquetas al lote existente?</p>
+                  <DialogDescription asChild>
+                    <div className="pt-4 space-y-4">
+                        <Alert variant="destructive" className="mb-4">
+                            <AlertTriangle className="h-4 w-4" />
+                            <AlertTitle>¡Atención!</AlertTitle>
+                            <AlertDescription>
+                                El lote <span className="font-bold">{loteId}</span> ya existe.
+                            </AlertDescription>
+                        </Alert>
+                        <div>Este lote contiene actualmente <span className="font-bold">{loteConfirmation.existingCount}</span> etiqueta(s).</div>
+                        <div>Estás a punto de anexar <span className="font-bold">{loteConfirmation.newCount}</span> nueva(s) etiqueta(s).</div>
+                        <div className="mt-4">¿Deseas continuar y anexar estas etiquetas al lote existente?</div>
+                    </div>
                   </DialogDescription>
               </DialogHeader>
               <DialogFooter>
