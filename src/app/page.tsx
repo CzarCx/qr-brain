@@ -121,6 +121,7 @@ export default function Home() {
   const [loadedProgData, setLoadedProgData] = useState<any[]>([]);
   const [personToAssign, setPersonToAssign] = useState('');
   const [showCargarProduccion, setShowCargarProduccion] = useState(false);
+  const [loteProgramado, setLoteProgramado] = useState('');
 
 
   // Refs para elementos del DOM y la instancia del escáner
@@ -941,6 +942,11 @@ export default function Home() {
       showAppMessage('Por favor, completa todos los campos de "Tiempo Estimado" antes de programar.', 'duplicate');
       return;
     }
+    if (!loteProgramado.trim()) {
+      showAppMessage('Por favor, ingresa un identificador de lote para la producción programada.', 'duplicate');
+      return;
+    }
+
     setLoading(true);
     showAppMessage('Guardando producción programada...', 'info');
 
@@ -959,17 +965,19 @@ export default function Home() {
         status: 'PROGRAMADO',
         date_ini: null,
         date_esti: null,
+        lote_p: loteProgramado,
       }));
 
       const { error } = await supabase.from('personal_prog').insert(dataToInsert);
       if (error) throw error;
 
-      showAppMessage(`¡Éxito! Se guardaron ${scannedData.length} registros en producción programada.`, 'success');
+      showAppMessage(`¡Éxito! Se guardaron ${scannedData.length} registros en producción programada con el lote ${loteProgramado}.`, 'success');
       setScannedData([]);
       scannedCodesRef.current.clear();
       setMelCodesCount(0);
       setOtherCodesCount(0);
       setSelectedPersonal('');
+      setLoteProgramado('');
 
     } catch (error: any) {
       console.error("Error al guardar producción programada:", error);
@@ -1295,7 +1303,8 @@ export default function Home() {
         
         {showCargarProduccion && CargarProduccionSection}
 
-        <div className="p-4 bg-starbucks-cream rounded-lg mt-4 space-y-2 md:flex md:items-center md:gap-4 md:space-y-0">
+        <div className="p-4 bg-starbucks-cream rounded-lg mt-4 space-y-4">
+          <div className="space-y-2 md:flex md:items-center md:gap-4 md:space-y-0">
             <label className="block text-sm font-bold text-starbucks-dark flex-shrink-0">Asociar Pendientes a:</label>
             <div className="flex-grow">
                 <Combobox
@@ -1307,14 +1316,26 @@ export default function Home() {
                     buttonClassName="bg-transparent border-input"
                 />
             </div>
-            <div className="flex gap-2 flex-wrap">
-                <Button onClick={handleManualAssociate} disabled={isAssociationDisabled || loading} className="bg-starbucks-accent hover:bg-starbucks-green text-white w-full sm:w-auto">
-                    <UserPlus className="mr-2 h-4 w-4" /> Asociar y Guardar
-                </Button>
-                  <Button onClick={handleProduccionProgramada} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg shadow-sm text-sm transition-colors duration-200 w-full sm:w-auto" disabled={loading || isAssociationDisabled}>
-                    Producción Programada
-                  </Button>
-            </div>
+             <Button onClick={handleManualAssociate} disabled={isAssociationDisabled || loading} className="bg-starbucks-accent hover:bg-starbucks-green text-white w-full sm:w-auto">
+                <UserPlus className="mr-2 h-4 w-4" /> Asociar y Guardar
+            </Button>
+          </div>
+          <div className="space-y-2">
+             <Label htmlFor="lote-programado" className="text-sm font-bold text-starbucks-dark">Lote de Producción Programada:</Label>
+             <Input
+                id="lote-programado"
+                type="text"
+                value={loteProgramado}
+                onChange={(e) => setLoteProgramado(e.target.value)}
+                placeholder="Ej. TANDA-01-AM"
+                className="bg-transparent"
+                disabled={loading}
+              />
+          </div>
+          <Button onClick={handleProduccionProgramada} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg shadow-sm text-sm transition-colors duration-200 w-full" disabled={loading || isAssociationDisabled}>
+            Guardar como Producción Programada
+          </Button>
+
         </div>
           {isAssociationDisabled && scannedData.length > 0 && (
             <p className="text-xs text-red-600 mt-2">Completa todos los campos de "Tiempo Estimado" para poder asociar.</p>
