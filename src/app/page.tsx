@@ -131,6 +131,7 @@ export default function Home() {
   const [verificationCode, setVerificationCode] = useState('');
   const [isVerifying, setIsVerifying] = useState(false);
   const [verificationResult, setVerificationResult] = useState<VerificationResult>({ status: 'pending', message: 'Ingrese un código de corte para registrar la fecha.' });
+  const [selectedArea, setSelectedArea] = useState('');
 
 
   // Refs para elementos del DOM y la instancia del escáner
@@ -349,7 +350,7 @@ export default function Home() {
       fecha: fechaEscaneo,
       hora: horaEscaneo,
       encargado: encargado.trim(),
-      area: 'REVISIÓN CALIDAD',
+      area: selectedArea,
       sku: details.sku,
       cantidad: details.cantidad,
       producto: details.producto,
@@ -360,7 +361,7 @@ export default function Home() {
 
     invalidateCSV();
     return true;
-  }, [encargado]);
+  }, [encargado, selectedArea]);
 
   const associateNameToScans = useCallback(async (name: string, pendingScans: ScannedItem[]) => {
     if (pendingScans.length === 0) {
@@ -465,6 +466,7 @@ export default function Home() {
               code: String(item.code),
               name: name, 
               name_inc: item.encargado,
+              area: item.area,
               sku: sku,
               product: producto,
               quantity: cantidad,
@@ -837,6 +839,7 @@ export default function Home() {
   
   const startScanner = () => {
     if (!encargado.trim()) return showAppMessage('Por favor, ingresa el nombre del encargado.', 'duplicate');
+    if (!selectedArea) return showAppMessage('Por favor, selecciona un área de trabajo.', 'duplicate');
     setScannerActive(true);
     if(selectedScannerMode === 'camara') {
       showAppMessage('Cámara activada. Apunta al código.', 'info');
@@ -864,6 +867,7 @@ export default function Home() {
   const handleManualAdd = async () => {
       const manualCodeInput = document.getElementById('manual-code-input') as HTMLInputElement;
       if (!encargado.trim()) return showAppMessage('Por favor, ingresa el nombre del encargado.', 'duplicate');
+      if (!selectedArea) return showAppMessage('Por favor, selecciona un área de trabajo.', 'duplicate');
 
       const manualCode = manualCodeInput.value.trim();
       if (!manualCode) return showAppMessage('Por favor, ingresa un código para agregar.', 'duplicate');
@@ -916,7 +920,7 @@ const deleteRow = (codeToDelete: string) => {
           const encargadoName = (encargado || "SIN_NOMBRE").trim().toUpperCase().replace(/ /g, '_');
           const etiquetas = `ETIQUETAS(${scannedCodesRef.current.size})`;
           const removeAccents = (str: string) => str.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-          const areaName = removeAccents(("REVISIÓN CALIDAD").toUpperCase().replace(/ /g, '_'));
+          const areaName = removeAccents((selectedArea).toUpperCase().replace(/ /g, '_'));
 
           const day = String(now.getDate()).padStart(2, '0');
           const year = String(now.getFullYear()).slice(-2);
@@ -1039,6 +1043,7 @@ const deleteRow = (codeToDelete: string) => {
             sku: item.sku,
             name: selectedPersonal,
             name_inc: item.encargado,
+            area: item.area,
             product: item.producto,
             quantity: item.cantidad,
             organization: item.empresa,
@@ -1160,7 +1165,7 @@ const deleteRow = (codeToDelete: string) => {
               fecha: new Date(item.date).toLocaleDateString('es-MX'),
               hora: new Date(item.date).toLocaleTimeString('es-MX'),
               encargado: item.name_inc,
-              area: 'CARGA_PROGRAMADA',
+              area: item.area || 'CARGA_PROGRAMADA',
               sku: item.sku,
               cantidad: item.quantity,
               producto: item.product,
@@ -1220,7 +1225,7 @@ const deleteRow = (codeToDelete: string) => {
       info: 'scan-info'
   };
   
-  const isAssociationDisabled = !isUnlocked || scannedData.length === 0 || scannedData.some(item => item.esti_time === null || item.esti_time === undefined);
+  const isAssociationDisabled = scannedData.length === 0 || scannedData.some(item => item.esti_time === null || item.esti_time === undefined);
 
   const totalEstimatedTime = useMemo(() => {
     return scannedData.reduce((acc, item) => acc + (item.esti_time || 0), 0);
@@ -1237,12 +1242,12 @@ const deleteRow = (codeToDelete: string) => {
   };
 
   const renderPendingRecords = () => {
-    const sortedData = [...scannedData].sort((a, b) => new Date(`1970/01/01 ${a.hora}`).valueOf() - new Date(`1970/01/01 ${b.hora}`).valueOf());
     let lastFinishTime: Date | null = null;
+    const now = new Date();
     
     // Failsafe to ensure no duplicates are rendered
-    const uniqueData = Array.from(new Map(sortedData.map(item => [item.code, item])).values());
-    const now = new Date();
+    const uniqueData = Array.from(new Map(scannedData.map(item => [item.code, item])).values());
+
 
     return uniqueData.map((data: ScannedItem, index: number) => {
         let startTime: Date;
@@ -1425,6 +1430,14 @@ const deleteRow = (codeToDelete: string) => {
         {showCargarProduccion && CargarProduccionSection}
 
         <div className="p-4 bg-starbucks-cream rounded-lg mt-4 space-y-4">
+            <div>
+                <Label className="block text-sm font-bold text-starbucks-dark mb-2">Área de Trabajo:</Label>
+                <div className="grid grid-cols-3 gap-2">
+                    <button onClick={() => setSelectedArea('VIVERO')} className={`area-btn w-full px-4 py-3 text-sm rounded-md shadow-sm focus:outline-none ${selectedArea === 'VIVERO' ? 'scanner-mode-selected' : ''}`}>VIVERO</button>
+                    <button onClick={() => setSelectedArea('QUINTA')} className={`area-btn w-full px-4 py-3 text-sm rounded-md shadow-sm focus:outline-none ${selectedArea === 'QUINTA' ? 'scanner-mode-selected' : ''}`}>QUINTA</button>
+                    <button onClick={() => setSelectedArea('LAVADO')} className={`area-btn w-full px-4 py-3 text-sm rounded-md shadow-sm focus:outline-none ${selectedArea === 'LAVADO' ? 'scanner-mode-selected' : ''}`}>LAVADO</button>
+                </div>
+            </div>
           <div className="space-y-2 md:flex md:items-center md:gap-4 md:space-y-0">
             <label className="block text-sm font-bold text-starbucks-dark flex-shrink-0">Asociar Pendientes a:</label>
             <div className="flex-grow">
@@ -1457,7 +1470,7 @@ const deleteRow = (codeToDelete: string) => {
             Guardar como Producción Programada
           </Button>
         </div>
-        {(isAssociationDisabled && scannedData.length > 0) && (
+        {isAssociationDisabled && scannedData.length > 0 && (
             <p className="text-xs text-red-600 mt-2">Completa todos los campos de "Tiempo Estimado" para poder asociar.</p>
         )}
         
@@ -1748,5 +1761,3 @@ const deleteRow = (codeToDelete: string) => {
     </>
   );
 }
-
-    
