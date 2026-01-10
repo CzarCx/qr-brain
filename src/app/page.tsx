@@ -344,9 +344,7 @@ export default function Home() {
       esti_time: estimatedTime,
     };
     
-    setScannedData(prevData => [...prevData].sort((a, b) => new Date(`1970/01/01 ${a.hora}`).valueOf() - new Date(`1970/01/01 ${b.hora}`).valueOf()));
     setScannedData(prevData => [...prevData, newData]);
-
 
     invalidateCSV();
     return true;
@@ -636,7 +634,7 @@ export default function Home() {
              throw new Error(`Error al verificar corte: ${vCodeInfoError.message}`);
         }
         
-        if (!vCodeInfo || vCodeInfo.corte_etiquetas === null) {
+        if (!isUnlocked && (!vCodeInfo || vCodeInfo.corte_etiquetas === null)) {
             showModalNotification('Corte no Realizado', `La etiqueta ${finalCode} no puede ser asignada porque el corte aún no ha sido realizado.`, 'destructive');
             playErrorSound();
             setLoading(false);
@@ -689,7 +687,7 @@ export default function Home() {
     } finally {
         setLoading(false);
     }
-}, [addCodeAndUpdateCounters, associateNameToScans, scannedData, personalList, scanMode]);
+}, [addCodeAndUpdateCounters, associateNameToScans, scannedData, personalList, scanMode, isUnlocked]);
 
 
   useEffect(() => {
@@ -1737,3 +1735,5 @@ export default function Home() {
     </>
   );
 }
+
+    
