@@ -130,7 +130,7 @@ export default function Home() {
   const [isUnlocked, setIsUnlocked] = useState(false);
   const [verificationCode, setVerificationCode] = useState('');
   const [isVerifying, setIsVerifying] = useState(false);
-  const [verificationResult, setVerificationResult] = useState<VerificationResult>({ status: 'pending', message: 'Sistema bloqueado. Verifica un código de corte para continuar.' });
+  const [verificationResult, setVerificationResult] = useState<VerificationResult>({ status: 'pending', message: 'Ingrese un código de corte para registrar la fecha.' });
 
 
   // Refs para elementos del DOM y la instancia del escáner
@@ -1172,38 +1172,36 @@ export default function Home() {
       }
   };
 
-  const handleVerifyCode = async () => {
+ const handleVerifyCode = async () => {
     if (!verificationCode) {
         setVerificationResult({ status: 'error', message: 'Por favor, ingresa un código.' });
         return;
     }
     setIsVerifying(true);
-    setVerificationResult({ status: 'pending', message: 'Verificando...' });
+    setVerificationResult({ status: 'pending', message: 'Registrando corte...' });
     try {
         const { data, error } = await supabaseEtiquetas
             .from('v_code')
-            .select('corte_etiquetas')
+            .update({ corte_etiquetas: new Date().toISOString() })
             .eq('code_i', verificationCode)
-            .single();
+            .select();
 
-        if (error && error.code !== 'PGRST116') {
+        if (error) {
             throw error;
         }
 
-        if (data && data.corte_etiquetas !== null) {
-            setIsUnlocked(true);
-            setVerificationResult({ status: 'verified', message: 'Sistema desbloqueado. Puedes asignar producción.' });
-        } else if (data && data.corte_etiquetas === null) {
-            setVerificationResult({ status: 'not-found', message: 'Código válido, pero el corte aún no se ha realizado. La asignación está bloqueada.' });
+        if (data && data.length > 0) {
+            setVerificationResult({ status: 'verified', message: `¡Éxito! Se registró el corte para el código ${verificationCode}.` });
         } else {
             setVerificationResult({ status: 'not-found', message: 'Código de corte no encontrado o inválido.' });
         }
     } catch (e: any) {
-        setVerificationResult({ status: 'error', message: `Error al verificar: ${e.message}` });
+        setVerificationResult({ status: 'error', message: `Error al registrar el corte: ${e.message}` });
     } finally {
         setIsVerifying(false);
+        setVerificationCode('');
     }
-  };
+};
 
   const messageClasses: any = {
       success: 'scan-success',
@@ -1211,7 +1209,7 @@ export default function Home() {
       info: 'scan-info'
   };
   
-  const isAssociationDisabled = scannedData.length === 0 || scannedData.some(item => item.esti_time === null || item.esti_time === undefined) || !isUnlocked;
+  const isAssociationDisabled = scannedData.length === 0 || scannedData.some(item => item.esti_time === null || item.esti_time === undefined);
 
   const totalEstimatedTime = useMemo(() => {
     return scannedData.reduce((acc, item) => acc + (item.esti_time || 0), 0);
@@ -1520,13 +1518,9 @@ export default function Home() {
                     </Alert>
                 )}
                 
-                <div className={`p-4 rounded-lg border-2 ${isUnlocked ? 'border-green-400 bg-green-50' : 'border-red-400 bg-red-50'}`}>
+                <div className="p-4 rounded-lg border-2 border-gray-300 bg-gray-50">
                     <Label className="text-sm font-bold text-starbucks-dark">Verificar Código de Corte</Label>
                      <div className="flex items-center gap-2 mt-1">
-                        <div className={`flex items-center gap-2 font-semibold p-2 rounded-md text-sm ${isUnlocked ? 'bg-green-200 text-green-800' : 'bg-red-200 text-red-800'}`}>
-                            {isUnlocked ? <Unlock className="h-4 w-4" /> : <Lock className="h-4 w-4" />}
-                            <span>{isUnlocked ? 'Desbloqueado' : 'Bloqueado'}</span>
-                        </div>
                         <Input
                             type="text"
                             value={verificationCode}
@@ -1534,9 +1528,9 @@ export default function Home() {
                             className="flex-grow bg-transparent"
                             placeholder="Ingresa el código de corte..."
                             onKeyDown={(e) => e.key === 'Enter' && handleVerifyCode()}
-                            disabled={isUnlocked || isVerifying}
+                            disabled={isVerifying}
                         />
-                        <Button onClick={handleVerifyCode} disabled={isUnlocked || isVerifying}>
+                        <Button onClick={handleVerifyCode} disabled={isVerifying}>
                             {isVerifying ? 'Verificando...' : <Search className="h-4 w-4"/>}
                         </Button>
                     </div>
