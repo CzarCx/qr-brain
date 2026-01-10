@@ -946,50 +946,74 @@ export default function Home() {
       showAppMessage('Por favor, completa todos los campos de "Tiempo Estimado" antes de programar.', 'duplicate');
       return;
     }
-    if (!loteProgramado.trim()) {
+    const loteId = loteProgramado.trim();
+    if (!loteId) {
       showAppMessage('Por favor, ingresa un identificador de lote para la producción programada.', 'duplicate');
       return;
     }
-
+    
+    // Validation 1: Check if loteProgramado is numeric
+    if (!/^\d+$/.test(loteId)) {
+        showAppMessage('El identificador de lote debe ser solo numérico.', 'duplicate');
+        return;
+    }
+    
     setLoading(true);
     showAppMessage('Guardando producción programada...', 'info');
 
     try {
-      const dataToInsert = scannedData.map(item => ({
-        code: String(item.code),
-        sku: item.sku,
-        name: selectedPersonal,
-        name_inc: item.encargado,
-        product: item.producto,
-        quantity: item.cantidad,
-        organization: item.empresa,
-        sales_num: Number(item.venta),
-        date: new Date().toISOString(),
-        esti_time: item.esti_time,
-        status: 'PROGRAMADO',
-        date_ini: null,
-        date_esti: null,
-        lote_p: loteProgramado,
-      }));
+        // Validation 2: Check if lote_p already exists
+        const { data: existingLote, error: checkError } = await supabase
+            .from('personal_prog')
+            .select('lote_p')
+            .eq('lote_p', loteId)
+            .limit(1);
 
-      const { error } = await supabase.from('personal_prog').insert(dataToInsert);
-      if (error) throw error;
+        if (checkError) {
+            throw new Error(`Error al verificar el lote: ${checkError.message}`);
+        }
 
-      showAppMessage(`¡Éxito! Se guardaron ${scannedData.length} registros en producción programada con el lote ${loteProgramado}.`, 'success');
-      setScannedData([]);
-      scannedCodesRef.current.clear();
-      setMelCodesCount(0);
-      setOtherCodesCount(0);
-      setSelectedPersonal('');
-      setLoteProgramado('');
+        if (existingLote && existingLote.length > 0) {
+            showAppMessage(`El lote "${loteId}" ya existe. Por favor, usa un identificador diferente.`, 'duplicate');
+            setLoading(false);
+            return;
+        }
+
+        const dataToInsert = scannedData.map(item => ({
+            code: String(item.code),
+            sku: item.sku,
+            name: selectedPersonal,
+            name_inc: item.encargado,
+            product: item.producto,
+            quantity: item.cantidad,
+            organization: item.empresa,
+            sales_num: Number(item.venta),
+            date: new Date().toISOString(),
+            esti_time: item.esti_time,
+            status: 'PROGRAMADO',
+            date_ini: null,
+            date_esti: null,
+            lote_p: loteId,
+        }));
+
+        const { error } = await supabase.from('personal_prog').insert(dataToInsert);
+        if (error) throw error;
+
+        showAppMessage(`¡Éxito! Se guardaron ${scannedData.length} registros en producción programada con el lote ${loteId}.`, 'success');
+        setScannedData([]);
+        scannedCodesRef.current.clear();
+        setMelCodesCount(0);
+        setOtherCodesCount(0);
+        setSelectedPersonal('');
+        setLoteProgramado('');
 
     } catch (error: any) {
-      console.error("Error al guardar producción programada:", error);
-      showAppMessage(`Error al guardar: ${error.message}`, 'duplicate');
+        console.error("Error al guardar producción programada:", error);
+        showAppMessage(`Error al guardar: ${error.message}`, 'duplicate');
     } finally {
-      setLoading(false);
+        setLoading(false);
     }
-  };
+};
 
   const handleOpenCargarSeccion = async () => {
     setShowCargarProduccion(true);
@@ -1691,5 +1715,3 @@ export default function Home() {
     </>
   );
 }
-
-    
