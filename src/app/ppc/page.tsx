@@ -58,7 +58,7 @@ type Encargado = {
 
 export default function PpcPage() {
   const [isMounted, setIsMounted] = useState(false);
-  const [message, setMessage] = useState('Apunte la cámara a un código QR.');
+  const [message, setMessage] = useState({ text: 'Apunte la cámara a un código QR.', type: 'info', show: false });
   const [lastScannedResult, setLastScannedResult] = useState<ScanResult | null>(null);
   const [scannerActive, setScannerActive] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -77,6 +77,7 @@ export default function PpcPage() {
   const isMobile = useIsMobile();
   const [dbError, setDbError] = useState<string | null>(null);
 
+  const messageTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const html5QrCodeRef = useRef<Html5Qrcode | null>(null);
   const readerRef = useRef<HTMLDivElement>(null);
@@ -85,6 +86,16 @@ export default function PpcPage() {
   const massScannedCodesRef = useRef(new Set<string>());
   const physicalScannerInputRef = useRef<HTMLInputElement | null>(null);
   const bufferRef = useRef('');
+
+   const showAppMessage = (text: string, type: 'success' | 'error' | 'info' | 'warning') => {
+    if (messageTimeoutRef.current) {
+      clearTimeout(messageTimeoutRef.current);
+    }
+    setMessage({ text, type, show: true });
+    messageTimeoutRef.current = setTimeout(() => {
+      setMessage(prev => ({ ...prev, show: false }));
+    }, 2500);
+  };
 
    useEffect(() => {
     setIsMounted(true);
@@ -159,13 +170,13 @@ export default function PpcPage() {
     
     lastScanTimeRef.current = Date.now();
     setLoading(true);
-    setMessage('Procesando código...');
+    showAppMessage('Procesando código...', 'info');
     if ('vibrate' in navigator) navigator.vibrate(100);
 
     let finalCode = String(decodedText).trim();
     
     if (scanMode === 'masivo' && massScannedCodesRef.current.has(finalCode)) {
-        setMessage(`Código duplicado: ${finalCode}`);
+        showAppMessage(`Código duplicado: ${finalCode}`, 'warning');
         setLoading(false);
         return;
     }
@@ -193,19 +204,19 @@ export default function PpcPage() {
 
             if (data.status === 'PPC') {
                 playWarningSound();
-                setMessage(`Etiqueta ya procesada como PPC.`);
+                showAppMessage(`Etiqueta ya procesada como PPC.`, 'warning');
                 setLastScannedResult(result);
             } else {
                  playBeep();
                  if (scanMode === 'individual') {
                     setLastScannedResult(result);
-                    setMessage('Etiqueta confirmada correctamente.');
+                    showAppMessage('Etiqueta confirmada correctamente.', 'success');
                     setIsRatingModalOpen(true);
                 } else { // Mass scanning mode
                     if (data.status === 'REPORTADO') {
-                       setMessage(`Añadido (Reportado): ${finalCode}`);
+                       showAppMessage(`Añadido (Reportado): ${finalCode}`, 'info');
                     } else {
-                       setMessage(`Añadido a la lista: ${finalCode}`);
+                       showAppMessage(`Añadido a la lista: ${finalCode}`, 'success');
                     }
                     setMassScannedCodes(prev => [result, ...prev]);
                     massScannedCodesRef.current.add(finalCode);
@@ -220,7 +231,7 @@ export default function PpcPage() {
                 found: false,
             };
             setLastScannedResult(result);
-            setMessage('Esta etiqueta todavía no ha sido asignada.');
+            showAppMessage('Esta etiqueta todavía no ha sido asignada.', 'error');
         }
     } catch (e: any) {
         playWarningSound();
@@ -232,7 +243,7 @@ export default function PpcPage() {
             error: e.message,
         };
         setLastScannedResult(result);
-        setMessage(`Error al consultar la base de datos: ${e.message}`);
+        showAppMessage(`Error al consultar la base de datos: ${e.message}`, 'error');
     } finally {
         setLoading(false);
     }
@@ -332,9 +343,9 @@ export default function PpcPage() {
             console.error("Error al iniciar camara:", err);
              // Si el error es el de transición, manejalo de forma controlada.
             if (String(err).includes('Cannot transition to a new state')) {
-                setMessage('Error al iniciar la cámara. Por favor, intenta de nuevo.');
+                showAppMessage('Error al iniciar la cámara. Por favor, intenta de nuevo.', 'error');
             } else {
-                setMessage('Error al iniciar la cámara. Revisa los permisos.');
+                showAppMessage('Error al iniciar la cámara. Revisa los permisos.', 'error');
             }
             setScannerActive(false); // Forzar el estado a "detenido"
         });
@@ -363,7 +374,7 @@ export default function PpcPage() {
         setShowReportSelect(false);
         setSelectedReport('');
         setLastScannedResult(null);
-        setMessage('Apunte la cámara a un código QR.');
+        showAppMessage('Apunte la cámara a un código QR.', 'info');
     }
   }
 
@@ -454,7 +465,7 @@ const handleMassQualify = async () => {
   const removeFromMassList = (codeToRemove: string) => {
     setMassScannedCodes(prev => prev.filter(item => item.code !== codeToRemove));
     massScannedCodesRef.current.delete(codeToRemove);
-    setMessage(`Código ${codeToRemove} eliminado de la lista.`);
+    showAppMessage(`Código ${codeToRemove} eliminado de la lista.`, 'info');
   };
 
 
@@ -475,6 +486,13 @@ const handleMassQualify = async () => {
         fetchReportReasons();
     }
   }, [isRatingModalOpen, showReportSelect, reportReasons.length]);
+
+  const messageClasses: any = {
+      success: 'bg-green-500/80 text-white',
+      error: 'bg-red-500/80 text-white',
+      warning: 'bg-yellow-500/80 text-white',
+      info: 'bg-blue-500/80 text-white'
+  };
 
 
   return (
@@ -538,6 +556,11 @@ const handleMassQualify = async () => {
           <div className="bg-starbucks-cream p-4 rounded-lg">
             <div className="scanner-container relative">
                 <div id="reader" ref={readerRef} style={{ display: selectedScannerMode === 'camara' && scannerActive ? 'block' : 'none' }}></div>
+                {message.show && (
+                    <div className={`scanner-message ${messageClasses[message.type]}`}>
+                        {message.text}
+                    </div>
+                )}
                 {scannerActive && selectedScannerMode === 'camara' && <div id="laser-line"></div>}
                 <input type="text" id="physical-scanner-input" ref={physicalScannerInputRef} className="hidden-input" autoComplete="off" />
                 {selectedScannerMode === 'camara' && !scannerActive && (
@@ -579,7 +602,7 @@ const handleMassQualify = async () => {
                 </div>
              )}
             <div id="scanner-controls" className="mt-4 flex flex-wrap gap-2 justify-center">
-              <button onClick={() => { setScannerActive(true); setLastScannedResult(null); setMessage('Apunte la cámara a un código QR.'); }} disabled={scannerActive || loading || !encargado} className="px-4 py-2 text-white font-semibold rounded-lg shadow-md transition-colors duration-200 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-sm">
+              <button onClick={() => { setScannerActive(true); setLastScannedResult(null); showAppMessage('Apunte la cámara a un código QR.', 'info'); }} disabled={scannerActive || loading || !encargado} className="px-4 py-2 text-white font-semibold rounded-lg shadow-md transition-colors duration-200 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-sm">
                 Iniciar
               </button>
               <button onClick={() => window.location.reload()} disabled={!scannerActive} className="px-4 py-2 text-white font-semibold rounded-lg shadow-md transition-colors duration-200 bg-red-600 hover:bg-red-700 disabled:bg-gray-400 text-sm">
@@ -592,9 +615,12 @@ const handleMassQualify = async () => {
           </div>
 
           <div id="result-container" className="space-y-4">
-            <div className={`p-3 rounded-lg text-center font-semibold text-base transition-all duration-300 ${!lastScannedResult && massScannedCodes.length === 0 ? 'bg-gray-100 text-gray-800' : lastScannedResult?.found ? 'bg-green-100 border-green-400 text-green-700' : 'bg-yellow-100 border-yellow-400 text-yellow-700'}`}>
-              {message}
-            </div>
+            {/* Fallback message display for when scanner is off */}
+            {!message.show && (
+                <div className="p-3 rounded-lg text-center font-semibold text-base bg-gray-100 text-gray-800">
+                    {lastScannedResult?.found ? `Último escaneo: ${lastScannedResult.code}` : 'Apunte la cámara a un código QR.'}
+                </div>
+            )}
 
             {/* Individual Scan Result */}
             {lastScannedResult && scanMode === 'individual' && (
@@ -730,5 +756,3 @@ const handleMassQualify = async () => {
     </>
   );
 }
-
-    

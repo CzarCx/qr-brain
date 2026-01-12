@@ -56,7 +56,7 @@ type Encargado = {
 };
 
 export default function ScannerPage() {
-  const [message, setMessage] = useState('Apunte la cámara a un código QR.');
+  const [message, setMessage] = useState({ text: 'Apunte la cámara a un código QR.', type: 'info', show: false });
   const [lastScannedResult, setLastScannedResult] = useState<ScanResult | null>(null);
   const [scannerActive, setScannerActive] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -70,12 +70,23 @@ export default function ScannerPage() {
   const [scanMode, setScanMode] = useState('individual');
   const [massScannedCodes, setMassScannedCodes] = useState<ScanResult[]>([]);
 
+  const messageTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const html5QrCodeRef = useRef<Html5Qrcode | null>(null);
   const readerRef = useRef<HTMLDivElement>(null);
   const lastScanTimeRef = useRef(Date.now());
   const MIN_SCAN_INTERVAL = 2000; // 2 seconds between scans
   const massScannedCodesRef = useRef(new Set<string>());
+
+   const showAppMessage = (text: string, type: 'success' | 'error' | 'info' | 'warning') => {
+    if (messageTimeoutRef.current) {
+      clearTimeout(messageTimeoutRef.current);
+    }
+    setMessage({ text, type, show: true });
+    messageTimeoutRef.current = setTimeout(() => {
+      setMessage(prev => ({ ...prev, show: false }));
+    }, 2500);
+  };
 
    useEffect(() => {
     const fetchEncargados = async () => {
@@ -98,12 +109,12 @@ export default function ScannerPage() {
     
     lastScanTimeRef.current = Date.now();
     setLoading(true);
-    setMessage('Procesando código...');
+    showAppMessage('Procesando código...', 'info');
     if ('vibrate' in navigator) navigator.vibrate(100);
 
     // Prevent duplicates in mass scanning mode
     if (scanMode === 'masivo' && massScannedCodesRef.current.has(decodedText)) {
-        setMessage(`Código duplicado: ${decodedText}`);
+        showAppMessage(`Código duplicado: ${decodedText}`, 'warning');
         setLoading(false);
         return;
     }
@@ -131,18 +142,18 @@ export default function ScannerPage() {
             };
 
             if (data.status === 'CALIFICADO') {
-                setMessage(`Etiqueta ya procesada (Estado: ${data.status}).`);
+                showAppMessage(`Etiqueta ya procesada (Estado: ${data.status}).`, 'warning');
                 setLastScannedResult(result);
             } else {
                  if (scanMode === 'individual') {
                     setLastScannedResult(result);
-                    setMessage('Etiqueta confirmada correctamente.');
+                    showAppMessage('Etiqueta confirmada correctamente.', 'success');
                     setIsRatingModalOpen(true);
                 } else { // Mass scanning mode
                     if (data.status === 'REPORTADO') {
-                       setMessage(`Añadido a la lista (previamente reportado): ${decodedText}`);
+                       showAppMessage(`Añadido a la lista (previamente reportado): ${decodedText}`, 'info');
                     } else {
-                       setMessage(`Añadido a la lista: ${decodedText}`);
+                       showAppMessage(`Añadido a la lista: ${decodedText}`, 'success');
                     }
                     setMassScannedCodes(prev => [result, ...prev]);
                     massScannedCodesRef.current.add(decodedText);
@@ -156,7 +167,7 @@ export default function ScannerPage() {
                 found: false,
             };
             setLastScannedResult(result);
-            setMessage('Esta etiqueta todavía no ha sido asignada.');
+            showAppMessage('Esta etiqueta todavía no ha sido asignada.', 'error');
         }
     } catch (e: any) {
         const result: ScanResult = {
@@ -167,7 +178,7 @@ export default function ScannerPage() {
             error: e.message,
         };
         setLastScannedResult(result);
-        setMessage(`Error al consultar la base de datos: ${e.message}`);
+        showAppMessage(`Error al consultar la base de datos: ${e.message}`, 'error');
     } finally {
         setLoading(false);
     }
@@ -200,7 +211,7 @@ export default function ScannerPage() {
             };
             qrCode.start({ facingMode: "environment" }, config, onScanSuccess, (e: any) => {}).catch(err => {
                 console.error("Error al iniciar camara:", err);
-                setMessage('Error al iniciar la cámara. Revisa los permisos.');
+                showAppMessage('Error al iniciar la cámara. Revisa los permisos.', 'error');
                 setScannerActive(false);
             });
         }
@@ -228,7 +239,7 @@ export default function ScannerPage() {
         setShowReportSelect(false);
         setSelectedReport('');
         setLastScannedResult(null);
-        setMessage('Apunte la cámara a un código QR.');
+        showAppMessage('Apunte la cámara a un código QR.', 'info');
     }
   }
 
@@ -319,7 +330,7 @@ const handleMassQualify = async () => {
   const removeFromMassList = (codeToRemove: string) => {
     setMassScannedCodes(prev => prev.filter(item => item.code !== codeToRemove));
     massScannedCodesRef.current.delete(codeToRemove);
-    setMessage(`Código ${codeToRemove} eliminado de la lista.`);
+    showAppMessage(`Código ${codeToRemove} eliminado de la lista.`, 'info');
   };
 
 
@@ -340,6 +351,13 @@ const handleMassQualify = async () => {
         fetchReportReasons();
     }
   }, [isRatingModalOpen, showReportSelect, reportReasons.length]);
+
+  const messageClasses: any = {
+      success: 'bg-green-500/80 text-white',
+      error: 'bg-red-500/80 text-white',
+      warning: 'bg-yellow-500/80 text-white',
+      info: 'bg-blue-500/80 text-white'
+  };
 
 
   return (
@@ -389,6 +407,11 @@ const handleMassQualify = async () => {
           <div className="bg-starbucks-cream p-4 rounded-lg">
             <div className="scanner-container relative">
                 <div id="reader" ref={readerRef} style={{ display: selectedScannerMode === 'camara' && scannerActive ? 'block' : 'none' }}></div>
+                 {message.show && (
+                    <div className={`scanner-message ${messageClasses[message.type]}`}>
+                        {message.text}
+                    </div>
+                )}
                 {scannerActive && selectedScannerMode === 'camara' && <div id="laser-line"></div>}
                 {selectedScannerMode === 'camara' && !scannerActive && (
                     <div className="text-center p-8 border-2 border-dashed border-gray-300 rounded-lg">
@@ -403,7 +426,7 @@ const handleMassQualify = async () => {
                 </div>
              )}
             <div id="scanner-controls" className="mt-4 flex flex-wrap gap-2 justify-center">
-              <button onClick={() => { setScannerActive(true); setLastScannedResult(null); setMessage('Apunte la cámara a un código QR.'); }} disabled={scannerActive || loading || !encargado} className="px-4 py-2 text-white font-semibold rounded-lg shadow-md transition-colors duration-200 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400">
+              <button onClick={() => { setScannerActive(true); setLastScannedResult(null); showAppMessage('Apunte la cámara a un código QR.', 'info'); }} disabled={scannerActive || loading || !encargado} className="px-4 py-2 text-white font-semibold rounded-lg shadow-md transition-colors duration-200 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400">
                 Iniciar Escaneo
               </button>
               <button onClick={() => setScannerActive(false)} disabled={!scannerActive || loading} className="px-4 py-2 text-white font-semibold rounded-lg shadow-md transition-colors duration-200 bg-red-600 hover:bg-red-700 disabled:bg-gray-400">
@@ -416,9 +439,12 @@ const handleMassQualify = async () => {
           </div>
 
           <div id="result-container" className="space-y-4">
-            <div className={`p-4 rounded-lg text-center font-semibold text-lg transition-all duration-300 ${!lastScannedResult && massScannedCodes.length === 0 ? 'bg-gray-100 text-gray-800' : lastScannedResult?.found ? 'bg-green-100 border-green-400 text-green-700' : 'bg-yellow-100 border-yellow-400 text-yellow-700'}`}>
-              {message}
-            </div>
+            {/* Fallback message display for when scanner is off */}
+            {!message.show && (
+                <div className="p-3 rounded-lg text-center font-semibold text-base bg-gray-100 text-gray-800">
+                    {lastScannedResult?.found ? `Último escaneo: ${lastScannedResult.code}` : 'Apunte la cámara a un código QR.'}
+                </div>
+            )}
 
             {/* Individual Scan Result */}
             {lastScannedResult && scanMode === 'individual' && (

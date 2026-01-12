@@ -35,7 +35,7 @@ type Encargado = {
 
 export default function Home() {
   const [isMounted, setIsMounted] = useState(false);
-  const [message, setMessage] = useState({text: 'Esperando para escanear...', type: 'info' as 'info' | 'success' | 'error' | 'warning'});
+  const [message, setMessage] = useState({text: 'Esperando para escanear...', type: 'info' as 'info' | 'success' | 'error' | 'warning', show: false});
   const [lastScanned, setLastScanned] = useState<string | null>(null);
   const [encargado, setEncargado] = useState('');
   const [encargadosList, setEncargadosList] = useState<Encargado[]>([]);
@@ -57,6 +57,7 @@ export default function Home() {
   const [loteId, setLoteId] = useState('');
   const [lotesCargadosCount, setLotesCargadosCount] = useState(0);
 
+  const messageTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Refs
   const html5QrCodeRef = useRef<Html5Qrcode | null>(null);
@@ -102,7 +103,13 @@ export default function Home() {
   }, [deliveryList]);
 
   const showAppMessage = (text: string, type: 'success' | 'error' | 'info' | 'warning') => {
-    setMessage({text, type});
+    if (messageTimeoutRef.current) {
+      clearTimeout(messageTimeoutRef.current);
+    }
+    setMessage({text, type, show: true});
+    messageTimeoutRef.current = setTimeout(() => {
+      setMessage(prev => ({...prev, show: false}));
+    }, 2500);
   };
   
   const showModalNotification = (title: string, message: string, variant: 'default' | 'destructive' = 'default') => {
@@ -449,10 +456,10 @@ export default function Home() {
 
 
   const messageClasses: any = {
-      success: 'bg-green-100 border-green-400 text-green-800',
-      error: 'bg-red-100 border-red-400 text-red-800',
-      warning: 'bg-yellow-100 border-yellow-400 text-yellow-800',
-      info: 'bg-blue-100 border-blue-400 text-blue-800'
+      success: 'bg-green-500/80 text-white',
+      error: 'bg-red-500/80 text-white',
+      warning: 'bg-yellow-500/80 text-white',
+      info: 'bg-blue-500/80 text-white'
   };
 
   return (
@@ -512,6 +519,11 @@ export default function Home() {
                 <div className="bg-starbucks-cream p-4 rounded-lg">
                     <div className="scanner-container relative">
                         <div id="reader" ref={readerRef} style={{ display: selectedScannerMode === 'camara' && scannerActive ? 'block' : 'none' }}></div>
+                         {message.show && (
+                            <div className={`scanner-message ${messageClasses[message.type]}`}>
+                                {message.text}
+                            </div>
+                        )}
                          {scannerActive && selectedScannerMode === 'camara' && <div id="laser-line"></div>}
                          <input type="text" id="physical-scanner-input" ref={physicalScannerInputRef} className="hidden-input" autoComplete="off" />
                          {selectedScannerMode === 'camara' && !scannerActive && (
@@ -644,9 +656,12 @@ export default function Home() {
                 </div>
 
                 <div id="result-container" className="space-y-4">
-                     <div id="message" className={`p-3 rounded-lg text-center font-medium text-base transition-all duration-300 ${messageClasses[message.type]}`}>
-                        {message.text}
-                    </div>
+                     {/* Fallback message display for when scanner is off */}
+                    {!message.show && (
+                        <div className="p-3 rounded-lg text-center font-semibold text-base bg-gray-100 text-gray-800">
+                           {lastScanned ? `Último escaneo: ${lastScanned}` : 'Esperando para escanear...'}
+                        </div>
+                    )}
                 </div>
             </div>
 
