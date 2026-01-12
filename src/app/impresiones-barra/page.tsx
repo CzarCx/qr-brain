@@ -343,7 +343,7 @@ export default function ImpresionesBarraPage() {
     return () => {
       cleanup();
     };
-  }, [scannerActive, selectedScannerMode, onScanSuccess, isMobile, isMounted]);
+  }, [scannerActive, selectedScannerMode, isMobile, isMounted]);
 
 
   useEffect(() => {

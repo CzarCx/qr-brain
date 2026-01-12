@@ -812,7 +812,7 @@ export default function Home() {
     return () => {
       cleanup();
     };
-  }, [scannerActive, selectedScannerMode, onScanSuccess, isMounted, isMobile]);
+  }, [scannerActive, selectedScannerMode, isMounted, isMobile]);
 
   const handlePhysicalScannerInput = (event: KeyboardEvent) => {
       if (event.key === 'Enter') {

@@ -424,7 +424,7 @@ export default function CalificarPage() {
     return () => {
       cleanup();
     };
-  }, [scannerActive, selectedScannerMode, onScanSuccess, isMobile, isMounted]);
+  }, [scannerActive, selectedScannerMode, isMobile, isMounted]);
 
 
   useEffect(() => {
@@ -1055,7 +1055,7 @@ const triggerMassQualify = async () => {
           <DialogContent>
               <DialogHeader>
                   <DialogTitle>Confirmar Anexión a Lote Existente</DialogTitle>
-                  <DialogDescription asChild>
+                  <DialogDescription>
                     <div className="pt-4 space-y-4">
                         <Alert variant="destructive" className="mb-4">
                             <AlertTriangle className="h-4 w-4" />
@@ -1081,3 +1081,4 @@ const triggerMassQualify = async () => {
     </>
   );
 }
+

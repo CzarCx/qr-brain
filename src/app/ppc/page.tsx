@@ -357,7 +357,7 @@ export default function PpcPage() {
     return () => {
       cleanup();
     };
-  }, [scannerActive, selectedScannerMode, onScanSuccess, isMobile, isMounted]);
+  }, [scannerActive, selectedScannerMode, isMobile, isMounted]);
 
 
   useEffect(() => {
