@@ -87,7 +87,7 @@ const isLikelyName = (text: string): boolean => {
 
 export default function Home() {
   const [isMounted, setIsMounted] = useState(false);
-  const [message, setMessage] = useState<{text: React.ReactNode, type: 'info' | 'success' | 'duplicate'}>({text: 'Esperando para escanear...', type: 'info'});
+  const [message, setMessage] = useState<{text: React.ReactNode, type: 'info' | 'success' | 'duplicate', show: boolean}>({text: 'Esperando para escanear...', type: 'info', show: false});
   const [lastScannedCode, setLastScannedCode] = useState<string | null>(null);
   const [encargado, setEncargado] = useState('');
   const [encargadosList, setEncargadosList] = useState<Encargado[]>([]);
@@ -149,6 +149,8 @@ export default function Home() {
   const scannedCodesRef = useRef(new Set<string>());
   const bufferRef = useRef('');
   const scanTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const messageTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
 
   const APPS_SCRIPT_URL =
     'https://script.google.com/macros/s/AKfycbwxN5n-iE00pi3JlOkImBgWD3-qptWsJxdyMJjXbRySgGvi7jqIsU9Puo7p2uvu5BioIbQ/exec';
@@ -231,7 +233,13 @@ export default function Home() {
   }, []);
 
   const showAppMessage = (text: React.ReactNode, type: 'success' | 'duplicate' | 'info') => {
-    setMessage({text, type});
+    if (messageTimeoutRef.current) {
+      clearTimeout(messageTimeoutRef.current);
+    }
+    setMessage({ text, type, show: true });
+    messageTimeoutRef.current = setTimeout(() => {
+      setMessage(prev => ({ ...prev, show: false }));
+    }, 2500);
   };
 
   const showModalNotification = (title: string, message: string, variant: 'default' | 'destructive' | 'success' = 'default') => {
@@ -347,7 +355,7 @@ export default function Home() {
       hour12: false,
     });
 
-    setScannedData(prevData => [...prevData, {
+    const newItem: ScannedItem = {
       code: finalCode,
       fecha: fechaEscaneo,
       hora: horaEscaneo,
@@ -359,7 +367,9 @@ export default function Home() {
       empresa: details.empresa,
       venta: details.venta,
       esti_time: estimatedTime,
-    }]);
+    };
+
+    setScannedData(prevData => [...prevData, newItem]);
 
     invalidateCSV();
     return true;
@@ -841,7 +851,7 @@ export default function Home() {
   
   const startScanner = () => {
     if (!encargado.trim()) {
-      showAppMessage('Por favor, ingresa el nombre del encargado.', 'duplicate');
+      showModalNotification('Falta Encargado', 'Por favor, ingresa el nombre del encargado.', 'destructive');
       return;
     }
     setScannerActive(true);
@@ -871,13 +881,13 @@ export default function Home() {
   const handleManualAdd = async () => {
       const manualCodeInput = document.getElementById('manual-code-input') as HTMLInputElement;
       if (!encargado.trim()) {
-        showAppMessage('Por favor, ingresa el nombre del encargado.', 'duplicate');
+        showModalNotification('Falta Encargado', 'Por favor, ingresa el nombre del encargado.', 'destructive');
         return;
       }
       
       const manualCode = manualCodeInput.value.trim();
       if (!manualCode) {
-        showAppMessage('Por favor, ingresa un código para agregar.', 'duplicate');
+        showModalNotification('Sin Código', 'Por favor, ingresa un código para agregar.', 'info');
         return;
       }
       
@@ -1114,7 +1124,7 @@ const deleteRow = (codeToDelete: string) => {
 
 
     } catch (error: any) {
-        showAppMessage('Error al cargar la lista de producción programada.', 'duplicate');
+      showModalNotification('Error', 'Error al cargar la lista de producción programada.', 'destructive');
     } finally {
         setLoadingProgramados(false);
     }
@@ -1125,7 +1135,7 @@ const deleteRow = (codeToDelete: string) => {
     const filterValue = byPerson ? selectedPersonalParaCargar : selectedLoteParaCargar;
 
     if (!filterValue) {
-        showAppMessage('Por favor, selecciona una persona o lote para cargar.', 'info');
+        showModalNotification('Sin Selección', 'Por favor, selecciona una persona o lote para cargar.', 'info');
         return;
     }
     setLoading(true);
@@ -1143,7 +1153,7 @@ const deleteRow = (codeToDelete: string) => {
         if (error) throw error;
 
         if (data.length === 0) {
-            showAppMessage(`No hay producción programada para ${filterValue}.`, 'info');
+            showModalNotification('Sin Resultados', `No hay producción programada para ${filterValue}.`, 'info');
             setLoading(false);
             return;
         }
@@ -1156,7 +1166,7 @@ const deleteRow = (codeToDelete: string) => {
 
     } catch (error: any) {
         console.error("Error al cargar producción programada:", error);
-        showAppMessage(`Error al cargar: ${error.message}`, 'duplicate');
+        showModalNotification('Error', `Error al cargar: ${error.message}`, 'destructive');
     } finally {
         setLoading(false);
     }
@@ -1241,9 +1251,9 @@ const deleteRow = (codeToDelete: string) => {
 };
 
   const messageClasses: any = {
-      success: 'scan-success',
-      duplicate: 'scan-duplicate',
-      info: 'scan-info'
+      success: 'bg-green-500/80 text-white',
+      duplicate: 'bg-red-500/80 text-white',
+      info: 'bg-blue-500/80 text-white'
   };
   
   const isAssociationDisabled = scannedData.length === 0 || loading || (!selectedArea && !skipAreaSelection);
@@ -1263,8 +1273,8 @@ const deleteRow = (codeToDelete: string) => {
   };
 
   const renderPendingRecords = () => {
-    let lastFinishTime: Date | null = null;
-    const now = new Date();
+    const renderTime = new Date();
+    let lastFinishTime: Date = renderTime;
     
     // Failsafe to ensure no duplicates are rendered
     const uniqueData = Array.from(new Map(scannedData.map(item => [item.code, item])).values());
@@ -1273,7 +1283,7 @@ const deleteRow = (codeToDelete: string) => {
     return uniqueData.map((data: ScannedItem, index: number) => {
         let startTime: Date;
         if (index === 0) {
-            startTime = now;
+            startTime = renderTime;
         } else {
             startTime = lastFinishTime!;
         }
@@ -1645,6 +1655,13 @@ const deleteRow = (codeToDelete: string) => {
                      <div ref={scannerSectionRef} className="bg-starbucks-cream p-4 rounded-lg flex flex-col justify-between">
                         <div className="scanner-container relative w-full flex-grow min-h-[250px] md:min-h-0">
                             <div id="reader" ref={readerRef} className="w-full h-full" style={{ display: selectedScannerMode === 'camara' && scannerActive ? 'block' : 'none' }}></div>
+                            
+                            {message.show && (
+                                <div className={`scanner-message ${messageClasses[message.type]}`}>
+                                    {message.text}
+                                </div>
+                            )}
+
                             {scannerActive && selectedScannerMode === 'camara' && <div id="laser-line"></div>}
                             <input type="text" id="physical-scanner-input" ref={physicalScannerInputRef} className="hidden-input" autoComplete="off" />
                             {selectedScannerMode === 'camara' && !scannerActive && (
@@ -1696,9 +1713,6 @@ const deleteRow = (codeToDelete: string) => {
 
 
                 <div className="space-y-4">
-                    <div id="message" className={`p-3 rounded-lg text-center font-semibold text-base transition-all duration-300 ${messageClasses[message.type]}`}>
-                        {message.text}
-                    </div>
                      {scanMode === 'assign' && (
                         <div className="grid grid-cols-3 gap-2 text-center">
                             <div className="bg-starbucks-cream p-2 rounded-lg">

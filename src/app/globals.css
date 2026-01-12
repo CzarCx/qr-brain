@@ -1,3 +1,4 @@
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -259,4 +260,28 @@ body {
 
 .form-input {
   @apply shadow-inner appearance-none border rounded-lg w-full py-2 px-3 text-base md:text-sm text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-starbucks-accent;
+}
+
+.scanner-message {
+  @apply absolute inset-0 flex items-center justify-center p-4 rounded-lg text-center font-semibold text-lg pointer-events-none;
+  animation: fade-in-out 2.5s ease-in-out forwards;
+}
+
+@keyframes fade-in-out {
+  0% {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  20% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  80% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.9);
+  }
 }
