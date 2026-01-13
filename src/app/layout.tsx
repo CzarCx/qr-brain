@@ -4,6 +4,9 @@ import type {Metadata} from 'next';
 import './globals.css';
 import Navbar from '@/components/Navbar'; // Import the new Navbar component
 import { useEffect } from 'react';
+import { Beaker } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+
 
 // export const metadata: Metadata = {
 //   title: 'Escáner de Códigos',
@@ -52,10 +55,24 @@ export default function RootLayout({
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
       </head>
       <body className="font-body antialiased bg-starbucks-light-gray">
-        <Navbar />
-        <main className="pt-16">
-            {children}
-        </main>
+        <TooltipProvider>
+            <div className="fixed top-4 right-4 z-[100]">
+                <Tooltip>
+                    <TooltipTrigger asChild>
+                        <div className="p-2 bg-yellow-400 text-yellow-900 rounded-full shadow-lg animate-pulse">
+                            <Beaker className="h-6 w-6" />
+                        </div>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                        <p>Entorno de Pruebas</p>
+                    </TooltipContent>
+                </Tooltip>
+            </div>
+            <Navbar />
+            <main className="pt-16">
+                {children}
+            </main>
+        </TooltipProvider>
       </body>
     </html>
   );
