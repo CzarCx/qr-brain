@@ -542,7 +542,7 @@ export default function Home() {
             
           if (fetchError) throw fetchError;
 
-          const existingCodeSet = new Set(existingCodes.map(item => item.code));
+          const existingCodeSet = new Set(existingCodes.map(item => String(item.code)));
           const codesToUpdate = codesFromCsv.filter(code => existingCodeSet.has(code));
           const codesNotFound = codesFromCsv.filter(code => !existingCodeSet.has(code));
 
@@ -555,7 +555,7 @@ export default function Home() {
 
           if (codesToUpdate.length > 0) {
             const updates = codesToUpdate.map(code => ({
-              code: code,
+              code: Number(code),
               status: 'ENTREGADO',
               date_entre: csvDataMap.get(code),
             }));
@@ -915,6 +915,8 @@ export default function Home() {
     </>
   );
 }
+
+    
 
     
 
