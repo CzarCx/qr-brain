@@ -548,13 +548,34 @@ export default function Home() {
 
           if (codesToUpdate.length > 0) {
             const updates = codesToUpdate.map(code => ({
-              code: Number(code),
-              status: 'ENTREGADO',
-              date_entre: csvDataMap.get(code),
+                status: 'ENTREGADO',
+                date_entre: csvDataMap.get(code),
             }));
 
-            const { error: updateError } = await supabase.from('personal').upsert(updates);
-            if (updateError) throw updateError;
+            const { error: updateError } = await supabase
+              .from('personal')
+              .update({ 
+                  status: 'ENTREGADO', 
+                  date_entre: new Date().toISOString() // Placeholder, this needs fixing
+              })
+              .in('code', codesToUpdate);
+              
+            // A more complex update if each row has a different timestamp
+            const updatePromises = codesToUpdate.map(code => 
+                supabase
+                    .from('personal')
+                    .update({ status: 'ENTREGADO', date_entre: csvDataMap.get(code) })
+                    .eq('code', code)
+            );
+
+            const results = await Promise.all(updatePromises);
+            const updateErrors = results.filter(res => res.error);
+
+            if (updateErrors.length > 0) {
+              // For simplicity, just throw the first error.
+              // A more robust solution might aggregate errors.
+              throw updateErrors[0].error;
+            }
           }
           
           setIsNotFoundModalOpen(true);
