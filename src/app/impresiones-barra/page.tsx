@@ -159,7 +159,17 @@ export default function ImpresionesBarraPage() {
     showAppMessage('Procesando código...', 'info');
     if ('vibrate' in navigator) navigator.vibrate(100);
 
-    let finalCode = String(decodedText).trim();
+    let finalCode = decodedText;
+    try {
+        const parsed = JSON.parse(decodedText);
+        if (parsed && parsed.id) {
+            finalCode = String(parsed.id);
+        }
+    } catch (e) {
+        // Not a JSON, proceed with the original decodedText
+    }
+    
+    finalCode = String(finalCode).trim();
     
     // Prevent duplicates in mass scanning mode
     if (scanMode === 'masivo' && massScannedCodesRef.current.has(finalCode)) {

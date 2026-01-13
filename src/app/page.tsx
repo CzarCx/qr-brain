@@ -535,7 +535,18 @@ export default function Home() {
   const onScanSuccess = useCallback((decodedText: string, decodedResult: any) => {
     if (!scannerActive || Date.now() - lastScanTimeRef.current < MIN_SCAN_INTERVAL) return;
     lastScanTimeRef.current = Date.now();
-    setLastScannedCode(decodedText);
+    
+    let finalCode = decodedText;
+    try {
+        const parsed = JSON.parse(decodedText);
+        if (parsed && parsed.id) {
+            finalCode = String(parsed.id);
+        }
+    } catch (e) {
+        // Not a JSON, proceed with the original decodedText
+    }
+    
+    setLastScannedCode(finalCode);
   }, [scannerActive]);
 
  const processScan = useCallback(async (decodedText: string) => {
