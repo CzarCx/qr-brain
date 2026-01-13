@@ -481,7 +481,6 @@ export default function Home() {
 
     Papa.parse(file, {
       complete: async (results) => {
-        // Skip header row by slicing
         const dataRows = results.data.slice(1) as string[][];
         if (dataRows.length === 0) {
           showModalNotification('Archivo Vacío', 'El CSV no contiene datos para procesar.', 'destructive');
@@ -489,20 +488,40 @@ export default function Home() {
           return;
         }
 
-        const codesFromCsv = dataRows.map(row => row[4]).filter(Boolean); // Column E for text/code
-        const csvDataMap = new Map(dataRows.map(row => {
-            const code = row[4];
-            const date = row[7]; // Column H for date_utc
-            const time = row[8]; // Column I for time_utc
-            if (code && date && time) {
-                // Concatenate date and time for ISO string format
-                const [day, month, year] = date.split('/');
-                const isoDate = `20${year}-${month}-${day}T${time}Z`;
-                return [code, isoDate];
-            }
-            return [null, null];
-        }).filter(entry => entry[0] !== null));
+        const processedEntries = dataRows.map(row => {
+          let codeValue = row[4]; // Column E for text/code
+          const date = row[7]; // Column H for date_utc
+          const time = row[8]; // Column I for time_utc
 
+          if (!codeValue || !date || !time) return null;
+
+          try {
+            const parsed = JSON.parse(codeValue);
+            if (parsed && parsed.id) {
+              codeValue = String(parsed.id);
+            }
+          } catch (e) {
+            // Not a JSON string, use as is
+          }
+
+          // Validate that the code is numeric
+          if (!/^\d+$/.test(codeValue)) {
+            return null;
+          }
+
+          const [day, month, year] = date.split('/');
+          const isoDate = `20${year}-${month}-${day}T${time}Z`;
+          return { code: codeValue, date: isoDate };
+        }).filter(Boolean) as { code: string, date: string }[];
+
+        const codesFromCsv = processedEntries.map(entry => entry.code);
+        const csvDataMap = new Map(processedEntries.map(entry => [entry.code, entry.date]));
+        
+        if (codesFromCsv.length === 0) {
+            showModalNotification('Sin Datos Válidos', 'No se encontraron códigos numéricos válidos en el archivo CSV.', 'warning');
+            setLoading(false);
+            return;
+        }
 
         try {
           const { data: existingCodes, error: fetchError } = await supabase
@@ -534,7 +553,7 @@ export default function Home() {
             if (updateError) throw updateError;
           }
           
-          showModalNotification('Proceso Completado', `Se procesaron ${codesFromCsv.length} registros del CSV.`);
+          showModalNotification('Proceso Completado', `Se procesaron ${codesFromCsv.length} registros válidos del CSV.`);
           setIsNotFoundModalOpen(true);
 
         } catch (e: any) {
@@ -548,7 +567,6 @@ export default function Home() {
         setLoading(false);
       },
     });
-    // Reset file input value to allow re-uploading the same file
     event.target.value = '';
   };
   
@@ -887,3 +905,5 @@ export default function Home() {
     </>
   );
 }
+
+    
