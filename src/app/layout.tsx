@@ -56,7 +56,7 @@ export default function RootLayout({
       </head>
       <body className="font-body antialiased bg-starbucks-light-gray">
         <TooltipProvider>
-            <div className="fixed top-4 right-4 z-[100]">
+            <div className="fixed top-20 right-4 z-[100]">
                 <Tooltip>
                     <TooltipTrigger asChild>
                         <div className="p-2 bg-yellow-400 text-yellow-900 rounded-full shadow-lg">
