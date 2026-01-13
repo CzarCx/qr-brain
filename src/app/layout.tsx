@@ -4,7 +4,7 @@ import type {Metadata} from 'next';
 import './globals.css';
 import Navbar from '@/components/Navbar'; // Import the new Navbar component
 import { useEffect } from 'react';
-import { Beaker } from 'lucide-react';
+import { Cog } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 
@@ -59,8 +59,8 @@ export default function RootLayout({
             <div className="fixed top-4 right-4 z-[100]">
                 <Tooltip>
                     <TooltipTrigger asChild>
-                        <div className="p-2 bg-yellow-400 text-yellow-900 rounded-full shadow-lg animate-pulse">
-                            <Beaker className="h-6 w-6" />
+                        <div className="p-2 bg-yellow-400 text-yellow-900 rounded-full shadow-lg">
+                            <Cog className="h-6 w-6" />
                         </div>
                     </TooltipTrigger>
                     <TooltipContent>
