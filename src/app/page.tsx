@@ -1316,6 +1316,7 @@ const deleteRow = (codeToDelete: string) => {
 
         return (
         <tr key={data.code}>
+            <td className="px-4 py-3 whitespace-nowrap text-sm font-semibold">{index + 1}</td>
             <td className="px-4 py-3 whitespace-nowrap font-mono text-sm">{data.code}</td>
              <td className="px-4 py-3 whitespace-nowrap text-sm">
                 <Input
@@ -1533,6 +1534,7 @@ const deleteRow = (codeToDelete: string) => {
             <table className="w-full min-w-full divide-y divide-gray-200">
                 <thead className="bg-starbucks-cream sticky top-0 z-10">
                     <tr>
+                        <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">#</th>
                         <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">CODIGO</th>
                         <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">TIEMPO ESTIMADO</th>
                         <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">PRODUCTO</th>
