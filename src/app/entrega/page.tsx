@@ -472,7 +472,6 @@ export default function Home() {
   const handleCsvUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) {
-      showModalNotification('Error', 'No se seleccionó ningún archivo.', 'destructive');
       return;
     }
 
@@ -483,22 +482,18 @@ export default function Home() {
       complete: async (results) => {
         const dataRows = results.data.slice(1) as string[][];
         if (dataRows.length === 0) {
+          setCsvProcessingStats({ found: 0, notFound: 0, total: 0 });
           setIsNotFoundModalOpen(true);
-          setCsvProcessingStats({
-            found: 0,
-            notFound: 0,
-            total: 0,
-          });
           setLoading(false);
           return;
         }
 
         const processedEntries = dataRows.map(row => {
           let codeValue = row[4]; // Column E for text/code
-          const date = row[7]; // Column H for date_utc
-          const time = row[8]; // Column I for time_utc
+          const dateStr = row[7]; // Column H for date_utc
+          const timeStr = row[8]; // Column I for time_utc
 
-          if (!codeValue || !date || !time) return null;
+          if (!codeValue || !dateStr || !timeStr) return null;
 
           try {
             const parsed = JSON.parse(codeValue);
@@ -509,27 +504,25 @@ export default function Home() {
             // Not a JSON string, use as is
           }
 
-          // Validate that the code is numeric
           if (!/^\d+$/.test(codeValue)) {
             return null;
           }
 
-          const [day, month, year] = date.split('/');
-          const isoDate = `20${year}-${month}-${day}T${time}Z`;
-          return { code: codeValue, date: isoDate };
+          const dateObj = new Date(`${dateStr} ${timeStr} UTC`);
+          if (isNaN(dateObj.getTime())) {
+            return null; // Invalid date
+          }
+
+          return { code: codeValue, date: dateObj.toISOString() };
         }).filter(Boolean) as { code: string, date: string }[];
 
         const codesFromCsv = processedEntries.map(entry => entry.code);
         const csvDataMap = new Map(processedEntries.map(entry => [entry.code, entry.date]));
         
         if (codesFromCsv.length === 0) {
-            setIsNotFoundModalOpen(true);
-            setCsvProcessingStats({
-              found: 0,
-              notFound: 0,
-              total: processedEntries.length,
-            });
+            setCsvProcessingStats({ found: 0, notFound: 0, total: 0 });
             setNotFoundCodes([]);
+            setIsNotFoundModalOpen(true);
             setLoading(false);
             return;
         }
