@@ -911,7 +911,6 @@ const deleteRow = (codeToDelete: string) => {
     setScannedData(prevData => {
         const newData = prevData.filter(item => item.code !== codeToDelete);
         
-        // We also need to update the counters after filtering
         const newMelCount = newData.filter(item => item.code.startsWith('4')).length;
         const newOtherCount = newData.length - newMelCount;
 
@@ -1730,7 +1729,7 @@ const deleteRow = (codeToDelete: string) => {
                         <div className="grid grid-cols-3 gap-2 text-center">
                             <div className="bg-starbucks-cream p-2 rounded-lg">
                                 <h3 className="font-bold text-starbucks-dark uppercase text-xs">Total</h3>
-                                <p id="total-scans" className="text-2xl font-mono text-starbucks-green">{melCodesCount + otherCodesCount}</p>
+                                <p id="total-scans" className="text-2xl font-mono text-starbucks-green">{scannedData.length}</p>
                             </div>
                             <div className="bg-starbucks-cream p-2 rounded-lg">
                                 <h3 className="font-bold text-starbucks-dark uppercase text-xs">Otros</h3>
