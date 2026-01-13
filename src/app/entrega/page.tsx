@@ -483,7 +483,12 @@ export default function Home() {
       complete: async (results) => {
         const dataRows = results.data.slice(1) as string[][];
         if (dataRows.length === 0) {
-          showModalNotification('Archivo Vacío', 'El CSV no contiene datos para procesar.', 'destructive');
+          setIsNotFoundModalOpen(true);
+          setCsvProcessingStats({
+            found: 0,
+            notFound: 0,
+            total: 0,
+          });
           setLoading(false);
           return;
         }
@@ -518,7 +523,13 @@ export default function Home() {
         const csvDataMap = new Map(processedEntries.map(entry => [entry.code, entry.date]));
         
         if (codesFromCsv.length === 0) {
-            showModalNotification('Sin Datos Válidos', 'No se encontraron códigos numéricos válidos en el archivo CSV.', 'warning');
+            setIsNotFoundModalOpen(true);
+            setCsvProcessingStats({
+              found: 0,
+              notFound: 0,
+              total: processedEntries.length,
+            });
+            setNotFoundCodes([]);
             setLoading(false);
             return;
         }
@@ -553,7 +564,6 @@ export default function Home() {
             if (updateError) throw updateError;
           }
           
-          showModalNotification('Proceso Completado', `Se procesaron ${codesFromCsv.length} registros válidos del CSV.`);
           setIsNotFoundModalOpen(true);
 
         } catch (e: any) {
@@ -905,5 +915,9 @@ export default function Home() {
     </>
   );
 }
+
+    
+
+    
 
     
