@@ -8,7 +8,7 @@ import { supabase } from '@/lib/supabaseClient';
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { XCircle, PackageCheck, AlertTriangle, Trash2, Zap, ZoomIn, PlusCircle, Download } from 'lucide-react';
+import { XCircle, PackageCheck, AlertTriangle, Trash2, Zap, ZoomIn, PlusCircle, Download, FileUp } from 'lucide-react';
 import {
   Select,
   SelectContent,
@@ -672,6 +672,17 @@ export default function Home() {
                            {lastScanned ? `Último escaneo: ${lastScanned}` : 'Esperando para escanear...'}
                         </div>
                     )}
+                     <div className="mt-4 flex justify-center">
+                          <Label htmlFor="csv-upload" className="cursor-pointer">
+                              <Button asChild variant="outline">
+                                  <div>
+                                      <FileUp className="mr-2 h-4 w-4" />
+                                      Cargar Excel de entrega
+                                  </div>
+                              </Button>
+                          </Label>
+                          <Input id="csv-upload" type="file" accept=".csv" className="hidden" />
+                      </div>
                 </div>
             </div>
 
