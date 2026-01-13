@@ -21,6 +21,7 @@ import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
+import Papa from 'papaparse';
 
 
 type DeliveryItem = {
@@ -56,6 +57,10 @@ export default function Home() {
   const [driverPlate, setDriverPlate] = useState('');
   const [loteId, setLoteId] = useState('');
   const [lotesCargadosCount, setLotesCargadosCount] = useState(0);
+  const [notFoundCodes, setNotFoundCodes] = useState<string[]>([]);
+  const [isNotFoundModalOpen, setIsNotFoundModalOpen] = useState(false);
+  const [csvProcessingStats, setCsvProcessingStats] = useState<{ found: number; notFound: number; total: number } | null>(null);
+
 
   const messageTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -464,6 +469,104 @@ export default function Home() {
     }
   };
 
+  const handleCsvUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) {
+      showModalNotification('Error', 'No se seleccionó ningún archivo.', 'destructive');
+      return;
+    }
+
+    setLoading(true);
+    showAppMessage('Procesando archivo CSV...', 'info');
+
+    Papa.parse(file, {
+      complete: async (results) => {
+        // Skip header row by slicing
+        const dataRows = results.data.slice(1) as string[][];
+        if (dataRows.length === 0) {
+          showModalNotification('Archivo Vacío', 'El CSV no contiene datos para procesar.', 'destructive');
+          setLoading(false);
+          return;
+        }
+
+        const codesFromCsv = dataRows.map(row => row[4]).filter(Boolean); // Column E for text/code
+        const csvDataMap = new Map(dataRows.map(row => {
+            const code = row[4];
+            const date = row[7]; // Column H for date_utc
+            const time = row[8]; // Column I for time_utc
+            if (code && date && time) {
+                // Concatenate date and time for ISO string format
+                const [day, month, year] = date.split('/');
+                const isoDate = `20${year}-${month}-${day}T${time}Z`;
+                return [code, isoDate];
+            }
+            return [null, null];
+        }).filter(entry => entry[0] !== null));
+
+
+        try {
+          const { data: existingCodes, error: fetchError } = await supabase
+            .from('personal')
+            .select('code')
+            .in('code', codesFromCsv);
+            
+          if (fetchError) throw fetchError;
+
+          const existingCodeSet = new Set(existingCodes.map(item => item.code));
+          const codesToUpdate = codesFromCsv.filter(code => existingCodeSet.has(code));
+          const codesNotFound = codesFromCsv.filter(code => !existingCodeSet.has(code));
+
+          setNotFoundCodes(codesNotFound);
+          setCsvProcessingStats({
+            found: codesToUpdate.length,
+            notFound: codesNotFound.length,
+            total: codesFromCsv.length,
+          });
+
+          if (codesToUpdate.length > 0) {
+            const updates = codesToUpdate.map(code => ({
+              code: code,
+              status: 'ENTREGADO',
+              date_entre: csvDataMap.get(code),
+            }));
+
+            const { error: updateError } = await supabase.from('personal').upsert(updates);
+            if (updateError) throw updateError;
+          }
+          
+          showModalNotification('Proceso Completado', `Se procesaron ${codesFromCsv.length} registros del CSV.`);
+          setIsNotFoundModalOpen(true);
+
+        } catch (e: any) {
+          showModalNotification('Error de Base de Datos', `Ocurrió un error: ${e.message}`, 'destructive');
+        } finally {
+          setLoading(false);
+        }
+      },
+      error: (error: any) => {
+        showModalNotification('Error al Leer CSV', `No se pudo procesar el archivo: ${error.message}`, 'destructive');
+        setLoading(false);
+      },
+    });
+    // Reset file input value to allow re-uploading the same file
+    event.target.value = '';
+  };
+  
+  const downloadNotFoundCsv = () => {
+    if (notFoundCodes.length === 0) return;
+    const csvContent = "data:text/csv;charset=utf-8," 
+      + "CodigosNoEncontrados\n"
+      + notFoundCodes.join("\n");
+    
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", "codigos_no_encontrados.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
 
   const messageClasses: any = {
       success: 'bg-green-500/80 text-white',
@@ -681,7 +784,7 @@ export default function Home() {
                                   </div>
                               </Button>
                           </Label>
-                          <Input id="csv-upload" type="file" accept=".csv" className="hidden" />
+                          <Input id="csv-upload" type="file" accept=".csv" className="hidden" onChange={handleCsvUpload} />
                       </div>
                 </div>
             </div>
@@ -745,6 +848,38 @@ export default function Home() {
                         <Button onClick={handleUpdateStatusToDelivered} disabled={loading}>
                             {loading ? 'Confirmando...' : 'Confirmar Entrega'}
                         </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+             <Dialog open={isNotFoundModalOpen} onOpenChange={setIsNotFoundModalOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Resultados del Procesamiento CSV</DialogTitle>
+                         {csvProcessingStats && (
+                             <DialogDescription>
+                                Total de registros: {csvProcessingStats.total} <br />
+                                Registros actualizados: {csvProcessingStats.found} <br />
+                                Códigos no encontrados: {csvProcessingStats.notFound}
+                            </DialogDescription>
+                         )}
+                    </DialogHeader>
+                    {notFoundCodes.length > 0 && (
+                        <div className="max-h-60 overflow-auto border rounded-md p-2">
+                             <h4 className="font-semibold mb-2">Códigos no encontrados:</h4>
+                             <ul className="list-disc pl-5 text-sm">
+                                {notFoundCodes.map(code => <li key={code} className="font-mono">{code}</li>)}
+                            </ul>
+                        </div>
+                    )}
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setIsNotFoundModalOpen(false)}>Cerrar</Button>
+                        {notFoundCodes.length > 0 && (
+                            <Button onClick={downloadNotFoundCsv}>
+                                <Download className="mr-2 h-4 w-4" />
+                                Descargar no encontrados
+                            </Button>
+                        )}
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
