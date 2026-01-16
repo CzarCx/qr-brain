@@ -474,6 +474,11 @@ export default function Home() {
     if (!file) {
       return;
     }
+     if (!encargado) {
+        showModalNotification('Falta Encargado', 'Por favor, selecciona un encargado antes de subir un archivo CSV.', 'destructive');
+        event.target.value = ''; // Reset file input
+        return;
+    }
 
     setLoading(true);
     showAppMessage('Procesando archivo CSV...', 'info');
@@ -520,6 +525,7 @@ export default function Home() {
         const firstDate = validEntries[0].date;
         const lastDate = validEntries[validEntries.length - 1].date;
         const diff = lastDate.getTime() - firstDate.getTime();
+        const timeInSeconds = Math.round(diff / 1000);
         const hours = Math.floor(diff / 3600000);
         const minutes = Math.floor((diff % 3600000) / 60000);
         const seconds = Math.floor(((diff % 3600000) % 60000) / 1000);
@@ -529,6 +535,18 @@ export default function Home() {
         const csvDataMap = new Map(validEntries.map(entry => [entry.code, entry.date.toISOString()]));
 
         try {
+          const { error: kpiError } = await supabase
+            .from('kpis')
+            .insert({
+                time: timeInSeconds,
+                encargado: encargado,
+                date: new Date().toISOString()
+            });
+
+          if (kpiError) {
+              throw new Error(`Error al guardar KPI: ${kpiError.message}`);
+          }
+            
           const { data: existingCodes, error: fetchError } = await supabase
             .from('personal')
             .select('code')
