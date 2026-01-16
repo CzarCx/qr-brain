@@ -173,10 +173,10 @@ export default function RegistroPersonal() {
         <title>Gestión de Personal</title>
       </Head>
       <div className="text-starbucks-dark container mx-auto p-4 md:p-8">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-8 items-start">
           
-          <div className="lg:col-span-1">
-             <Card className="w-full max-w-md mx-auto sticky top-24">
+          <div className="lg:col-span-2">
+             <Card className="w-full sticky top-24">
               <CardHeader className="text-center">
                 <UserPlus className="mx-auto h-12 w-12 text-starbucks-green" />
                 <CardTitle className="text-2xl md:text-3xl font-bold text-starbucks-green">Registro de Personal</CardTitle>
@@ -233,7 +233,7 @@ export default function RegistroPersonal() {
             </Card>
           </div>
 
-          <div className="lg:col-span-2">
+          <div className="lg:col-span-3">
             <Card>
               <CardHeader>
                 <CardTitle>Personal Registrado</CardTitle>
