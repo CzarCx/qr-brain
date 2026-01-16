@@ -591,6 +591,17 @@ export default function Home() {
       showModalNotification('Falta Área', 'Por favor, selecciona un área de trabajo o marca la opción para continuar sin una.', 'destructive');
       return;
     }
+
+    const missingTimeRows = scannedData
+      .map((item, index) => (item.esti_time === null || item.esti_time === undefined ? index + 1 : null))
+      .filter((rowNum): rowNum is number => rowNum !== null);
+
+    if (missingTimeRows.length > 0) {
+      const message = `Por favor, completa el campo "Tiempo Estimado" en las siguientes filas: ${missingTimeRows.join(', ')}.`;
+      showModalNotification('Faltan Datos', message, 'destructive');
+      return;
+    }
+    
     associateNameToScans(selectedPersonal, scannedData);
     setSelectedPersonal(''); // Reset dropdown
   };
@@ -862,8 +873,7 @@ export default function Home() {
           qrbox: { width: 250, height: 250 },
           experimentalFeatures: { useBarCodeDetectorIfSupported: true },
         };
-        qrCode.start({ facingMode: "environment" }, config, onScanSuccess, (errorMessage) => {})
-        .then(() => {
+        qrCode.start({ facingMode: "environment" }, config, onScanSuccess, (errorMessage) => {}).then(() => {
             if (isMobile) {
               const videoElement = document.getElementById('reader')?.querySelector('video');
               const stream = videoElement?.srcObject as MediaStream;
@@ -892,7 +902,7 @@ export default function Home() {
     return () => {
       cleanup();
     };
-  }, [scannerActive, selectedScannerMode, isMounted, isMobile]);
+  }, [scannerActive, selectedScannerMode, isMounted, isMobile, onScanSuccess]);
 
   const handlePhysicalScannerInput = (event: KeyboardEvent) => {
       if (event.key === 'Enter') {
@@ -1098,30 +1108,37 @@ const deleteRow = (codeToDelete: string) => {
 
  const handleProduccionProgramada = async () => {
     if (scannedData.length === 0) {
-      showAppMessage('No hay registros pendientes para programar.', 'info');
+      showModalNotification('Lista Vacía', 'No hay registros pendientes para programar.', 'info');
       return;
     }
     if (!selectedPersonal) {
-      showAppMessage('Por favor, selecciona un miembro del personal.', 'duplicate');
+      showModalNotification('Falta Personal', 'Por favor, selecciona un miembro del personal.', 'destructive');
       return;
     }
     if (!selectedArea && !skipAreaSelection) {
-      showAppMessage('Por favor, selecciona un área de trabajo o marca la opción para continuar sin una.', 'destructive');
+      showModalNotification('Falta Área', 'Por favor, selecciona un área de trabajo o marca la opción para continuar sin una.', 'destructive');
       return;
     }
-    if (scannedData.some(item => item.esti_time === null || item.esti_time === undefined)) {
-      showAppMessage('Por favor, completa todos los campos de "Tiempo Estimado" antes de programar.', 'duplicate');
+
+    const missingTimeRows = scannedData
+      .map((item, index) => (item.esti_time === null || item.esti_time === undefined ? index + 1 : null))
+      .filter((rowNum): rowNum is number => rowNum !== null);
+
+    if (missingTimeRows.length > 0) {
+      const message = `Por favor, completa el campo "Tiempo Estimado" en las siguientes filas: ${missingTimeRows.join(', ')}.`;
+      showModalNotification('Faltan Datos', message, 'destructive');
       return;
     }
+
     const loteId = loteProgramado.trim();
     if (!loteId) {
-      showAppMessage('Por favor, ingresa un identificador de lote para la producción programada.', 'duplicate');
+      showModalNotification('Falta Lote', 'Por favor, ingresa un identificador de lote para la producción programada.', 'destructive');
       return;
     }
     
     // Validation 1: Check if loteProgramado is numeric
     if (!/^\d+$/.test(loteId)) {
-        showAppMessage('El identificador de lote debe ser solo numérico.', 'duplicate');
+        showModalNotification('Lote Inválido', 'El identificador de lote debe ser solo numérico.', 'destructive');
         return;
     }
     
@@ -1141,7 +1158,7 @@ const deleteRow = (codeToDelete: string) => {
         }
 
         if (existingLote && existingLote.length > 0) {
-            showAppMessage(`El lote "${loteId}" ya existe. Por favor, usa un identificador diferente.`, 'duplicate');
+            showModalNotification('Lote Duplicado', `El lote "${loteId}" ya existe. Por favor, usa un identificador diferente.`, 'destructive');
             setLoading(false);
             return;
         }
@@ -1167,7 +1184,7 @@ const deleteRow = (codeToDelete: string) => {
         const { error } = await supabase.from('personal_prog').insert(dataToInsert);
         if (error) throw error;
 
-        showAppMessage(`¡Éxito! Se guardaron ${scannedData.length} registros en producción programada con el lote ${loteId}.`, 'success');
+        showModalNotification('¡Éxito!', `Se guardaron ${scannedData.length} registros en producción programada con el lote ${loteId}.`, 'success');
         setScannedData([]);
         scannedCodesRef.current.clear();
         setMelCodesCount(0);
@@ -1180,7 +1197,7 @@ const deleteRow = (codeToDelete: string) => {
 
     } catch (error: any) {
         console.error("Error al guardar producción programada:", error);
-        showAppMessage(`Error al guardar: ${error.message}`, 'duplicate');
+        showModalNotification('Error', `Error al guardar: ${error.message}`, 'destructive');
     } finally {
         setLoading(false);
     }
