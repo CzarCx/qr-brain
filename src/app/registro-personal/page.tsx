@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState } from 'react';
@@ -28,8 +27,8 @@ export default function RegistroPersonal() {
     e.preventDefault();
     setNotification(null);
 
-    if (!firstName.trim() || !lastName1.trim() || !rol || !organization) {
-      setNotification({ type: 'error', message: 'Por favor, completa Nombre, Primer Apellido, Rol y Empresa.' });
+    if (!firstName.trim() || !lastName1.trim() || !lastName2.trim() || !rol || !organization) {
+      setNotification({ type: 'error', message: 'Por favor, completa todos los campos.' });
       return;
     }
 
