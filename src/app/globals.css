@@ -9,22 +9,22 @@ body {
 
 @layer base {
   :root {
-    --background: 234 43% 94%; /* Light Indigo */
-    --foreground: 231 48% 28%; /* Darker Indigo */
+    --background: 0 0% 100%;
+    --foreground: 231 48% 28%;
 
-    --card: 234 43% 94%;
+    --card: 0 0% 100%;
     --card-foreground: 231 48% 28%;
 
-    --popover: 234 43% 94%;
+    --popover: 0 0% 100%;
     --popover-foreground: 231 48% 28%;
 
     --primary: 231 48% 48%; /* Deep Indigo */
     --primary-foreground: 0 0% 98%; /* White */
 
-    --secondary: 234 30% 90%;
+    --secondary: 0 0% 96%;
     --secondary-foreground: 231 48% 28%;
 
-    --muted: 234 30% 90%;
+    --muted: 0 0% 96%;
     --muted-foreground: 231 40% 45%;
 
     --accent: 54 100% 61%; /* Vibrant Yellow */
@@ -33,8 +33,8 @@ body {
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 0 0% 98%;
 
-    --border: 234 20% 85%;
-    --input: 234 20% 85%;
+    --border: 0 0% 90%;
+    --input: 0 0% 90%;
     --ring: 231 48% 48%;
 
     --chart-1: 12 76% 61%;
@@ -43,13 +43,13 @@ body {
     --chart-4: 43 74% 66%;
     --chart-5: 27 87% 67%;
     --radius: 0.5rem;
-    --sidebar-background: 234 43% 98%;
+    --sidebar-background: 0 0% 100%;
     --sidebar-foreground: 240 5.3% 26.1%;
     --sidebar-primary: 231 48% 48%;
     --sidebar-primary-foreground: 0 0% 98%;
-    --sidebar-accent: 234 43% 94%;
+    --sidebar-accent: 0 0% 96%;
     --sidebar-accent-foreground: 231 48% 28%;
-    --sidebar-border: 234 20% 85%;
+    --sidebar-border: 0 0% 90%;
     --sidebar-ring: 231 48% 48%;
   }
   .dark {
