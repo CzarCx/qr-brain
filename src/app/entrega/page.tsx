@@ -538,7 +538,7 @@ export default function Home() {
           const { error: kpiError } = await supabase
             .from('kpis')
             .insert({
-                time: timeInSeconds,
+                time: elapsedTime,
                 name: encargado,
                 csv_file: file.name,
             });
