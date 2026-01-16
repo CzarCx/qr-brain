@@ -1,15 +1,50 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Head from 'next/head';
-import Image from 'next/image';
 import { supabase } from '@/lib/supabaseClient';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { UserPlus, CheckCircle, AlertTriangle } from 'lucide-react';
+import { UserPlus, CheckCircle, AlertTriangle, Edit, Trash2 } from 'lucide-react';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
+
+
+type Personal = {
+  id: number;
+  name: string;
+  rol: string;
+  organization: string;
+};
 
 export default function RegistroPersonal() {
   const [firstName, setFirstName] = useState('');
@@ -23,18 +58,45 @@ export default function RegistroPersonal() {
     message: string
   } | null>(null);
 
+  const [personalList, setPersonalList] = useState<Personal[]>([]);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [editingPersonal, setEditingPersonal] = useState<Personal | null>(null);
+  
+  // State for the fields in the edit dialog
+  const [editName, setEditName] = useState('');
+  const [editRol, setEditRol] = useState('');
+  const [editOrganization, setEditOrganization] = useState('');
+
+  const fetchPersonal = useCallback(async () => {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from('personal_name')
+      .select('*')
+      .order('name', { ascending: true });
+
+    if (error) {
+      setNotification({ type: 'error', message: 'Error al cargar el personal.' });
+    } else {
+      setPersonalList(data as Personal[]);
+    }
+    setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    fetchPersonal();
+  }, [fetchPersonal]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setNotification(null);
 
-    if (!firstName.trim() || !lastName1.trim() || !lastName2.trim() || !rol || !organization) {
-      setNotification({ type: 'error', message: 'Por favor, completa todos los campos.' });
+    if (!firstName.trim() || !lastName1.trim() || !rol || !organization) {
+      setNotification({ type: 'error', message: 'Por favor, completa Nombre, Primer Apellido, Rol y Empresa.' });
       return;
     }
 
     setLoading(true);
     const fullName = [firstName.trim(), lastName1.trim(), lastName2.trim()].filter(Boolean).join(' ');
-
 
     try {
       const { error } = await supabase
@@ -51,6 +113,7 @@ export default function RegistroPersonal() {
       setLastName2('');
       setRol('');
       setOrganization('');
+      fetchPersonal(); // Refresh list
 
     } catch (e: any) {
       console.error("Error al registrar personal:", e);
@@ -61,111 +124,230 @@ export default function RegistroPersonal() {
     }
   };
 
+  const handleEditClick = (personal: Personal) => {
+    setEditingPersonal(personal);
+    setEditName(personal.name);
+    setEditRol(personal.rol);
+    setEditOrganization(personal.organization);
+    setIsEditDialogOpen(true);
+  };
+
+  const handleUpdate = async () => {
+    if (!editingPersonal) return;
+    setLoading(true);
+    const { error } = await supabase
+      .from('personal_name')
+      .update({ name: editName, rol: editRol, organization: editOrganization })
+      .eq('id', editingPersonal.id);
+    
+    if (error) {
+      setNotification({ type: 'error', message: `Error al actualizar: ${error.message}` });
+    } else {
+      setNotification({ type: 'success', message: 'Personal actualizado exitosamente.' });
+      setIsEditDialogOpen(false);
+      setEditingPersonal(null);
+      fetchPersonal(); // Refresh list
+    }
+    setLoading(false);
+  };
+
+  const handleDelete = async (id: number) => {
+    setLoading(true);
+    const { error } = await supabase
+      .from('personal_name')
+      .delete()
+      .eq('id', id);
+
+    if (error) {
+      setNotification({ type: 'error', message: `Error al eliminar: ${error.message}` });
+    } else {
+      setNotification({ type: 'success', message: 'Registro eliminado exitosamente.' });
+      fetchPersonal(); // Refresh list
+    }
+    setLoading(false);
+  };
+
   return (
     <>
       <Head>
-        <title>Registro de Personal</title>
+        <title>Gestión de Personal</title>
       </Head>
-      <main className="text-starbucks-dark flex min-h-screen items-center justify-center p-4">
-        <div className="w-full max-w-md mx-auto bg-starbucks-white rounded-xl shadow-2xl p-6 md:p-8 space-y-6">
-          <header className="text-center">
-            <UserPlus className="mx-auto h-16 w-16 text-starbucks-green mb-4" />
-            <h1 className="text-2xl md:text-3xl font-bold text-starbucks-green">Registro de Personal</h1>
-            <p className="text-gray-600 mt-1">Añade nuevos miembros al equipo.</p>
-          </header>
+      <main className="text-starbucks-dark container mx-auto p-4 md:p-8">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
+          
+          <div className="lg:col-span-1">
+             <Card className="w-full max-w-md mx-auto sticky top-24">
+              <CardHeader className="text-center">
+                <UserPlus className="mx-auto h-12 w-12 text-starbucks-green" />
+                <CardTitle className="text-2xl md:text-3xl font-bold text-starbucks-green">Registro de Personal</CardTitle>
+                <CardDescription>Añade nuevos miembros al equipo.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <form onSubmit={handleSubmit} className="space-y-6">
+                  <div className="space-y-2">
+                    <Label htmlFor="firstName" className="text-sm font-bold text-starbucks-dark">Nombre(s):</Label>
+                    <Input id="firstName" type="text" value={firstName} onChange={(e) => setFirstName(e.target.value)} placeholder="Ej. Juan" className="form-input" disabled={loading} />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="lastName1" className="text-sm font-bold text-starbucks-dark">Primer Apellido:</Label>
+                        <Input id="lastName1" type="text" value={lastName1} onChange={(e) => setLastName1(e.target.value)} placeholder="Ej. Pérez" className="form-input" disabled={loading}/>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="lastName2" className="text-sm font-bold text-starbucks-dark">Segundo Apellido:</Label>
+                        <Input id="lastName2" type="text" value={lastName2} onChange={(e) => setLastName2(e.target.value)} placeholder="Ej. García (Opcional)" className="form-input" disabled={loading}/>
+                      </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="rol" className="text-sm font-bold text-starbucks-dark">Rol:</Label>
+                    <Select onValueChange={setRol} value={rol} disabled={loading}>
+                      <SelectTrigger id="rol" className="bg-transparent hover:bg-gray-50">
+                        <SelectValue placeholder="Selecciona un rol" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="barra">Barra</SelectItem>
+                        <SelectItem value="entrega">Entrega</SelectItem>
+                        <SelectItem value="operativo">Operativo</SelectItem>
+                        <SelectItem value="Control de calidad">Control de calidad</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="organization" className="text-sm font-bold text-starbucks-dark">Empresa:</Label>
+                    <Select onValueChange={setOrganization} value={organization} disabled={loading}>
+                      <SelectTrigger id="organization" className="bg-transparent hover:bg-gray-50">
+                        <SelectValue placeholder="Selecciona una empresa" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="INMATMEX">INMATMEX</SelectItem>
+                        <SelectItem value="PALO DE ROSA">PALO DE ROSA</SelectItem>
+                        <SelectItem value="TOLEXAL">TOLEXAL</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <Button type="submit" disabled={loading} className="w-full bg-starbucks-accent hover:bg-starbucks-green text-white font-bold py-3">
+                    {loading ? 'Guardando...' : 'Registrar Personal'}
+                  </Button>
+                </form>
+              </CardContent>
+            </Card>
+          </div>
 
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="space-y-2">
-              <Label htmlFor="firstName" className="text-sm font-bold text-starbucks-dark">Nombre(s):</Label>
-              <Input
-                id="firstName"
-                type="text"
-                value={firstName}
-                onChange={(e) => setFirstName(e.target.value)}
-                placeholder="Ej. Juan"
-                className="form-input"
-                disabled={loading}
-              />
-            </div>
-            
-            <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="lastName1" className="text-sm font-bold text-starbucks-dark">Primer Apellido:</Label>
-                  <Input
-                    id="lastName1"
-                    type="text"
-                    value={lastName1}
-                    onChange={(e) => setLastName1(e.target.value)}
-                    placeholder="Ej. Pérez"
-                    className="form-input"
-                    disabled={loading}
-                  />
+          <div className="lg:col-span-2">
+            <Card>
+              <CardHeader>
+                <CardTitle>Personal Registrado</CardTitle>
+                <CardDescription>Lista del personal actual. Desde aquí puedes editar o eliminar registros.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {notification && (
+                  <Alert variant={notification.type === 'error' ? 'destructive' : 'default'} className={`mb-4 ${notification.type === 'success' ? 'border-green-500 text-green-700' : ''}`}>
+                    {notification.type === 'success' ? <CheckCircle className="h-5 w-5" /> : <AlertTriangle className="h-5 w-5" />}
+                    <AlertTitle>{notification.type === 'success' ? 'Éxito' : 'Error'}</AlertTitle>
+                    <AlertDescription>
+                      {notification.message}
+                    </AlertDescription>
+                  </Alert>
+                )}
+                <div className="border rounded-lg max-h-[60vh] overflow-auto">
+                    <Table>
+                      <TableHeader className="sticky top-0 bg-starbucks-cream z-10">
+                        <TableRow>
+                          <TableHead>Nombre</TableHead>
+                          <TableHead>Rol</TableHead>
+                          <TableHead>Empresa</TableHead>
+                          <TableHead className="text-right">Acciones</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {loading && personalList.length === 0 ? (
+                            <TableRow><TableCell colSpan={4} className="text-center py-8">Cargando...</TableCell></TableRow>
+                        ) : personalList.length > 0 ? personalList.map((p) => (
+                          <TableRow key={p.id}>
+                            <TableCell className="font-medium">{p.name}</TableCell>
+                            <TableCell>{p.rol}</TableCell>
+                            <TableCell>{p.organization}</TableCell>
+                            <TableCell className="text-right space-x-1">
+                              <Button variant="ghost" size="icon" onClick={() => handleEditClick(p)}>
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <Button variant="ghost" size="icon" className="text-red-500 hover:text-red-600">
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      Esta acción no se puede deshacer. Se eliminará permanentemente el registro de <span className="font-bold">{p.name}</span>.
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                    <AlertDialogAction onClick={() => handleDelete(p.id)} className="bg-destructive hover:bg-destructive/90">Eliminar</AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
+                            </TableCell>
+                          </TableRow>
+                        )) : (
+                           <TableRow><TableCell colSpan={4} className="text-center py-8">No hay personal registrado.</TableCell></TableRow>
+                        )}
+                      </TableBody>
+                    </Table>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="lastName2" className="text-sm font-bold text-starbucks-dark">Segundo Apellido:</Label>
-                  <Input
-                    id="lastName2"
-                    type="text"
-                    value={lastName2}
-                    onChange={(e) => setLastName2(e.target.value)}
-                    placeholder="Ej. García"
-                    className="form-input"
-                    disabled={loading}
-                  />
-                </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="rol" className="text-sm font-bold text-starbucks-dark">Rol:</Label>
-              <Select onValueChange={setRol} value={rol} disabled={loading}>
-                <SelectTrigger id="rol" className="bg-transparent hover:bg-gray-50">
-                  <SelectValue placeholder="Selecciona un rol" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="barra">Barra</SelectItem>
-                  <SelectItem value="entrega">Entrega</SelectItem>
-                  <SelectItem value="operativo">Operativo</SelectItem>
-                  <SelectItem value="Control de calidad">Control de calidad</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            
-            <div className="space-y-2">
-              <Label htmlFor="organization" className="text-sm font-bold text-starbucks-dark">Empresa:</Label>
-              <Select onValueChange={setOrganization} value={organization} disabled={loading}>
-                <SelectTrigger id="organization" className="bg-transparent hover:bg-gray-50">
-                  <SelectValue placeholder="Selecciona una empresa" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="INMATMEX">INMATMEX</SelectItem>
-                  <SelectItem value="PALO DE ROSA">PALO DE ROSA</SelectItem>
-                  <SelectItem value="TOLEXAL">TOLEXAL</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {notification && (
-              <Alert variant={notification.type === 'error' ? 'destructive' : 'default'} className={notification.type === 'success' ? 'border-green-500 text-green-700' : ''}>
-                {notification.type === 'success' ? <CheckCircle className="h-5 w-5" /> : <AlertTriangle className="h-5 w-5" />}
-                <AlertTitle>{notification.type === 'success' ? 'Éxito' : 'Error'}</AlertTitle>
-                <AlertDescription>
-                  {notification.message}
-                </AlertDescription>
-              </Alert>
-            )}
-
-            <Button type="submit" disabled={loading} className="w-full bg-starbucks-accent hover:bg-starbucks-green text-white font-bold py-3">
-              {loading ? (
-                <div className="flex items-center justify-center">
-                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-3"></div>
-                  <span>Guardando...</span>
-                </div>
-              ) : (
-                'Registrar Personal'
-              )}
-            </Button>
-          </form>
+              </CardContent>
+            </Card>
+          </div>
         </div>
+
+        <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Editar Personal</DialogTitle>
+              <DialogDescription>
+                Modifica los datos del registro. Haz clic en guardar cuando termines.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <div className="space-y-2">
+                <Label htmlFor="edit-name">Nombre Completo</Label>
+                <Input id="edit-name" value={editName} onChange={(e) => setEditName(e.target.value)} disabled={loading} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-rol">Rol</Label>
+                 <Select onValueChange={setEditRol} value={editRol} disabled={loading}>
+                    <SelectTrigger id="edit-rol"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="barra">Barra</SelectItem>
+                        <SelectItem value="entrega">Entrega</SelectItem>
+                        <SelectItem value="operativo">Operativo</SelectItem>
+                        <SelectItem value="Control de calidad">Control de calidad</SelectItem>
+                    </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-organization">Empresa</Label>
+                <Select onValueChange={setEditOrganization} value={editOrganization} disabled={loading}>
+                    <SelectTrigger id="edit-organization"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="INMATMEX">INMATMEX</SelectItem>
+                        <SelectItem value="PALO DE ROSA">PALO DE ROSA</SelectItem>
+                        <SelectItem value="TOLEXAL">TOLEXAL</SelectItem>
+                    </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>Cancelar</Button>
+              <Button onClick={handleUpdate} disabled={loading}>
+                {loading ? 'Guardando...' : 'Guardar Cambios'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </main>
     </>
   );
