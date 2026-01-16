@@ -67,6 +67,7 @@ type CreatedLote = {
   lote_p: string;
   name_inc: string;
   date: string;
+  count: number;
 };
 
 type Encargado = {
@@ -168,23 +169,35 @@ export default function Home() {
     const { data, error } = await supabase
       .from('personal_prog')
       .select('lote_p, name_inc, date')
-      .not('lote_p', 'is', null)
-      .order('date', { ascending: false });
-
+      .not('lote_p', 'is', null);
+  
     if (error) {
       console.error('Error fetching created lotes:', error);
     } else if (data) {
-      const lotesMap = new Map<string, CreatedLote>();
+      const lotesCount: { [key: string]: { name_inc: string; date: string; count: number } } = {};
+  
       for (const item of data) {
-        if (item.lote_p && !lotesMap.has(item.lote_p)) {
-          lotesMap.set(item.lote_p, {
-            lote_p: item.lote_p,
-            name_inc: item.name_inc,
-            date: item.date,
-          });
+        if (item.lote_p) {
+          if (lotesCount[item.lote_p]) {
+            lotesCount[item.lote_p].count++;
+          } else {
+            lotesCount[item.lote_p] = {
+              name_inc: item.name_inc,
+              date: item.date,
+              count: 1,
+            };
+          }
         }
       }
-      setCreatedLotesList(Array.from(lotesMap.values()));
+  
+      const lotesList: CreatedLote[] = Object.entries(lotesCount)
+        .map(([lote_p, details]) => ({
+          lote_p,
+          ...details,
+        }))
+        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  
+      setCreatedLotesList(lotesList);
     }
   }, []);
 
@@ -1562,6 +1575,7 @@ const deleteRow = (codeToDelete: string) => {
                                 <TableHead>Lote</TableHead>
                                 <TableHead>Creado por</TableHead>
                                 <TableHead>Fecha</TableHead>
+                                <TableHead>Cantidad</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -1570,10 +1584,11 @@ const deleteRow = (codeToDelete: string) => {
                                     <TableCell className="font-mono">{lote.lote_p}</TableCell>
                                     <TableCell>{lote.name_inc}</TableCell>
                                     <TableCell>{new Date(lote.date).toLocaleString('es-MX')}</TableCell>
+                                    <TableCell className="font-semibold">{lote.count}</TableCell>
                                 </TableRow>
                             )) : (
                                 <TableRow>
-                                    <TableCell colSpan={3} className="text-center text-gray-500 py-4">
+                                    <TableCell colSpan={4} className="text-center text-gray-500 py-4">
                                         No hay lotes programados.
                                     </TableCell>
                                 </TableRow>
