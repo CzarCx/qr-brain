@@ -1469,7 +1469,7 @@ const deleteRow = (codeToDelete: string) => {
                      )}
                 </div>
                 <Button onClick={handleCargarProgramada} disabled={loading || (cargaFilterType === 'persona' && !selectedPersonalParaCargar) || (cargaFilterType === 'lote' && !selectedLoteParaCargar)} className="bg-green-600 hover:bg-green-700">
-                    {loading ? 'Cargando...' : 'Cargar Producción'}
+                    {loading ? 'Cargando...' : 'Cargar'}
                 </Button>
             </div>
             </>
@@ -1489,11 +1489,13 @@ const deleteRow = (codeToDelete: string) => {
 
               <div className="max-h-64 overflow-auto border rounded-lg">
                   <table className="w-full text-sm">
-                      <thead className="sticky top-0 bg-gray-100">
+                      <thead className="sticky top-0 bg-gray-100 z-10">
                           <tr>
-                              <th className="px-2 py-1 text-left">Código</th>
-                              <th className="px-2 py-1 text-left">Producto</th>
-                              <th className="px-2 py-1 text-left">T. Est.</th>
+                              <th className="px-2 py-1 text-left font-semibold">Código</th>
+                              <th className="px-2 py-1 text-left font-semibold">Producto</th>
+                              <th className="px-2 py-1 text-left font-semibold">Área</th>
+                              <th className="px-2 py-1 text-left font-semibold">Hora Prog.</th>
+                              <th className="px-2 py-1 text-left font-semibold">T. Est.</th>
                           </tr>
                       </thead>
                       <tbody>
@@ -1501,6 +1503,8 @@ const deleteRow = (codeToDelete: string) => {
                               <tr key={item.code} className="border-b">
                                   <td className="px-2 py-1 font-mono">{item.code}</td>
                                   <td className="px-2 py-1">{item.product}</td>
+                                  <td className="px-2 py-1">{item.place || 'N/A'}</td>
+                                  <td className="px-2 py-1">{new Date(item.date).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}</td>
                                   <td className="px-2 py-1">{item.esti_time} min</td>
                               </tr>
                           ))}
