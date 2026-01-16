@@ -539,8 +539,8 @@ export default function Home() {
             .from('kpis')
             .insert({
                 time: timeInSeconds,
-                encargado: encargado,
-                date: new Date().toISOString()
+                name: encargado,
+                csv_file: file.name,
             });
 
           if (kpiError) {
