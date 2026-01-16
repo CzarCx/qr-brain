@@ -221,6 +221,21 @@ export default function Home() {
     };
     checkDbConnections();
     fetchCreatedLotes();
+
+    const channel = supabase
+      .channel('personal_prog_changes')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'personal_prog' },
+        (payload) => {
+          fetchCreatedLotes();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [fetchCreatedLotes]);
   
   useEffect(() => {
