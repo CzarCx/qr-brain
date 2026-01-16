@@ -59,7 +59,7 @@ export default function Home() {
   const [lotesCargadosCount, setLotesCargadosCount] = useState(0);
   const [notFoundCodes, setNotFoundCodes] = useState<string[]>([]);
   const [isNotFoundModalOpen, setIsNotFoundModalOpen] = useState(false);
-  const [csvProcessingStats, setCsvProcessingStats] = useState<{ found: number; notFound: number; total: number } | null>(null);
+  const [csvProcessingStats, setCsvProcessingStats] = useState<{ found: number; notFound: number; total: number; elapsedTime?: string; } | null>(null);
 
 
   const messageTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -481,51 +481,52 @@ export default function Home() {
     Papa.parse(file, {
       complete: async (results) => {
         const dataRows = results.data.slice(1) as string[][];
-        if (dataRows.length === 0) {
-          setCsvProcessingStats({ found: 0, notFound: 0, total: 0 });
-          setIsNotFoundModalOpen(true);
-          setLoading(false);
-          return;
-        }
 
-        const processedEntries = dataRows.map(row => {
-          let codeValue = row[4]; // Column E for text/code
-          const dateStr = row[7]; // Column H for date_utc
-          const timeStr = row[8]; // Column I for time_utc
+        const validEntries = dataRows.map(row => {
+            let codeValue = row[4]; // Column E for text/code
+            const dateStr = row[7]; // Column H for date_utc
+            const timeStr = row[8]; // Column I for time_utc
 
-          if (!codeValue || !dateStr || !timeStr) return null;
+            if (!codeValue || !dateStr || !timeStr) return null;
+            
+            const dateObj = new Date(`${dateStr} ${timeStr} UTC`);
+            if (isNaN(dateObj.getTime())) return null;
 
-          try {
-            const parsed = JSON.parse(codeValue);
-            if (parsed && parsed.id) {
-              codeValue = String(parsed.id);
+            try {
+                const parsed = JSON.parse(codeValue);
+                if (parsed && parsed.id) {
+                    codeValue = String(parsed.id);
+                }
+            } catch (e) {
+                // Not a JSON string, use as is
             }
-          } catch (e) {
-            // Not a JSON string, use as is
-          }
 
-          if (!/^\d+$/.test(codeValue)) {
-            return null;
-          }
+            if (!/^\d+$/.test(codeValue)) {
+                return null;
+            }
 
-          const dateObj = new Date(`${dateStr} ${timeStr} UTC`);
-          if (isNaN(dateObj.getTime())) {
-            return null; // Invalid date
-          }
+            return { code: codeValue, date: dateObj };
+        }).filter(Boolean) as { code: string, date: Date }[];
 
-          return { code: codeValue, date: dateObj.toISOString() };
-        }).filter(Boolean) as { code: string, date: string }[];
 
-        const codesFromCsv = processedEntries.map(entry => entry.code);
-        const csvDataMap = new Map(processedEntries.map(entry => [entry.code, entry.date]));
-        
-        if (codesFromCsv.length === 0) {
-            setCsvProcessingStats({ found: 0, notFound: 0, total: 0 });
-            setNotFoundCodes([]);
+        if (validEntries.length === 0) {
+            setCsvProcessingStats({ found: 0, notFound: 0, total: 0, elapsedTime: 'N/A' });
             setIsNotFoundModalOpen(true);
             setLoading(false);
             return;
         }
+
+        // Calculate time
+        const firstDate = validEntries[0].date;
+        const lastDate = validEntries[validEntries.length - 1].date;
+        const diff = lastDate.getTime() - firstDate.getTime();
+        const hours = Math.floor(diff / 3600000);
+        const minutes = Math.floor((diff % 3600000) / 60000);
+        const seconds = Math.floor(((diff % 3600000) % 60000) / 1000);
+        const elapsedTime = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+
+        const codesFromCsv = validEntries.map(entry => entry.code);
+        const csvDataMap = new Map(validEntries.map(entry => [entry.code, entry.date.toISOString()]));
 
         try {
           const { data: existingCodes, error: fetchError } = await supabase
@@ -544,23 +545,10 @@ export default function Home() {
             found: codesToUpdate.length,
             notFound: codesNotFound.length,
             total: codesFromCsv.length,
+            elapsedTime: elapsedTime
           });
 
           if (codesToUpdate.length > 0) {
-            const updates = codesToUpdate.map(code => ({
-                status: 'ENTREGADO',
-                date_entre: csvDataMap.get(code),
-            }));
-
-            const { error: updateError } = await supabase
-              .from('personal')
-              .update({ 
-                  status: 'ENTREGADO', 
-                  date_entre: new Date().toISOString() // Placeholder, this needs fixing
-              })
-              .in('code', codesToUpdate);
-              
-            // A more complex update if each row has a different timestamp
             const updatePromises = codesToUpdate.map(code => 
                 supabase
                     .from('personal')
@@ -572,8 +560,6 @@ export default function Home() {
             const updateErrors = results.filter(res => res.error);
 
             if (updateErrors.length > 0) {
-              // For simplicity, just throw the first error.
-              // A more robust solution might aggregate errors.
               throw updateErrors[0].error;
             }
           }
@@ -691,7 +677,7 @@ export default function Home() {
                      {isMobile && scannerActive && selectedScannerMode === 'camara' && cameraCapabilities && (
                         <div id="camera-controls" className="flex items-center gap-4 mt-4 p-2 rounded-lg bg-gray-200">
                             {cameraCapabilities.torch && (
-                                <Button variant="ghost" size="icon" onClick={() => setIsFlashOn(prev => !prev)} className={isFlashOn ? 'bg-yellow-400' : ''}>
+                                <Button variant="ghost" size="icon" onClick={()={() => setIsFlashOn(prev => !prev)} className={isFlashOn ? 'bg-yellow-400' : ''}>
                                     <Zap className="h-5 w-5" />
                                 </Button>
                             )}
@@ -899,10 +885,13 @@ export default function Home() {
                     <DialogHeader>
                         <DialogTitle>Resultados del Procesamiento CSV</DialogTitle>
                          {csvProcessingStats && (
-                             <DialogDescription>
-                                Total de registros: {csvProcessingStats.total} <br />
-                                Registros actualizados: {csvProcessingStats.found} <br />
-                                Códigos no encontrados: {csvProcessingStats.notFound}
+                             <DialogDescription className="space-y-1 pt-2">
+                                <p>Total de registros en CSV: {csvProcessingStats.total}</p>
+                                <p>Registros actualizados en BD: {csvProcessingStats.found}</p>
+                                <p>Códigos no encontrados en BD: {csvProcessingStats.notFound}</p>
+                                {csvProcessingStats.elapsedTime && (
+                                  <p className="font-semibold pt-2">Tiempo de escaneo: {csvProcessingStats.elapsedTime}</p>
+                                )}
                             </DialogDescription>
                          )}
                     </DialogHeader>
@@ -929,6 +918,8 @@ export default function Home() {
     </>
   );
 }
+
+    
 
     
 
