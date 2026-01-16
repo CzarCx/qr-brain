@@ -30,6 +30,7 @@ import {
 } from "@/components/ui/dialog"
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 
 type ScannedItem = {
@@ -60,6 +61,12 @@ type PersonalScanItem = {
   esti_time?: number | null;
   date_esti?: string | null;
   date_ini?: string | null;
+};
+
+type CreatedLote = {
+  lote_p: string;
+  name_inc: string;
+  date: string;
 };
 
 type Encargado = {
@@ -113,6 +120,7 @@ export default function Home() {
   const isMobile = useIsMobile();
   const [programadosPersonalList, setProgramadosPersonalList] = useState<{ name: string }[]>([]);
   const [programadosLotesList, setProgramadosLotesList] = useState<{ lote_p: string }[]>([]);
+  const [createdLotesList, setCreatedLotesList] = useState<CreatedLote[]>([]);
   const [loadingProgramados, setLoadingProgramados] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [selectedBulkPersonal, setSelectedBulkPersonal] = useState('');
@@ -156,6 +164,30 @@ export default function Home() {
     'https://script.google.com/macros/s/AKfycbwxN5n-iE00pi3JlOkImBgWD3-qptWsJxdyMJjXbRySgGvi7jqIsU9Puo7p2uvu5BioIbQ/exec';
   const MIN_SCAN_INTERVAL = 500;
 
+  const fetchCreatedLotes = useCallback(async () => {
+    const { data, error } = await supabase
+      .from('personal_prog')
+      .select('lote_p, name_inc, date')
+      .not('lote_p', 'is', null)
+      .order('date', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching created lotes:', error);
+    } else if (data) {
+      const lotesMap = new Map<string, CreatedLote>();
+      for (const item of data) {
+        if (item.lote_p && !lotesMap.has(item.lote_p)) {
+          lotesMap.set(item.lote_p, {
+            lote_p: item.lote_p,
+            name_inc: item.name_inc,
+            date: item.date,
+          });
+        }
+      }
+      setCreatedLotesList(Array.from(lotesMap.values()));
+    }
+  }, []);
+
   useEffect(() => {
     const timer = setInterval(() => {
       setCurrentTime(new Date());
@@ -175,7 +207,8 @@ export default function Home() {
       setDbStatus(prev => ({ ...prev, etiquetasDb: etiquetasError ? 'error' : 'success' }));
     };
     checkDbConnections();
-  }, []);
+    fetchCreatedLotes();
+  }, [fetchCreatedLotes]);
   
   useEffect(() => {
     if (isMobile && encargado && scannerSectionRef.current) {
@@ -1107,6 +1140,7 @@ const deleteRow = (codeToDelete: string) => {
         setLoteProgramado('');
         setSelectedArea('');
         setSkipAreaSelection(false);
+        fetchCreatedLotes();
 
     } catch (error: any) {
         console.error("Error al guardar producción programada:", error);
@@ -1518,6 +1552,36 @@ const deleteRow = (codeToDelete: string) => {
           <Button onClick={handleProduccionProgramada} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg shadow-sm text-sm transition-colors duration-200 w-full" disabled={isAssociationDisabled || loading}>
             Guardar como Producción Programada
           </Button>
+
+            <div className="mt-6 border-t pt-4">
+                <h3 className="text-lg font-bold text-starbucks-dark mb-2">Lotes Programados Creados</h3>
+                <div className="table-container border border-gray-200 rounded-lg max-h-48 overflow-auto">
+                    <Table>
+                        <TableHeader className="sticky top-0 bg-gray-200 z-20">
+                            <TableRow>
+                                <TableHead>Lote</TableHead>
+                                <TableHead>Creado por</TableHead>
+                                <TableHead>Fecha</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {createdLotesList.length > 0 ? createdLotesList.map((lote) => (
+                                <TableRow key={lote.lote_p}>
+                                    <TableCell className="font-mono">{lote.lote_p}</TableCell>
+                                    <TableCell>{lote.name_inc}</TableCell>
+                                    <TableCell>{new Date(lote.date).toLocaleString('es-MX')}</TableCell>
+                                </TableRow>
+                            )) : (
+                                <TableRow>
+                                    <TableCell colSpan={3} className="text-center text-gray-500 py-4">
+                                        No hay lotes programados.
+                                    </TableCell>
+                                </TableRow>
+                            )}
+                        </TableBody>
+                    </Table>
+                </div>
+            </div>
         </div>
         
         {totalEstimatedTime > 0 && (
