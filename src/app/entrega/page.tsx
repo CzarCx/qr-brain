@@ -677,7 +677,7 @@ export default function Home() {
                      {isMobile && scannerActive && selectedScannerMode === 'camara' && cameraCapabilities && (
                         <div id="camera-controls" className="flex items-center gap-4 mt-4 p-2 rounded-lg bg-gray-200">
                             {cameraCapabilities.torch && (
-                                <Button variant="ghost" size="icon" onClick={()={() => setIsFlashOn(prev => !prev)} className={isFlashOn ? 'bg-yellow-400' : ''}>
+                                <Button variant="ghost" size="icon" onClick={() => setIsFlashOn(prev => !prev)} className={isFlashOn ? 'bg-yellow-400' : ''}>
                                     <Zap className="h-5 w-5" />
                                 </Button>
                             )}
@@ -918,13 +918,3 @@ export default function Home() {
     </>
   );
 }
-
-    
-
-    
-
-    
-
-    
-
-    
