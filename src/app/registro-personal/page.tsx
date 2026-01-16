@@ -128,6 +128,7 @@ export default function RegistroPersonal() {
                   <SelectItem value="barra">Barra</SelectItem>
                   <SelectItem value="entrega">Entrega</SelectItem>
                   <SelectItem value="operativo">Operativo</SelectItem>
+                  <SelectItem value="Control de calidad">Control de calidad</SelectItem>
                 </SelectContent>
               </Select>
             </div>
