@@ -542,7 +542,7 @@ export default function Home() {
               code: String(item.code),
               name: name, 
               name_inc: item.encargado,
-              place: skipAreaSelection ? null : selectedArea,
+              place: item.area,
               sku: sku,
               product: producto,
               quantity: cantidad,
@@ -571,7 +571,7 @@ export default function Home() {
     } finally {
       setLoading(false);
     }
-  }, [selectedArea, skipAreaSelection]);
+  }, []);
 
   const handleManualAssociate = () => {
     if (!selectedPersonal) {
@@ -1468,7 +1468,7 @@ const deleteRow = (codeToDelete: string) => {
                        )
                      )}
                 </div>
-                <Button onClick={handleCargarProgramada} disabled={loading || (cargaFilterType === 'persona' && !selectedPersonalParaCargar) || (cargaFilterType === 'lote' && !selectedLoteParaCargar)}>
+                <Button onClick={handleCargarProgramada} disabled={loading || (cargaFilterType === 'persona' && !selectedPersonalParaCargar) || (cargaFilterType === 'lote' && !selectedLoteParaCargar)} className="bg-green-600 hover:bg-green-700">
                     {loading ? 'Cargando...' : 'Cargar Producción'}
                 </Button>
             </div>
