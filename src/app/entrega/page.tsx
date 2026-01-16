@@ -885,13 +885,15 @@ export default function Home() {
                     <DialogHeader>
                         <DialogTitle>Resultados del Procesamiento CSV</DialogTitle>
                          {csvProcessingStats && (
-                             <DialogDescription className="space-y-1 pt-2">
-                                <p>Total de registros en CSV: {csvProcessingStats.total}</p>
-                                <p>Registros actualizados en BD: {csvProcessingStats.found}</p>
-                                <p>Códigos no encontrados en BD: {csvProcessingStats.notFound}</p>
-                                {csvProcessingStats.elapsedTime && (
-                                  <p className="font-semibold pt-2">Tiempo de escaneo: {csvProcessingStats.elapsedTime}</p>
-                                )}
+                             <DialogDescription asChild>
+                                <div className="space-y-1 pt-2 text-sm text-muted-foreground">
+                                  <div>Total de registros en CSV: {csvProcessingStats.total}</div>
+                                  <div>Registros actualizados en BD: {csvProcessingStats.found}</div>
+                                  <div>Códigos no encontrados en BD: {csvProcessingStats.notFound}</div>
+                                  {csvProcessingStats.elapsedTime && (
+                                    <div className="font-semibold pt-2">Tiempo de escaneo: {csvProcessingStats.elapsedTime}</div>
+                                  )}
+                                </div>
                             </DialogDescription>
                          )}
                     </DialogHeader>
