@@ -121,7 +121,7 @@ export default function CalificarPage() {
         const { data, error } = await supabase
             .from('personal_name')
             .select('name, rol')
-            .eq('rol', 'barra');
+            .eq('rol', 'Control de calidad');
 
         if (error) {
             setDbError('Error al cargar encargados. Revisa los permisos RLS de la tabla `personal_name`.');
@@ -129,7 +129,7 @@ export default function CalificarPage() {
              const uniqueEncargados = Array.from(new Map(data.map(item => [item.name, item])).values());
              setEncargadosList(uniqueEncargados as Encargado[] || []);
         } else {
-             setDbError('No se encontraron encargados con el rol "barra". Revisa los datos o los permisos RLS.');
+             setDbError('No se encontraron encargados con el rol "Control de calidad". Revisa los datos o los permisos RLS.');
         }
     };
     fetchEncargados();
