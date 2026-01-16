@@ -13,8 +13,11 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { UserPlus, CheckCircle, AlertTriangle } from 'lucide-react';
 
 export default function RegistroPersonal() {
-  const [name, setName] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [lastName1, setLastName1] = useState('');
+  const [lastName2, setLastName2] = useState('');
   const [rol, setRol] = useState('');
+  const [organization, setOrganization] = useState('');
   const [loading, setLoading] = useState(false);
   const [notification, setNotification] = useState<{
     type: 'success' | 'error' | null,
@@ -25,25 +28,30 @@ export default function RegistroPersonal() {
     e.preventDefault();
     setNotification(null);
 
-    if (!name.trim() || !rol) {
-      setNotification({ type: 'error', message: 'Por favor, completa todos los campos.' });
+    if (!firstName.trim() || !lastName1.trim() || !rol || !organization) {
+      setNotification({ type: 'error', message: 'Por favor, completa Nombre, Primer Apellido, Rol y Empresa.' });
       return;
     }
 
     setLoading(true);
+    const fullName = [firstName.trim(), lastName1.trim(), lastName2.trim()].filter(Boolean).join(' ');
+
 
     try {
       const { error } = await supabase
         .from('personal_name')
-        .insert([{ name, rol }]);
+        .insert([{ name: fullName, rol, organization }]);
 
       if (error) {
         throw error;
       }
 
       setNotification({ type: 'success', message: '¡Personal registrado exitosamente!' });
-      setName('');
+      setFirstName('');
+      setLastName1('');
+      setLastName2('');
       setRol('');
+      setOrganization('');
 
     } catch (e: any) {
       console.error("Error al registrar personal:", e);
@@ -68,16 +76,43 @@ export default function RegistroPersonal() {
 
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="space-y-2">
-              <Label htmlFor="name" className="text-sm font-bold text-starbucks-dark">Nombre Completo:</Label>
+              <Label htmlFor="firstName" className="text-sm font-bold text-starbucks-dark">Nombre(s):</Label>
               <Input
-                id="name"
+                id="firstName"
                 type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Ej. Juan Pérez"
+                value={firstName}
+                onChange={(e) => setFirstName(e.target.value)}
+                placeholder="Ej. Juan"
                 className="form-input"
                 disabled={loading}
               />
+            </div>
+            
+            <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="lastName1" className="text-sm font-bold text-starbucks-dark">Primer Apellido:</Label>
+                  <Input
+                    id="lastName1"
+                    type="text"
+                    value={lastName1}
+                    onChange={(e) => setLastName1(e.target.value)}
+                    placeholder="Ej. Pérez"
+                    className="form-input"
+                    disabled={loading}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="lastName2" className="text-sm font-bold text-starbucks-dark">Segundo Apellido:</Label>
+                  <Input
+                    id="lastName2"
+                    type="text"
+                    value={lastName2}
+                    onChange={(e) => setLastName2(e.target.value)}
+                    placeholder="Ej. García"
+                    className="form-input"
+                    disabled={loading}
+                  />
+                </div>
             </div>
 
             <div className="space-y-2">
@@ -90,6 +125,20 @@ export default function RegistroPersonal() {
                   <SelectItem value="barra">Barra</SelectItem>
                   <SelectItem value="entrega">Entrega</SelectItem>
                   <SelectItem value="operativo">Operativo</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="organization" className="text-sm font-bold text-starbucks-dark">Empresa:</Label>
+              <Select onValueChange={setOrganization} value={organization} disabled={loading}>
+                <SelectTrigger id="organization" className="bg-transparent hover:bg-gray-50">
+                  <SelectValue placeholder="Selecciona una empresa" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="INMATMEX">INMATMEX</SelectItem>
+                  <SelectItem value="PALO DE ROSA">PALO DE ROSA</SelectItem>
+                  <SelectItem value="TOLEXAL">TOLEXAL</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -120,4 +169,3 @@ export default function RegistroPersonal() {
     </>
   );
 }
-
