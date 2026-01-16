@@ -54,7 +54,10 @@ export default function RegistroPersonal() {
 
     } catch (e: any) {
       console.error("Error al registrar personal:", e);
-      const errorMessage = e.message || (typeof e === 'object' && e !== null ? JSON.stringify(e) : String(e));
+      let errorMessage = e.message || (typeof e === 'object' && e !== null ? JSON.stringify(e) : String(e));
+      if (typeof errorMessage === 'string' && errorMessage.includes("Could not find the 'organization' column")) {
+        errorMessage = "La columna 'organization' no se encuentra en la tabla 'personal_name'. Por favor, verifica que la columna exista en tu base de datos de Supabase.";
+      }
       setNotification({ type: 'error', message: `Error al registrar: ${errorMessage}` });
     } finally {
       setLoading(false);
