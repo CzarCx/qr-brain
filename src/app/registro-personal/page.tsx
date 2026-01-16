@@ -54,7 +54,8 @@ export default function RegistroPersonal() {
 
     } catch (e: any) {
       console.error("Error al registrar personal:", e);
-      setNotification({ type: 'error', message: `Error al registrar: ${e.message}` });
+      const errorMessage = e.message || (typeof e === 'object' && e !== null ? JSON.stringify(e) : String(e));
+      setNotification({ type: 'error', message: `Error al registrar: ${errorMessage}` });
     } finally {
       setLoading(false);
     }
