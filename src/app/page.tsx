@@ -444,8 +444,13 @@ export default function Home() {
       showModalNotification('Sin Códigos', `${name} escaneado, pero no había códigos pendientes.`, 'destructive');
       return;
     }
-     if (pendingScans.some(item => item.esti_time === null || item.esti_time === undefined)) {
-      showModalNotification('Faltan Datos', 'Por favor, completa todos los campos de "Tiempo Estimado" antes de asociar.', 'destructive');
+     const missingTimeRows = pendingScans
+      .map((item, index) => (item.esti_time === null || item.esti_time === undefined ? index + 1 : null))
+      .filter((rowNum): rowNum is number => rowNum !== null);
+
+    if (missingTimeRows.length > 0) {
+      const message = `Por favor, completa el campo "Tiempo Estimado" en las siguientes filas: ${missingTimeRows.join(', ')}.`;
+      showModalNotification('Faltan Datos', message, 'destructive');
       return;
     }
   
