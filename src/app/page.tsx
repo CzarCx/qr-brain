@@ -511,8 +511,17 @@ export default function Home() {
               date_esti: null,
           }));
 
-          const { error } = await supabase.from('personal').insert(dataToInsert);
-          if (error) throw error;
+          const { error } = await supabase.from('personal_prog').insert(dataToInsert);
+          if (error) {
+              if (error.message.includes("could not find the 'user_id' column")) {
+                 showModalNotification('Error de Permisos', 'No tienes permiso para asignar. Contacta a un administrador.', 'destructive');
+                 setLoading(false);
+                 return;
+              }
+              throw error;
+          };
+
+          await saveKpiData(encargado, dataToInsert.length, elapsedTime);
 
           showModalNotification('¡Éxito!', `Se asignaron ${scannedData.length} etiquetas a ${personName}.`, 'success');
           
@@ -1074,6 +1083,26 @@ const deleteRow = (codeToDelete: string) => {
     }
   };
 
+  const saveKpiData = async (name: string, quantity: number, timeInSeconds: number) => {
+    if (quantity === 0 || !name) return;
+
+    try {
+      const { error } = await supabase.from('kpis').insert({
+        name: name,
+        quantity: quantity,
+        time: formatElapsedTime(timeInSeconds),
+      });
+
+      if (error) {
+        console.error('Error saving KPI data:', error.message);
+        // Silently fail for now, or show a non-blocking toast
+      }
+    } catch (e: any) {
+      console.error('Exception while saving KPI data:', e.message);
+    }
+  };
+
+
  const handleProduccionProgramada = async () => {
     if (scannedData.length === 0) {
       showModalNotification('Lista Vacía', 'No hay registros pendientes para programar.', 'info');
@@ -1151,6 +1180,8 @@ const deleteRow = (codeToDelete: string) => {
 
         const { error } = await supabase.from('personal_prog').insert(dataToInsert);
         if (error) throw error;
+
+        await saveKpiData(encargado, dataToInsert.length, elapsedTime);
 
         showModalNotification('¡Éxito!', `Se guardaron ${scannedData.length} registros en producción programada con el lote ${loteId}.`, 'success');
         clearSessionData();
