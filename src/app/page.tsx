@@ -503,15 +503,12 @@ export default function Home() {
               organization: item.empresa,
               sales_num: item.venta ? Number(item.venta) : null,
               date: new Date().toISOString(),
-              esti_time: item.esti_time,
               status: 'ASIGNADO',
+              esti_time: item.esti_time,
               deli_date: item.deli_date,
-              lote_p: null,
-              date_ini: null,
-              date_esti: null,
           }));
 
-          const { error } = await supabase.from('personal_prog').insert(dataToInsert);
+          const { error } = await supabase.from('personal').insert(dataToInsert);
           if (error) {
               if (error.message.includes("could not find the 'user_id' column")) {
                  showModalNotification('Error de Permisos', 'No tienes permiso para asignar. Contacta a un administrador.', 'destructive');
