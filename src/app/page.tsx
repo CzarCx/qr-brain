@@ -553,7 +553,7 @@ export default function Home() {
               code: String(item.code),
               name: name, 
               name_inc: item.encargado,
-              place: item.area,
+              place: item.area || null,
               sku: sku,
               product: producto,
               quantity: cantidad,
@@ -1130,11 +1130,6 @@ const deleteRow = (codeToDelete: string) => {
       showModalNotification('Falta Personal', 'Por favor, selecciona un miembro del personal.', 'destructive');
       return;
     }
-    if (!selectedArea && !skipAreaSelection) {
-      showModalNotification('Falta Área', 'Por favor, selecciona un área de trabajo o marca la opción para continuar sin una.', 'destructive');
-      return;
-    }
-
     const missingTimeRows = scannedData
       .map((item, index) => (item.esti_time === null || item.esti_time === undefined ? index + 1 : null))
       .filter((rowNum): rowNum is number => rowNum !== null);
@@ -1142,6 +1137,10 @@ const deleteRow = (codeToDelete: string) => {
     if (missingTimeRows.length > 0) {
       const message = `Por favor, completa el campo "Tiempo Estimado" en las siguientes filas: ${missingTimeRows.join(', ')}.`;
       showModalNotification('Faltan Datos', message, 'destructive');
+      return;
+    }
+     if (!selectedArea && !skipAreaSelection) {
+      showModalNotification('Falta Área', 'Por favor, selecciona un área de trabajo o marca la opción para continuar sin una.', 'destructive');
       return;
     }
 
@@ -1308,7 +1307,7 @@ const deleteRow = (codeToDelete: string) => {
               fecha: new Date(item.date).toLocaleDateString('es-MX'),
               hora: new Date(item.date).toLocaleTimeString('es-MX'),
               encargado: item.name_inc,
-              area: item.place || 'CARGA_PROGRAMADA',
+              area: item.place,
               sku: item.sku,
               cantidad: item.quantity,
               producto: item.product,
@@ -1353,6 +1352,7 @@ const deleteRow = (codeToDelete: string) => {
 
         if (!vCode) {
             setVerificationResult({ status: 'not-found', message: 'Código de corte no encontrado o inválido.' });
+            setIsVerifying(false);
             return;
         }
 
@@ -1366,6 +1366,7 @@ const deleteRow = (codeToDelete: string) => {
                 status: 'error',
                 message: `Este código ya fue registrado el ${registeredTime}.` 
             });
+            setIsVerifying(false);
             return;
         }
 
