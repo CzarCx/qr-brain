@@ -34,7 +34,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertTriangle, Trash2, Zap, ZoomIn, PlusCircle, Download } from 'lucide-react';
+import { AlertTriangle, Trash2, Zap, ZoomIn, PlusCircle, Download, Clock } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Switch } from '@/components/ui/switch';
 
@@ -94,6 +94,8 @@ export default function CalificarPage() {
   const [isNextDayDelivery, setIsNextDayDelivery] = useState(false);
   const [loteToLoad, setLoteToLoad] = useState('');
   const [loteConfirmation, setLoteConfirmation] = useState<LoteConfirmationState>({ isOpen: false, existingCount: 0, newCount: 0 });
+  const [timerStartTime, setTimerStartTime] = useState<Date | null>(null);
+  const [elapsedTime, setElapsedTime] = useState(0);
 
   const messageTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -104,6 +106,7 @@ export default function CalificarPage() {
   const massScannedCodesRef = useRef(new Set<string>());
   const physicalScannerInputRef = useRef<HTMLInputElement | null>(null);
   const bufferRef = useRef('');
+  const timerStartedRef = useRef(false);
 
    const showAppMessage = (text: string, type: 'success' | 'error' | 'info' | 'warning') => {
     if (messageTimeoutRef.current) {
@@ -134,6 +137,26 @@ export default function CalificarPage() {
     };
     fetchEncargados();
   }, []);
+
+  useEffect(() => {
+    let interval: NodeJS.Timeout | null = null;
+
+    if (timerStartTime) {
+      interval = setInterval(() => {
+        const now = new Date();
+        const seconds = Math.floor((now.getTime() - timerStartTime.getTime()) / 1000);
+        setElapsedTime(seconds);
+      }, 1000);
+    } else {
+        setElapsedTime(0);
+    }
+
+    return () => {
+      if (interval) {
+        clearInterval(interval);
+      }
+    };
+  }, [timerStartTime]);
 
   useEffect(() => {
     const handleBeforeUnload = (event: BeforeUnloadEvent) => {
@@ -218,6 +241,10 @@ export default function CalificarPage() {
 
         if (personalData) {
             playBeep();
+             if (!timerStartedRef.current) {
+                setTimerStartTime(new Date());
+                timerStartedRef.current = true;
+            }
             const result: ScanResult = {
                 name: personalData.name,
                 product: personalData.product,
@@ -259,6 +286,10 @@ export default function CalificarPage() {
 
             if (etiquetaData) {
                 playBeep();
+                 if (!timerStartedRef.current) {
+                    setTimerStartTime(new Date());
+                    timerStartedRef.current = true;
+                }
                 const result: ScanResult = {
                     code: etiquetaData.code,
                     name: 'N/A',
@@ -326,6 +357,23 @@ export default function CalificarPage() {
     }
   }, [loading, scanMode, encargado, isNextDayDelivery, massScannedCodes]);
   
+    const formatElapsedTime = (totalSeconds: number) => {
+        if (totalSeconds < 0) return '00:00';
+        const hours = Math.floor(totalSeconds / 3600);
+        const minutes = Math.floor((totalSeconds % 3600) / 60);
+        const seconds = totalSeconds % 60;
+
+        const paddedMinutes = String(minutes).padStart(2, '0');
+        const paddedSeconds = String(seconds).padStart(2, '0');
+
+        if (hours > 0) {
+            const paddedHours = String(hours).padStart(2, '0');
+            return `${paddedHours}:${paddedMinutes}:${paddedSeconds}`;
+        }
+        
+        return `${paddedMinutes}:${paddedSeconds}`;
+    };
+
     useEffect(() => {
         const handlePhysicalScannerInput = (event: KeyboardEvent) => {
             if (event.key === 'Enter') {
@@ -442,6 +490,8 @@ export default function CalificarPage() {
       setMassScannedCodes([]);
       massScannedCodesRef.current.clear();
       setLastScannedResult(null);
+      setTimerStartTime(null);
+      timerStartedRef.current = false;
   }, [scanMode]);
 
   const handleOpenRatingModal = (isOpen: boolean) => {
@@ -452,6 +502,8 @@ export default function CalificarPage() {
         setSelectedReport('');
         setLastScannedResult(null);
         showAppMessage('Apunte la cámara a un código QR.', 'info');
+        setTimerStartTime(null);
+        timerStartedRef.current = false;
     }
   }
 
@@ -580,6 +632,8 @@ const handleMassQualify = async () => {
         setMassScannedCodes([]);
         massScannedCodesRef.current.clear();
         setLoteId('');
+        setTimerStartTime(null);
+        timerStartedRef.current = false;
 
     } catch (e: any) {
         console.error('Error en la calificación masiva:', e);
@@ -797,9 +851,20 @@ const triggerMassQualify = async () => {
             </div>
           </div>
           
-          {scanMode === 'masivo' && (
-            <h2 className="text-lg font-bold text-center text-starbucks-dark">Escaneados ({massScannedCodes.length})</h2>
-          )}
+          <div className="grid grid-cols-2 gap-4">
+              {timerStartedRef.current && (
+                  <div className={`p-2 rounded-lg bg-blue-100 text-blue-800 text-center ${scanMode === 'individual' ? 'col-span-2' : 'col-span-1'}`}>
+                      <h3 className="font-bold uppercase text-xs flex items-center justify-center gap-1"><Clock className="h-4 w-4" /> Tiempo</h3>
+                      <p className="text-2xl font-mono">{formatElapsedTime(elapsedTime)}</p>
+                  </div>
+              )}
+              {scanMode === 'masivo' && (
+                  <div className={`bg-starbucks-cream p-2 rounded-lg border text-center ${!timerStartedRef.current ? 'col-span-2' : 'col-span-1'}`}>
+                      <h3 className="font-bold text-starbucks-dark uppercase text-xs">Escaneados</h3>
+                      <p className="text-2xl font-mono text-starbucks-green">{massScannedCodes.length}</p>
+                  </div>
+              )}
+          </div>
 
           <div className="bg-starbucks-cream p-4 rounded-lg">
             <div className="scanner-container relative">
