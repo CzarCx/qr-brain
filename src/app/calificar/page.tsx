@@ -493,7 +493,7 @@ export default function CalificarPage() {
 
         const { error } = await supabase
             .from('personal')
-            .update({ status: 'CALIFICADO', details: null, date: qualificationTimestamp.toISOString(), date_cal: qualificationTimestamp.toISOString() })
+            .update({ status: 'CALIFICADO', details: null, date_cal: qualificationTimestamp.toISOString() })
             .eq('code', lastScannedResult.code);
 
         if (error) {
@@ -558,7 +558,6 @@ const handleMassQualify = async () => {
                 .update({ 
                     status: 'CALIFICADO', 
                     details: null, 
-                    date: qualificationTimestamp.toISOString(),
                     date_cal: qualificationTimestamp.toISOString(),
                     lote: loteId,
                  })
