@@ -76,6 +76,11 @@ type Encargado = {
   name: string;
 };
 
+type PersonalOperativo = {
+  name: string;
+  organization: string;
+};
+
 type DbStatus = {
     personalDb: 'connecting' | 'success' | 'error';
     etiquetasDb: 'connecting' | 'success' | 'error';
@@ -101,7 +106,7 @@ export default function Home() {
   const [lastScannedCode, setLastScannedCode] = useState<string | null>(null);
   const [encargado, setEncargado] = useState('');
   const [encargadosList, setEncargadosList] = useState<Encargado[]>([]);
-  const [personalList, setPersonalList] = useState<Encargado[]>([]);
+  const [personalList, setPersonalList] = useState<PersonalOperativo[]>([]);
   const [selectedPersonal, setSelectedPersonal] = useState('');
   const [scannedData, setScannedData] = useState<ScannedItem[]>([]);
   const [melCodesCount, setMelCodesCount] = useState(0);
@@ -266,14 +271,14 @@ export default function Home() {
     const fetchPersonal = async () => {
         const { data, error } = await supabase
             .from('personal_name')
-            .select('name')
+            .select('name, organization')
             .eq('rol', 'operativo');
 
         if (error) {
             setDbError('Error al cargar personal. Revisa los permisos RLS de la tabla `personal_name`.');
         } else if (data) {
              const uniquePersonal = Array.from(new Map(data.map(item => [item.name, item])).values());
-             setPersonalList((uniquePersonal as Encargado[]) || []);
+             setPersonalList((uniquePersonal as PersonalOperativo[]) || []);
         } else {
             setDbError('No se encontró personal con el rol "operativo". Revisa los permisos RLS.');
         }
@@ -1443,6 +1448,24 @@ const deleteRow = (codeToDelete: string) => {
     })
   };
 
+  const groupedPersonalOptions = useMemo(() => {
+    if (personalList.length === 0) return [];
+    
+    const grouped = personalList.reduce((acc, person) => {
+        const org = person.organization || 'Sin Empresa';
+        if (!acc[org]) {
+            acc[org] = [];
+        }
+        acc[org].push({ value: person.name, label: person.name });
+        return acc;
+    }, {} as Record<string, { value: string; label: string }[]>);
+
+    return Object.keys(grouped).sort().map(org => ({
+        label: org,
+        options: grouped[org].sort((a, b) => a.label.localeCompare(b.label))
+    }));
+  }, [personalList]);
+
   const CargarProduccionSection = (
     <div className="w-full mt-4 p-4 border-t-2 border-dashed border-gray-300">
         <h3 className="text-lg font-bold text-starbucks-dark mb-2">Cargar Producción Programada</h3>
@@ -1507,7 +1530,7 @@ const deleteRow = (codeToDelete: string) => {
               <div className="space-y-2">
                   <Label>Reasignar producción a:</Label>
                    <Combobox
-                      options={personalList.map(p => ({ value: p.name, label: p.name }))}
+                      groupedOptions={groupedPersonalOptions}
                       value={personToAssign}
                       onValueChange={setPersonToAssign}
                       placeholder="Selecciona para reasignar..."
@@ -1602,7 +1625,7 @@ const deleteRow = (codeToDelete: string) => {
             <label className="block text-sm font-bold text-starbucks-dark flex-shrink-0">Asociar Pendientes a:</label>
             <div className="flex-grow">
                 <Combobox
-                    options={personalList.map(p => ({ value: p.name, label: p.name }))}
+                    groupedOptions={groupedPersonalOptions}
                     value={selectedPersonal}
                     onValueChange={setSelectedPersonal}
                     placeholder="Selecciona o busca personal..."
