@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { UserPlus, CheckCircle, AlertTriangle, Edit, Trash2 } from 'lucide-react';
+import { UserPlus, CheckCircle, AlertTriangle, Edit, Trash2, MessageSquare } from 'lucide-react';
 import {
   Table,
   TableBody,
@@ -44,6 +44,7 @@ type Personal = {
   name: string;
   rol: string;
   organization: string;
+  phone: string | null;
 };
 
 export default function RegistroPersonal() {
@@ -52,6 +53,7 @@ export default function RegistroPersonal() {
   const [lastName2, setLastName2] = useState('');
   const [rol, setRol] = useState('');
   const [organization, setOrganization] = useState('');
+  const [phone, setPhone] = useState('');
   const [loading, setLoading] = useState(false);
   const [notification, setNotification] = useState<{
     type: 'success' | 'error' | null,
@@ -66,6 +68,7 @@ export default function RegistroPersonal() {
   const [editName, setEditName] = useState('');
   const [editRol, setEditRol] = useState('');
   const [editOrganization, setEditOrganization] = useState('');
+  const [editPhone, setEditPhone] = useState('');
 
   const fetchPersonal = useCallback(async () => {
     setLoading(true);
@@ -75,7 +78,11 @@ export default function RegistroPersonal() {
       .order('name', { ascending: true });
 
     if (error) {
-      setNotification({ type: 'error', message: 'Error al cargar el personal.' });
+       if (error.message.includes('column "phone" does not exist')) {
+          setNotification({ type: 'error', message: 'Error: La columna "phone" no existe en la tabla `personal_name`. Por favor, agrégala en Supabase.' });
+      } else {
+        setNotification({ type: 'error', message: 'Error al cargar el personal.' });
+      }
     } else {
       setPersonalList(data as Personal[]);
     }
@@ -101,7 +108,7 @@ export default function RegistroPersonal() {
     try {
       const { error } = await supabase
         .from('personal_name')
-        .insert([{ name: fullName, rol, organization }]);
+        .insert([{ name: fullName, rol, organization, phone: phone.trim() || null }]);
 
       if (error) {
         throw error;
@@ -113,6 +120,7 @@ export default function RegistroPersonal() {
       setLastName2('');
       setRol('');
       setOrganization('');
+      setPhone('');
       fetchPersonal(); // Refresh list
 
     } catch (e: any) {
@@ -129,6 +137,7 @@ export default function RegistroPersonal() {
     setEditName(personal.name);
     setEditRol(personal.rol);
     setEditOrganization(personal.organization);
+    setEditPhone(personal.phone || '');
     setIsEditDialogOpen(true);
   };
 
@@ -137,7 +146,7 @@ export default function RegistroPersonal() {
     setLoading(true);
     const { error } = await supabase
       .from('personal_name')
-      .update({ name: editName, rol: editRol, organization: editOrganization })
+      .update({ name: editName, rol: editRol, organization: editOrganization, phone: editPhone.trim() || null })
       .eq('id', editingPersonal.id);
     
     if (error) {
@@ -225,6 +234,10 @@ export default function RegistroPersonal() {
                       </SelectContent>
                     </Select>
                   </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="phone" className="text-sm font-bold text-starbucks-dark">Teléfono (WhatsApp):</Label>
+                    <Input id="phone" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Ej. 521XXXXXXXXXX (Opcional)" className="form-input" disabled={loading}/>
+                  </div>
                   <Button type="submit" disabled={loading} className="w-full bg-starbucks-accent hover:bg-starbucks-green text-white font-bold py-3">
                     {loading ? 'Guardando...' : 'Registrar Personal'}
                   </Button>
@@ -268,6 +281,18 @@ export default function RegistroPersonal() {
                             <TableCell>{p.rol}</TableCell>
                             <TableCell>{p.organization}</TableCell>
                             <TableCell className="text-right space-x-1">
+                               {p.phone && (
+                                <a
+                                  href={`https://wa.me/${p.phone.replace(/\D/g, '')}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  title="Enviar WhatsApp"
+                                >
+                                  <Button variant="ghost" size="icon" className="text-green-600 hover:text-green-700">
+                                      <MessageSquare className="h-4 w-4" />
+                                  </Button>
+                                </a>
+                              )}
                               <Button variant="ghost" size="icon" onClick={() => handleEditClick(p)}>
                                 <Edit className="h-4 w-4" />
                               </Button>
@@ -338,6 +363,10 @@ export default function RegistroPersonal() {
                         <SelectItem value="TOLEXAL">TOLEXAL</SelectItem>
                     </SelectContent>
                 </Select>
+              </div>
+               <div className="space-y-2">
+                <Label htmlFor="edit-phone">Teléfono (WhatsApp)</Label>
+                <Input id="edit-phone" type="tel" value={editPhone} onChange={(e) => setEditPhone(e.target.value)} disabled={loading} />
               </div>
             </div>
             <DialogFooter>
