@@ -63,7 +63,9 @@ export default function RegistroPersonal() {
   const [editingPersonal, setEditingPersonal] = useState<Personal | null>(null);
   
   // State for the fields in the edit dialog
-  const [editName, setEditName] = useState('');
+  const [editFirstName, setEditFirstName] = useState('');
+  const [editLastName1, setEditLastName1] = useState('');
+  const [editLastName2, setEditLastName2] = useState('');
   const [editRol, setEditRol] = useState('');
   const [editOrganization, setEditOrganization] = useState('');
 
@@ -126,7 +128,14 @@ export default function RegistroPersonal() {
 
   const handleEditClick = (personal: Personal) => {
     setEditingPersonal(personal);
-    setEditName(personal.name);
+    const nameParts = personal.name.split(' ');
+    const lastName2 = nameParts.length > 2 ? nameParts.pop() || '' : '';
+    const lastName1 = nameParts.length > 1 ? nameParts.pop() || '' : '';
+    const firstName = nameParts.join(' ');
+    
+    setEditFirstName(firstName);
+    setEditLastName1(lastName1);
+    setEditLastName2(lastName2);
     setEditRol(personal.rol);
     setEditOrganization(personal.organization);
     setIsEditDialogOpen(true);
@@ -135,9 +144,10 @@ export default function RegistroPersonal() {
   const handleUpdate = async () => {
     if (!editingPersonal) return;
     setLoading(true);
+    const fullName = [editFirstName.trim(), editLastName1.trim(), editLastName2.trim()].filter(Boolean).join(' ');
     const { error } = await supabase
       .from('personal_name')
-      .update({ name: editName, rol: editRol, organization: editOrganization })
+      .update({ name: fullName, rol: editRol, organization: editOrganization })
       .eq('id', editingPersonal.id);
     
     if (error) {
@@ -313,8 +323,18 @@ export default function RegistroPersonal() {
             </DialogHeader>
             <div className="grid gap-4 py-4">
               <div className="space-y-2">
-                <Label htmlFor="edit-name">Nombre Completo</Label>
-                <Input id="edit-name" value={editName} onChange={(e) => setEditName(e.target.value)} disabled={loading} />
+                <Label htmlFor="edit-firstName">Nombre(s)</Label>
+                <Input id="edit-firstName" value={editFirstName} onChange={(e) => setEditFirstName(e.target.value)} disabled={loading} />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-lastName1">Primer Apellido</Label>
+                    <Input id="edit-lastName1" value={editLastName1} onChange={(e) => setEditLastName1(e.target.value)} disabled={loading} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-lastName2">Segundo Apellido</Label>
+                    <Input id="edit-lastName2" value={editLastName2} onChange={(e) => setEditLastName2(e.target.value)} disabled={loading} />
+                  </div>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="edit-rol">Rol</Label>
