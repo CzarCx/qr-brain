@@ -29,6 +29,17 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Checkbox } from '@/components/ui/checkbox';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
@@ -1296,6 +1307,26 @@ const deleteRow = (codeToDelete: string) => {
     }
 };
 
+  const handleDeleteLote = async (lote_p: string) => {
+    setLoading(true);
+    showAppMessage(`Eliminando lote ${lote_p}...`, 'info');
+    try {
+      const { error } = await supabase
+        .from('personal_prog')
+        .delete()
+        .eq('lote_p', lote_p);
+
+      if (error) throw error;
+
+      showModalNotification('¡Éxito!', `El lote ${lote_p} ha sido eliminado.`, 'success');
+      fetchCreatedLotes();
+    } catch (error: any) {
+      showModalNotification('Error', `No se pudo eliminar el lote: ${error.message}`, 'destructive');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const messageClasses: any = {
       success: 'bg-green-500/80 text-white',
       duplicate: 'bg-red-500/80 text-white',
@@ -1601,6 +1632,7 @@ const deleteRow = (codeToDelete: string) => {
                                 <TableHead>Fecha</TableHead>
                                 <TableHead>Cantidad</TableHead>
                                 <TableHead>Tiempo Programado</TableHead>
+                                <TableHead className="text-right">Acciones</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -1611,10 +1643,34 @@ const deleteRow = (codeToDelete: string) => {
                                     <TableCell>{new Date(lote.date).toLocaleString('es-MX')}</TableCell>
                                     <TableCell className="font-semibold">{lote.count}</TableCell>
                                     <TableCell>{formatTotalTime(lote.total_esti_time)}</TableCell>
+                                    <TableCell className="text-right">
+                                      <AlertDialog>
+                                          <AlertDialogTrigger asChild>
+                                              <Button variant="ghost" size="icon" className="text-red-500 hover:text-red-600 h-8 w-8">
+                                                  <Trash2 className="h-4 w-4" />
+                                              </Button>
+                                          </AlertDialogTrigger>
+                                          <AlertDialogContent>
+                                              <AlertDialogHeader>
+                                                  <AlertDialogTitle>¿Estás absolutamente seguro?</AlertDialogTitle>
+                                                  <AlertDialogDescription>
+                                                      Esta acción no se puede deshacer. Esto eliminará permanentemente el lote
+                                                      <span className="font-bold"> {lote.lote_p}</span> y todos sus registros asociados.
+                                                  </AlertDialogDescription>
+                                              </AlertDialogHeader>
+                                              <AlertDialogFooter>
+                                                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                                  <AlertDialogAction onClick={() => handleDeleteLote(lote.lote_p)} className="bg-destructive hover:bg-destructive/90">
+                                                      Eliminar Lote
+                                                  </AlertDialogAction>
+                                              </AlertDialogFooter>
+                                          </AlertDialogContent>
+                                      </AlertDialog>
+                                    </TableCell>
                                 </TableRow>
                             )) : (
                                 <TableRow>
-                                    <TableCell colSpan={5} className="text-center text-gray-500 py-4">
+                                    <TableCell colSpan={6} className="text-center text-gray-500 py-4">
                                         No hay lotes programados.
                                     </TableCell>
                                 </TableRow>
