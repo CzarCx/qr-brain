@@ -45,6 +45,7 @@ type ScannedItem = {
   empresa: string | null;
   venta: string | null;
   esti_time?: number | null;
+  deli_date?: string | null;
 };
 
 type PersonalScanItem = {
@@ -354,7 +355,7 @@ export default function Home() {
     oscillator.stop(context.currentTime + 0.2);
   };
 
- const addCodeAndUpdateCounters = useCallback(async (codeToAdd: string, details: { sku: string | null; cantidad: number | null; producto: string | null; empresa: string | null; venta: string | null; }) => {
+ const addCodeAndUpdateCounters = useCallback(async (codeToAdd: string, details: { sku: string | null; cantidad: number | null; producto: string | null; empresa: string | null; venta: string | null; deli_date: string | null; }) => {
     const finalCode = String(codeToAdd).trim();
 
     if (scannedCodesRef.current.has(finalCode)) {
@@ -431,6 +432,7 @@ export default function Home() {
       empresa: details.empresa,
       venta: details.venta,
       esti_time: estimatedTime,
+      deli_date: details.deli_date,
     };
 
     setScannedData(prevData => [...prevData, newItem]);
@@ -490,6 +492,7 @@ export default function Home() {
           let cantidad: number | null = 0;
           let empresa: string | null = '';
           let venta: string | null = '';
+          let deli_date: string | null = item.deli_date || null;
           
           let date_ini: string | null = null;
           let date_esti: string | null = null;
@@ -513,11 +516,11 @@ export default function Home() {
               lastFinishTime = startTime;
           }
 
-          if (!item.sku || !item.producto || !item.cantidad || !item.empresa || !item.venta) {
+          if (!item.sku || !item.producto || !item.cantidad || !item.empresa || !item.venta || !item.deli_date) {
               try {
                   const { data, error } = await supabaseEtiquetas
                   .from('etiquetas_i')
-                  .select('sku, product, quantity, organization, sales_num')
+                  .select('sku, product, quantity, organization, sales_num, deli_date')
                   .eq('code', String(item.code))
                   .single();
           
@@ -531,6 +534,7 @@ export default function Home() {
                     cantidad = data.quantity || 0;
                     empresa = data.organization || '';
                     venta = data.sales_num ? String(data.sales_num) : '';
+                    deli_date = data.deli_date || null;
                   }
               } catch (e: any) {
                   console.error(`Error al buscar el código ${item.code}:`, e.message);
@@ -541,6 +545,7 @@ export default function Home() {
               cantidad = item.cantidad;
               empresa = item.empresa;
               venta = item.venta;
+              deli_date = item.deli_date;
           }
       
           return {
@@ -558,6 +563,7 @@ export default function Home() {
               esti_time: item.esti_time,
               date_esti: date_esti,
               date_ini: date_ini,
+              deli_date: deli_date,
           };
         });
         
@@ -785,7 +791,7 @@ export default function Home() {
 
         const { data: fullEtiquetaData, error: fullEtiquetaError } = await supabaseEtiquetas
             .from('etiquetas_i')
-            .select('code, sku, quantity, product, organization, sales_num')
+            .select('code, sku, quantity, product, organization, sales_num, deli_date')
             .eq('code', finalCode)
             .single();
         
@@ -794,8 +800,8 @@ export default function Home() {
         }
 
         if (fullEtiquetaData) {
-            const { sku, quantity, product, organization, sales_num } = fullEtiquetaData;
-            await addCodeAndUpdateCounters(finalCode, { sku, cantidad: quantity, producto: product, empresa: organization, venta: sales_num ? String(sales_num) : null });
+            const { sku, quantity, product, organization, sales_num, deli_date } = fullEtiquetaData;
+            await addCodeAndUpdateCounters(finalCode, { sku, cantidad: quantity, producto: product, empresa: organization, venta: sales_num ? String(sales_num) : null, deli_date });
         } else {
             playErrorSound();
             showAppMessage(`Código ${finalCode} no encontrado en la base de datos de etiquetas.`, 'duplicate');
@@ -1300,6 +1306,7 @@ const deleteRow = (codeToDelete: string) => {
               empresa: item.organization,
               venta: item.sales_num ? String(item.sales_num) : '',
               esti_time: item.esti_time,
+              deli_date: null, // deli_date is not in personal_prog, it will be fetched again in associateNameToScans
           })));
 
           // Reset modal state
