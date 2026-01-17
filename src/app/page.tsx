@@ -446,6 +446,45 @@ export default function Home() {
     return true;
   }, [encargado, selectedArea]);
 
+  const saveToPersonal = async (personName: string) => {
+      setLoading(true);
+      showAppMessage('Guardando asignación...', 'info');
+
+      try {
+          const dataToInsert = scannedData.map(item => ({
+              code: String(item.code),
+              sku: item.sku,
+              name: personName,
+              name_inc: item.encargado,
+              place: skipAreaSelection ? null : selectedArea,
+              product: item.producto,
+              quantity: item.cantidad,
+              organization: item.empresa,
+              sales_num: item.venta ? Number(item.venta) : null,
+              date: new Date().toISOString(),
+              esti_time: item.esti_time,
+              status: 'ASIGNADO',
+              deli_date: item.deli_date,
+          }));
+
+          const { error } = await supabase.from('personal').insert(dataToInsert);
+          if (error) throw error;
+
+          showModalNotification('¡Éxito!', `Se asignaron ${scannedData.length} etiquetas a ${personName}.`, 'success');
+          
+          clearSessionData();
+          setSelectedPersonal('');
+          setSelectedArea('');
+          setSkipAreaSelection(false);
+
+      } catch (error: any) {
+          console.error("Error al guardar en personal:", error);
+          showModalNotification('Error', `Error al guardar la asignación: ${error.message}`, 'destructive');
+      } finally {
+          setLoading(false);
+      }
+  };
+
   const handleManualAssociate = () => {
     if (!selectedPersonal) {
         showModalNotification('Falta Selección', 'Por favor, selecciona un miembro del personal.', 'destructive');
@@ -469,51 +508,7 @@ export default function Home() {
       return;
     }
 
-    const save = async () => {
-        setLoading(true);
-        showAppMessage('Guardando producción...', 'info');
-
-        try {
-            const dataToInsert = scannedData.map(item => ({
-                code: String(item.code),
-                sku: item.sku,
-                name: selectedPersonal,
-                name_inc: item.encargado,
-                place: skipAreaSelection ? null : selectedArea,
-                product: item.producto,
-                quantity: item.cantidad,
-                organization: item.empresa,
-                sales_num: Number(item.venta),
-                date: new Date().toISOString(),
-                esti_time: item.esti_time,
-                status: 'PROGRAMADO',
-                date_ini: null,
-                date_esti: null,
-                lote_p: null, 
-                deli_date: item.deli_date,
-            }));
-
-            const { error } = await supabase.from('personal_prog').insert(dataToInsert);
-            if (error) throw error;
-
-            showModalNotification('¡Éxito!', `Se guardó la producción para ${selectedPersonal} con ${scannedData.length} etiquetas.`, 'success');
-            
-            clearSessionData();
-            setSelectedPersonal('');
-            setLoteProgramado('');
-            setSelectedArea('');
-            setSkipAreaSelection(false);
-            fetchCreatedLotes();
-
-        } catch (error: any) {
-            console.error("Error al guardar producción:", error);
-            showModalNotification('Error', `Error al guardar la producción: ${error.message}`, 'destructive');
-        } finally {
-            setLoading(false);
-        }
-    }
-    save();
-    setSelectedPersonal('');
+    saveToPersonal(selectedPersonal);
   };
   
   const showConfirmationDialog = (title: string, message: string, code: string): Promise<boolean> => {
@@ -627,42 +622,25 @@ export default function Home() {
         if (isKnownPersonal) {
             if ('vibrate' in navigator) navigator.vibrate([100, 50, 100]);
 
-            const saveOnScan = async () => {
-                if (scannedData.length === 0) {
-                    showModalNotification('Lista Vacía', 'No hay etiquetas pendientes para asociar.', 'info');
-                    setLoading(false); 
-                    return;
-                }
-                const missingTimeRows = scannedData.map((item, index) => (item.esti_time === null || item.esti_time === undefined ? index + 1 : null)).filter(Boolean) as number[];
-                if (missingTimeRows.length > 0) {
-                    showModalNotification('Faltan Datos', `Falta el tiempo estimado en las filas: ${missingTimeRows.join(', ')}`, 'destructive');
-                    setLoading(false); 
-                    return;
-                }
-                 if (!selectedArea && !skipAreaSelection) {
-                    showModalNotification('Falta Área', 'Por favor, selecciona un área de trabajo o marca la opción para continuar sin una.', 'destructive');
-                    setLoading(false);
-                    return;
-                }
-
-                try {
-                    const dataToInsert = scannedData.map(item => ({
-                        code: String(item.code), sku: item.sku, name: finalCode, name_inc: item.encargado,
-                        place: skipAreaSelection ? null : selectedArea, product: item.producto, quantity: item.cantidad, organization: item.empresa,
-                        sales_num: Number(item.venta), date: new Date().toISOString(), esti_time: item.esti_time, status: 'PROGRAMADO',
-                        date_ini: null, date_esti: null, lote_p: null, deli_date: item.deli_date,
-                    }));
-                    const { error } = await supabase.from('personal_prog').insert(dataToInsert);
-                    if (error) throw error;
-                    showModalNotification('¡Éxito!', `Se guardó la producción para ${finalCode} con ${scannedData.length} etiquetas.`, 'success');
-                    clearSessionData();
-                    fetchCreatedLotes();
-                } catch (e: any) {
-                    showModalNotification('Error', `Error al guardar: ${e.message}`, 'destructive');
-                }
+            if (scannedData.length === 0) {
+                showModalNotification('Lista Vacía', 'No hay etiquetas pendientes para asociar.', 'info');
+                setLoading(false); 
+                return;
+            }
+            const missingTimeRows = scannedData.map((item, index) => (item.esti_time === null || item.esti_time === undefined ? index + 1 : null)).filter(Boolean) as number[];
+            if (missingTimeRows.length > 0) {
+                showModalNotification('Faltan Datos', `Falta el tiempo estimado en las filas: ${missingTimeRows.join(', ')}`, 'destructive');
+                setLoading(false); 
+                return;
+            }
+             if (!selectedArea && !skipAreaSelection) {
+                showModalNotification('Falta Área', 'Por favor, selecciona un área de trabajo o marca la opción para continuar sin una.', 'destructive');
+                setLoading(false);
+                return;
             }
 
-            await saveOnScan();
+            await saveToPersonal(finalCode);
+
             lastSuccessfullyScannedCodeRef.current = finalCode;
             setLoading(false);
             return;
@@ -1124,6 +1102,7 @@ const deleteRow = (codeToDelete: string) => {
             date_ini: null,
             date_esti: null,
             lote_p: loteId,
+            deli_date: item.deli_date,
         }));
 
         const { error } = await supabase.from('personal_prog').insert(dataToInsert);
