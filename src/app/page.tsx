@@ -447,11 +447,7 @@ export default function Home() {
   }, [encargado, selectedArea]);
 
   const associateNameToScans = useCallback(async (name: string, pendingScans: ScannedItem[]) => {
-    if (pendingScans.length === 0) {
-      showModalNotification('Sin Códigos', `${name} escaneado, pero no había códigos pendientes.`, 'destructive');
-      return;
-    }
-     const missingTimeRows = pendingScans
+    const missingTimeRows = pendingScans
       .map((item, index) => (item.esti_time === null || item.esti_time === undefined ? index + 1 : null))
       .filter((rowNum): rowNum is number => rowNum !== null);
 
@@ -621,16 +617,6 @@ export default function Home() {
       return;
     }
 
-    const missingTimeRows = scannedData
-      .map((item, index) => (item.esti_time === null || item.esti_time === undefined ? index + 1 : null))
-      .filter((rowNum): rowNum is number => rowNum !== null);
-
-    if (missingTimeRows.length > 0) {
-      const message = `Por favor, completa el campo "Tiempo Estimado" en las siguientes filas: ${missingTimeRows.join(', ')}.`;
-      showModalNotification('Faltan Datos', message, 'destructive');
-      return;
-    }
-    
     associateNameToScans(selectedPersonal, scannedData);
     setSelectedPersonal(''); // Reset dropdown
   };
@@ -1352,25 +1338,51 @@ const deleteRow = (codeToDelete: string) => {
         return;
     }
     setIsVerifying(true);
-    setVerificationResult({ status: 'pending', message: 'Registrando corte...' });
+    setVerificationResult({ status: 'pending', message: 'Verificando código...' });
     try {
-        const { data, error } = await supabaseEtiquetas
+        // 1. Check if the code exists and get its current state.
+        const { data: vCode, error: fetchError } = await supabaseEtiquetas
+            .from('v_code')
+            .select('corte_etiquetas')
+            .eq('code_i', verificationCode)
+            .single();
+
+        if (fetchError && fetchError.code !== 'PGRST116') { // PGRST116 = no rows found
+             throw new Error(`Error al verificar el código: ${fetchError.message}`);
+        }
+
+        if (!vCode) {
+            setVerificationResult({ status: 'not-found', message: 'Código de corte no encontrado o inválido.' });
+            return;
+        }
+
+        // 2. If corte_etiquetas is already set, show a message and stop.
+        if (vCode.corte_etiquetas) {
+            const registeredTime = new Date(vCode.corte_etiquetas).toLocaleString('es-MX', {
+                dateStyle: 'short',
+                timeStyle: 'medium',
+            });
+            setVerificationResult({ 
+                status: 'error',
+                message: `Este código ya fue registrado el ${registeredTime}.` 
+            });
+            return;
+        }
+
+        // 3. If corte_etiquetas is null, update it.
+        const { error: updateError } = await supabaseEtiquetas
             .from('v_code')
             .update({ corte_etiquetas: new Date().toISOString() })
-            .eq('code_i', verificationCode)
-            .select();
+            .eq('code_i', verificationCode);
 
-        if (error) {
-            throw error;
+        if (updateError) {
+            throw new Error(`Error al registrar el corte: ${updateError.message}`);
         }
+        
+        setVerificationResult({ status: 'verified', message: `¡Éxito! Se registró el corte para el código ${verificationCode}.` });
 
-        if (data && data.length > 0) {
-            setVerificationResult({ status: 'verified', message: `¡Éxito! Se registró el corte para el código ${verificationCode}.` });
-        } else {
-            setVerificationResult({ status: 'not-found', message: 'Código de corte no encontrado o inválido.' });
-        }
     } catch (e: any) {
-        setVerificationResult({ status: 'error', message: `Error al registrar el corte: ${e.message}` });
+        setVerificationResult({ status: 'error', message: e.message || 'Ocurrió un error inesperado.' });
     } finally {
         setIsVerifying(false);
         setVerificationCode('');
@@ -1569,7 +1581,7 @@ const deleteRow = (codeToDelete: string) => {
                           </tr>
                       </thead>
                       <tbody>
-                          {loadedProgData.map(item => (
+                          {loadedProgData.map((item) => (
                               <tr key={item.code} className="border-b">
                                   <td className="px-2 py-1 font-mono">{item.code}</td>
                                   <td className="px-2 py-1">{item.product}</td>
