@@ -465,9 +465,12 @@ export default function Home() {
               esti_time: item.esti_time,
               status: 'ASIGNADO',
               deli_date: item.deli_date,
+              lote_p: null,
+              date_ini: null,
+              date_esti: null,
           }));
 
-          const { error } = await supabase.from('personal').insert(dataToInsert);
+          const { error } = await supabase.from('personal_prog').insert(dataToInsert);
           if (error) throw error;
 
           showModalNotification('¡Éxito!', `Se asignaron ${scannedData.length} etiquetas a ${personName}.`, 'success');
@@ -478,7 +481,7 @@ export default function Home() {
           setSkipAreaSelection(false);
 
       } catch (error: any) {
-          console.error("Error al guardar en personal:", error);
+          console.error("Error al guardar en personal_prog:", error);
           showModalNotification('Error', `Error al guardar la asignación: ${error.message}`, 'destructive');
       } finally {
           setLoading(false);
@@ -1202,32 +1205,22 @@ const deleteRow = (codeToDelete: string) => {
       setLoading(true);
 
       try {
-          const codesToDelete = loadedProgData.map(item => item.code);
-          const { error: deleteError } = await supabase
+          const codesToUpdate = loadedProgData.map(item => item.code);
+          
+          const { error: updateError } = await supabase
               .from('personal_prog')
-              .delete()
-              .in('code', codesToDelete);
+              .update({
+                  name: personToAssign,
+                  status: 'ASIGNADO',
+                  date: new Date().toISOString(), // Update assignment date
+              })
+              .in('code', codesToUpdate);
           
-          if (deleteError) {
-              throw new Error(`Error al limpiar 'personal_prog': ${deleteError.message}`);
-          }
-          
-          const now = new Date();
-          const dataToInsert = loadedProgData.map(item => ({
-              ...item,
-              name: personToAssign,
-              status: 'ASIGNADO',
-              date: now.toISOString(),
-          }));
-
-          const { error: insertError } = await supabase.from('personal').insert(dataToInsert);
-          if (insertError) {
-             throw new Error(`Error al guardar en 'personal': ${insertError.message}`);
+          if (updateError) {
+              throw new Error(`Error al re-asociar en 'personal_prog': ${updateError.message}`);
           }
 
-
-          showModalNotification('¡Éxito!', `Se asociaron y guardaron ${loadedProgData.length} códigos a ${personToAssign}.`, 'success');
-
+          showModalNotification('¡Éxito!', `Se re-asociaron ${loadedProgData.length} códigos a ${personToAssign}.`, 'success');
 
           // Reset modal state
           setShowCargarProduccion(false);
@@ -1235,6 +1228,7 @@ const deleteRow = (codeToDelete: string) => {
           setPersonToAssign('');
           setSelectedPersonalParaCargar('');
           setSelectedLoteParaCargar('');
+          fetchCreatedLotes();
 
       } catch (error: any) {
           showModalNotification('Error', `Error al asociar: ${error.message}`, 'destructive');
