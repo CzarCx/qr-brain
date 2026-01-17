@@ -78,7 +78,7 @@ export default function RootLayout({
             .from('feedback')
             .insert([{ 
                 title: feedbackTitle, 
-                category: feedbackCategory, 
+                cat: feedbackCategory, 
                 description: feedbackDescription 
             }]);
 
