@@ -18,7 +18,7 @@ import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Zap, ZoomIn, UserPlus, PlusCircle, Clock, AlertTriangle, Wifi, WifiOff, Search, XCircle, CheckCircle, Trash2, Lock, Unlock } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { Combobox } from '@/components/ui/combobox';
+import { Combobox, ComboboxGroup } from '@/components/ui/combobox';
 import {
   Dialog,
   DialogContent,
@@ -446,163 +446,6 @@ export default function Home() {
     return true;
   }, [encargado, selectedArea]);
 
-  const associateNameToScans = useCallback(async (name: string, pendingScans: ScannedItem[]) => {
-    const missingTimeRows = pendingScans
-      .map((item, index) => (item.esti_time === null || item.esti_time === undefined ? index + 1 : null))
-      .filter((rowNum): rowNum is number => rowNum !== null);
-
-    if (missingTimeRows.length > 0) {
-      const message = `Por favor, completa el campo "Tiempo Estimado" en las siguientes filas: ${missingTimeRows.join(', ')}.`;
-      showModalNotification('Faltan Datos', message, 'destructive');
-      return;
-    }
-  
-    setLoading(true);
-    showAppMessage('Asociando y guardando códigos en la base de datos...', 'info');
-  
-    try {
-        const sortedScans = [...pendingScans].sort((a, b) => new Date(`1970/01/01 ${a.hora}`).valueOf() - new Date(`1970/01/01 ${b.hora}`).valueOf());
-        
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-
-        const { data: lastScan, error: lastScanError } = await supabase
-            .from('personal')
-            .select('date_esti')
-            .eq('name', name)
-            .gte('date', today.toISOString())
-            .order('date_esti', { ascending: false })
-            .limit(1)
-            .single();
-
-        if (lastScanError && lastScanError.code !== 'PGRST116') {
-          throw new Error(`Error fetching last scan: ${lastScanError.message}`);
-        }
-
-        let lastFinishTime: Date;
-        if (lastScan && lastScan.date_esti) {
-            const lastEstiDate = new Date(lastScan.date_esti);
-            lastFinishTime = lastEstiDate > new Date() ? lastEstiDate : new Date();
-        } else {
-            lastFinishTime = new Date();
-        }
-
-        const dataToInsertPromises = sortedScans.map(async (item, index) => {
-          let sku: string | null = '';
-          let producto: string | null = '';
-          let cantidad: number | null = 0;
-          let empresa: string | null = '';
-          let venta: string | null = '';
-          let deli_date: string | null = item.deli_date || null;
-          
-          let date_ini: string | null = null;
-          let date_esti: string | null = null;
-
-          let startTime: Date;
-          if (index === 0) {
-              startTime = lastFinishTime;
-          } else {
-              startTime = lastFinishTime!;
-          }
-
-          if (!isNaN(startTime.getTime())) {
-            date_ini = startTime.toISOString();
-          }
-
-          if (!isNaN(startTime.getTime()) && item.esti_time) {
-              const endDate = new Date(startTime.getTime() + item.esti_time * 60000);
-              date_esti = endDate.toISOString();
-              lastFinishTime = endDate;
-          } else {
-              lastFinishTime = startTime;
-          }
-
-          if (!item.sku || !item.producto || !item.cantidad || !item.empresa || !item.venta || !item.deli_date) {
-              try {
-                  const { data, error } = await supabaseEtiquetas
-                  .from('etiquetas_i')
-                  .select('sku, product, quantity, organization, sales_num, deli_date')
-                  .eq('code', String(item.code))
-                  .single();
-          
-                  if (error && error.code !== 'PGRST116') {
-                    throw error;
-                  }
-          
-                  if (data) {
-                    sku = data.sku || '';
-                    producto = data.product || '';
-                    cantidad = data.quantity || 0;
-                    empresa = data.organization || '';
-                    venta = data.sales_num ? String(data.sales_num) : '';
-                    deli_date = data.deli_date || null;
-                  }
-              } catch (e: any) {
-                  console.error(`Error al buscar el código ${item.code}:`, e.message);
-              }
-          } else {
-              sku = item.sku;
-              producto = item.producto;
-              cantidad = item.cantidad;
-              empresa = item.empresa;
-              venta = item.venta;
-              deli_date = item.deli_date;
-          }
-      
-          return {
-              code: String(item.code),
-              name: name, 
-              name_inc: item.encargado,
-              place: item.area || null,
-              sku: sku,
-              product: producto,
-              quantity: cantidad,
-              status: 'ASIGNADO',
-              organization: empresa,
-              sales_num: Number(venta),
-              date: new Date().toISOString(),
-              esti_time: item.esti_time,
-              date_esti: date_esti,
-              date_ini: date_ini,
-              deli_date: deli_date,
-          };
-        });
-        
-        const dataToInsert = await Promise.all(dataToInsertPromises);
-
-        const updatesForEtiquetas = pendingScans
-          .filter(item => item.area && item.area.trim() !== '')
-          .map(item => 
-            supabaseEtiquetas
-                .from('etiquetas_i')
-                .update({ place: item.area })
-                .eq('code', item.code)
-        );
-        
-        if (updatesForEtiquetas.length > 0) {
-            const results = await Promise.all(updatesForEtiquetas);
-            const updateErrors = results.filter(res => res.error);
-            if (updateErrors.length > 0) {
-                console.error("Errors updating etiquetas_i:", updateErrors.map(e => e.error));
-                throw new Error(`Error al actualizar el área en ${updateErrors.length} etiqueta(s).`);
-            }
-        }
-
-        const { error: insertError } = await supabase.from('personal').insert(dataToInsert);
-        if (insertError) {
-          console.error("Error en insert:", insertError);
-          throw new Error(`Error al guardar en 'personal': ${insertError.message}`);
-        }
-
-        clearSessionData();
-        showModalNotification('¡Éxito!', `Se asociaron y guardaron ${pendingScans.length} códigos a ${name}.`, 'success');
-    } catch (e: any) {
-      showModalNotification('Error', `Error al procesar y guardar los códigos: ${e.message}`, 'destructive');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
   const handleManualAssociate = () => {
     if (!selectedPersonal) {
         showModalNotification('Falta Selección', 'Por favor, selecciona un miembro del personal.', 'destructive');
@@ -612,13 +455,65 @@ export default function Home() {
         showModalNotification('Lista Vacía', 'No hay etiquetas pendientes para asociar.', 'info');
         return;
     }
+    const missingTimeRows = scannedData
+      .map((item, index) => (item.esti_time === null || item.esti_time === undefined ? index + 1 : null))
+      .filter((rowNum): rowNum is number => rowNum !== null);
+
+    if (missingTimeRows.length > 0) {
+      const message = `Por favor, completa el campo "Tiempo Estimado" en las siguientes filas: ${missingTimeRows.join(', ')}.`;
+      showModalNotification('Faltan Datos', message, 'destructive');
+      return;
+    }
     if (!selectedArea && !skipAreaSelection) {
       showModalNotification('Falta Área', 'Por favor, selecciona un área de trabajo o marca la opción para continuar sin una.', 'destructive');
       return;
     }
 
-    associateNameToScans(selectedPersonal, scannedData);
-    setSelectedPersonal(''); // Reset dropdown
+    const save = async () => {
+        setLoading(true);
+        showAppMessage('Guardando producción...', 'info');
+
+        try {
+            const dataToInsert = scannedData.map(item => ({
+                code: String(item.code),
+                sku: item.sku,
+                name: selectedPersonal,
+                name_inc: item.encargado,
+                place: skipAreaSelection ? null : selectedArea,
+                product: item.producto,
+                quantity: item.cantidad,
+                organization: item.empresa,
+                sales_num: Number(item.venta),
+                date: new Date().toISOString(),
+                esti_time: item.esti_time,
+                status: 'PROGRAMADO',
+                date_ini: null,
+                date_esti: null,
+                lote_p: null, 
+                deli_date: item.deli_date,
+            }));
+
+            const { error } = await supabase.from('personal_prog').insert(dataToInsert);
+            if (error) throw error;
+
+            showModalNotification('¡Éxito!', `Se guardó la producción para ${selectedPersonal} con ${scannedData.length} etiquetas.`, 'success');
+            
+            clearSessionData();
+            setSelectedPersonal('');
+            setLoteProgramado('');
+            setSelectedArea('');
+            setSkipAreaSelection(false);
+            fetchCreatedLotes();
+
+        } catch (error: any) {
+            console.error("Error al guardar producción:", error);
+            showModalNotification('Error', `Error al guardar la producción: ${error.message}`, 'destructive');
+        } finally {
+            setLoading(false);
+        }
+    }
+    save();
+    setSelectedPersonal('');
   };
   
   const showConfirmationDialog = (title: string, message: string, code: string): Promise<boolean> => {
@@ -728,15 +623,51 @@ export default function Home() {
             return;
         }
 
-        // Check if the scanned code is a person's name
         const isKnownPersonal = personalList.some(p => p.name === finalCode);
         if (isKnownPersonal) {
             if ('vibrate' in navigator) navigator.vibrate([100, 50, 100]);
-            await associateNameToScans(finalCode, scannedData);
+
+            const saveOnScan = async () => {
+                if (scannedData.length === 0) {
+                    showModalNotification('Lista Vacía', 'No hay etiquetas pendientes para asociar.', 'info');
+                    setLoading(false); 
+                    return;
+                }
+                const missingTimeRows = scannedData.map((item, index) => (item.esti_time === null || item.esti_time === undefined ? index + 1 : null)).filter(Boolean) as number[];
+                if (missingTimeRows.length > 0) {
+                    showModalNotification('Faltan Datos', `Falta el tiempo estimado en las filas: ${missingTimeRows.join(', ')}`, 'destructive');
+                    setLoading(false); 
+                    return;
+                }
+                 if (!selectedArea && !skipAreaSelection) {
+                    showModalNotification('Falta Área', 'Por favor, selecciona un área de trabajo o marca la opción para continuar sin una.', 'destructive');
+                    setLoading(false);
+                    return;
+                }
+
+                try {
+                    const dataToInsert = scannedData.map(item => ({
+                        code: String(item.code), sku: item.sku, name: finalCode, name_inc: item.encargado,
+                        place: skipAreaSelection ? null : selectedArea, product: item.producto, quantity: item.cantidad, organization: item.empresa,
+                        sales_num: Number(item.venta), date: new Date().toISOString(), esti_time: item.esti_time, status: 'PROGRAMADO',
+                        date_ini: null, date_esti: null, lote_p: null, deli_date: item.deli_date,
+                    }));
+                    const { error } = await supabase.from('personal_prog').insert(dataToInsert);
+                    if (error) throw error;
+                    showModalNotification('¡Éxito!', `Se guardó la producción para ${finalCode} con ${scannedData.length} etiquetas.`, 'success');
+                    clearSessionData();
+                    fetchCreatedLotes();
+                } catch (e: any) {
+                    showModalNotification('Error', `Error al guardar: ${e.message}`, 'destructive');
+                }
+            }
+
+            await saveOnScan();
             lastSuccessfullyScannedCodeRef.current = finalCode;
             setLoading(false);
             return;
         }
+
 
         // Strict validation flow
         // 1. Find code_i from etiquetas_i
@@ -822,7 +753,7 @@ export default function Home() {
     } finally {
         setLoading(false);
     }
-}, [addCodeAndUpdateCounters, associateNameToScans, scannedData, personalList, scanMode]);
+}, [addCodeAndUpdateCounters, scannedData, personalList, scanMode, selectedArea, skipAreaSelection, fetchCreatedLotes]);
 
 
   useEffect(() => {
@@ -1302,20 +1233,22 @@ const deleteRow = (codeToDelete: string) => {
               throw new Error(`Error al limpiar 'personal_prog': ${deleteError.message}`);
           }
           
-          await associateNameToScans(personToAssign, loadedProgData.map(item => ({
-              code: item.code,
-              fecha: new Date(item.date).toLocaleDateString('es-MX'),
-              hora: new Date(item.date).toLocaleTimeString('es-MX'),
-              encargado: item.name_inc,
-              area: item.place,
-              sku: item.sku,
-              cantidad: item.quantity,
-              producto: item.product,
-              empresa: item.organization,
-              venta: item.sales_num ? String(item.sales_num) : '',
-              esti_time: item.esti_time,
-              deli_date: null, // deli_date is not in personal_prog, it will be fetched again in associateNameToScans
-          })));
+          const now = new Date();
+          const dataToInsert = loadedProgData.map(item => ({
+              ...item,
+              name: personToAssign,
+              status: 'ASIGNADO',
+              date: now.toISOString(),
+          }));
+
+          const { error: insertError } = await supabase.from('personal').insert(dataToInsert);
+          if (insertError) {
+             throw new Error(`Error al guardar en 'personal': ${insertError.message}`);
+          }
+
+
+          showModalNotification('¡Éxito!', `Se asociaron y guardaron ${loadedProgData.length} códigos a ${personToAssign}.`, 'success');
+
 
           // Reset modal state
           setShowCargarProduccion(false);
