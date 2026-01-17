@@ -574,6 +574,24 @@ export default function Home() {
         
         const dataToInsert = await Promise.all(dataToInsertPromises);
 
+        const updatesForEtiquetas = pendingScans
+          .filter(item => item.area && item.area.trim() !== '')
+          .map(item => 
+            supabaseEtiquetas
+                .from('etiquetas_i')
+                .update({ place: item.area })
+                .eq('code', item.code)
+        );
+        
+        if (updatesForEtiquetas.length > 0) {
+            const results = await Promise.all(updatesForEtiquetas);
+            const updateErrors = results.filter(res => res.error);
+            if (updateErrors.length > 0) {
+                console.error("Errors updating etiquetas_i:", updateErrors.map(e => e.error));
+                throw new Error(`Error al actualizar el área en ${updateErrors.length} etiqueta(s).`);
+            }
+        }
+
         const { error: insertError } = await supabase.from('personal').insert(dataToInsert);
         if (insertError) {
           console.error("Error en insert:", insertError);
