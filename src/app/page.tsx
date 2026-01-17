@@ -161,6 +161,8 @@ export default function Home() {
   const [verificationResult, setVerificationResult] = useState<VerificationResult>({ status: 'pending', message: 'Ingrese un código de corte para registrar la fecha.' });
   const [selectedArea, setSelectedArea] = useState('');
   const [skipAreaSelection, setSkipAreaSelection] = useState(false);
+  const [timerStartTime, setTimerStartTime] = useState<Date | null>(null);
+  const [elapsedTime, setElapsedTime] = useState(0);
 
 
   // Refs para elementos del DOM y la instancia del escáner
@@ -177,6 +179,7 @@ export default function Home() {
   const bufferRef = useRef('');
   const scanTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const messageTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const timerStartedRef = useRef(false);
 
 
   const APPS_SCRIPT_URL =
@@ -227,6 +230,26 @@ export default function Home() {
     }, 1000);
     return () => clearInterval(timer);
   }, []);
+
+  useEffect(() => {
+    let interval: NodeJS.Timeout | null = null;
+
+    if (timerStartTime) {
+      interval = setInterval(() => {
+        const now = new Date();
+        const seconds = Math.floor((now.getTime() - timerStartTime.getTime()) / 1000);
+        setElapsedTime(seconds);
+      }, 1000);
+    } else {
+        setElapsedTime(0);
+    }
+
+    return () => {
+      if (interval) {
+        clearInterval(interval);
+      }
+    };
+  }, [timerStartTime]);
 
   useEffect(() => {
     setIsMounted(true);
@@ -339,6 +362,8 @@ export default function Home() {
     setOtherCodesCount(0);
     lastSuccessfullyScannedCodeRef.current = null;
     setIngresarDatosEnabled(false);
+    setTimerStartTime(null);
+    timerStartedRef.current = false;
   };
 
   const playBeep = () => {
@@ -380,6 +405,11 @@ export default function Home() {
       return false;
     }
     
+    if (!timerStartedRef.current) {
+        setTimerStartTime(new Date());
+        timerStartedRef.current = true;
+    }
+
     let estimatedTime: number | null = null;
     if (details.sku) {
         try {
@@ -455,7 +485,7 @@ export default function Home() {
 
     invalidateCSV();
     return true;
-  }, [encargado, selectedArea]);
+  }, [encargado, selectedArea, skipAreaSelection]);
 
   const saveToPersonal = async (personName: string) => {
       setLoading(true);
@@ -481,7 +511,7 @@ export default function Home() {
               date_esti: null,
           }));
 
-          const { error } = await supabase.from('personal_prog').insert(dataToInsert);
+          const { error } = await supabase.from('personal').insert(dataToInsert);
           if (error) throw error;
 
           showModalNotification('¡Éxito!', `Se asignaron ${scannedData.length} etiquetas a ${personName}.`, 'success');
@@ -492,7 +522,7 @@ export default function Home() {
           setSkipAreaSelection(false);
 
       } catch (error: any) {
-          console.error("Error al guardar en personal_prog:", error);
+          console.error("Error al guardar en personal:", error);
           showModalNotification('Error', `Error al guardar la asignación: ${error.message}`, 'destructive');
       } finally {
           setLoading(false);
@@ -1123,10 +1153,7 @@ const deleteRow = (codeToDelete: string) => {
         if (error) throw error;
 
         showModalNotification('¡Éxito!', `Se guardaron ${scannedData.length} registros en producción programada con el lote ${loteId}.`, 'success');
-        setScannedData([]);
-        scannedCodesRef.current.clear();
-        setMelCodesCount(0);
-        setOtherCodesCount(0);
+        clearSessionData();
         setSelectedPersonal('');
         setLoteProgramado('');
         setSelectedArea('');
@@ -1325,6 +1352,23 @@ const deleteRow = (codeToDelete: string) => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const formatElapsedTime = (totalSeconds: number) => {
+    if (totalSeconds < 0) return '00:00';
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+
+    const paddedMinutes = String(minutes).padStart(2, '0');
+    const paddedSeconds = String(seconds).padStart(2, '0');
+
+    if (hours > 0) {
+        const paddedHours = String(hours).padStart(2, '0');
+        return `${paddedHours}:${paddedMinutes}:${paddedSeconds}`;
+    }
+    
+    return `${paddedMinutes}:${paddedSeconds}`;
   };
 
   const messageClasses: any = {
@@ -1887,7 +1931,11 @@ const deleteRow = (codeToDelete: string) => {
 
                 <div className="space-y-4">
                      {scanMode === 'assign' && (
-                        <div className="grid grid-cols-3 gap-2 text-center">
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-center">
+                             <div className="p-2 rounded-lg bg-blue-100 text-blue-800">
+                                <h3 className="font-bold uppercase text-xs flex items-center justify-center gap-1"><Clock className="h-4 w-4" /> Tiempo</h3>
+                                <p className="text-2xl font-mono">{formatElapsedTime(elapsedTime)}</p>
+                            </div>
                             <div className="bg-starbucks-cream p-2 rounded-lg">
                                 <h3 className="font-bold text-starbucks-dark uppercase text-xs">Total</h3>
                                 <p id="total-scans" className="text-2xl font-mono text-starbucks-green">{scannedData.length}</p>
