@@ -1,3 +1,4 @@
+
 "use client"
 
 import * as React from "react"
@@ -37,9 +38,10 @@ type ComboboxProps = {
     placeholder?: string
     emptyMessage?: string
     buttonClassName?: string
+    disabled?: boolean
 }
 
-export function Combobox({ options, groupedOptions, value, onValueChange, placeholder = "Select option...", emptyMessage = "No option found.", buttonClassName }: ComboboxProps) {
+export function Combobox({ options, groupedOptions, value, onValueChange, placeholder = "Select option...", emptyMessage = "No option found.", buttonClassName, disabled }: ComboboxProps) {
   const [open, setOpen] = React.useState(false)
 
   const selectedLabel = React.useMemo(() => {
@@ -68,7 +70,7 @@ export function Combobox({ options, groupedOptions, value, onValueChange, placeh
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
+      <PopoverTrigger asChild disabled={disabled}>
         <Button
           variant="outline"
           role="combobox"

@@ -1,6 +1,6 @@
 
 'use client';
-import {useEffect, useRef, useState, useCallback} from 'react';
+import {useEffect, useRef, useState, useCallback, useMemo} from 'react';
 import Head from 'next/head';
 import { Html5Qrcode, Html5QrcodeScannerState } from 'html5-qrcode';
 import { supabase } from '@/lib/supabaseClient';
@@ -34,6 +34,7 @@ import {
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertTriangle, Trash2, Zap, ZoomIn } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { Combobox } from '@/components/ui/combobox';
 
 
 type ScanResult = {
@@ -54,6 +55,7 @@ type ReportReason = {
 type Encargado = {
   name: string;
   rol: string;
+  organization: string;
 };
 
 export default function PpcPage() {
@@ -102,7 +104,7 @@ export default function PpcPage() {
     const fetchEncargados = async () => {
         const { data, error } = await supabase
             .from('personal_name')
-            .select('name, rol');
+            .select('name, rol, organization');
 
         if (error) {
             setDbError('Error al cargar encargados. Revisa los permisos RLS de la tabla `personal_name`.');
@@ -120,6 +122,24 @@ export default function PpcPage() {
     };
     fetchEncargados();
   }, []);
+
+  const groupedEncargadoOptions = useMemo(() => {
+    if (encargadosList.length === 0) return [];
+    
+    const grouped = encargadosList.reduce((acc, person) => {
+        const org = person.organization || 'Sin Empresa';
+        if (!acc[org]) {
+            acc[org] = [];
+        }
+        acc[org].push({ value: person.name, label: person.name });
+        return acc;
+    }, {} as Record<string, { value: string; label: string }[]>);
+
+    return Object.keys(grouped).sort().map(org => ({
+        label: org,
+        options: grouped[org].sort((a, b) => a.label.localeCompare(b.label))
+    }));
+  }, [encargadosList]);
 
   useEffect(() => {
     const handleBeforeUnload = (event: BeforeUnloadEvent) => {
@@ -528,18 +548,15 @@ const handleMassQualify = async () => {
           <div className="space-y-4">
               <div>
                   <label htmlFor="encargado" className="block text-sm font-bold text-starbucks-dark mb-1">Nombre del Encargado:</label>
-                   <Select onValueChange={setEncargado} value={encargado} disabled={scannerActive}>
-                      <SelectTrigger className="bg-transparent hover:bg-gray-50 border border-input">
-                          <SelectValue placeholder="Selecciona un encargado" />
-                      </SelectTrigger>
-                      <SelectContent>
-                          {encargadosList.map((enc) => (
-                              <SelectItem key={`${enc.name}-${enc.rol}`} value={enc.name}>
-                                  {enc.name}
-                              </SelectItem>
-                          ))}
-                      </SelectContent>
-                  </Select>
+                   <Combobox
+                      groupedOptions={groupedEncargadoOptions}
+                      value={encargado}
+                      onValueChange={setEncargado}
+                      placeholder="Selecciona un encargado..."
+                      emptyMessage="No se encontró encargado."
+                      buttonClassName="bg-transparent hover:bg-gray-50 border-input"
+                      disabled={scannerActive}
+                  />
               </div>
 
               <div>
