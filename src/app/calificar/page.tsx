@@ -506,6 +506,25 @@ export default function CalificarPage() {
         timerStartedRef.current = false;
     }
   }
+  
+  const saveKpiData = async (name: string, quantity: number, timeInSeconds: number) => {
+    if (quantity === 0 || !name) return;
+
+    try {
+      const { error } = await supabase.from('kpis').insert({
+        name: name,
+        quantity: quantity,
+        time: formatElapsedTime(timeInSeconds),
+      });
+
+      if (error) {
+        console.error('Error saving KPI data:', error.message);
+      }
+    } catch (e: any) {
+      console.error('Exception while saving KPI data:', e.message);
+    }
+  };
+
 
   const handleSendReport = async () => {
     if (!selectedReport || !lastScannedResult?.code) {
@@ -523,6 +542,7 @@ export default function CalificarPage() {
             throw error;
         }
 
+        await saveKpiData(encargado, 1, elapsedTime);
         alert('Reporte enviado correctamente.');
         handleOpenRatingModal(false); // Close and reset
 
@@ -552,6 +572,7 @@ export default function CalificarPage() {
             throw error;
         }
 
+        await saveKpiData(encargado, 1, elapsedTime);
         alert('Calificación guardada correctamente.');
         handleOpenRatingModal(false);
     } catch (e: any) {
@@ -627,6 +648,10 @@ const handleMassQualify = async () => {
             alert(`Se procesaron ${successCount} etiquetas con éxito, pero ${errorCount} fallaron. Revisa la consola.`);
         } else {
             alert(`Se calificaron ${successCount} etiquetas correctamente con el lote ${loteId}.`);
+        }
+
+        if (successCount > 0) {
+            await saveKpiData(encargado, successCount, elapsedTime);
         }
 
         setMassScannedCodes([]);
