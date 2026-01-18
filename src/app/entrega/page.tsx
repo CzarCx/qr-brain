@@ -62,8 +62,6 @@ export default function Home() {
   const [notFoundCodes, setNotFoundCodes] = useState<string[]>([]);
   const [isNotFoundModalOpen, setIsNotFoundModalOpen] = useState(false);
   const [csvProcessingStats, setCsvProcessingStats] = useState<{ found: number; notFound: number; total: number; elapsedTime?: string; } | null>(null);
-  const [timerStartTime, setTimerStartTime] = useState<Date | null>(null);
-  const [elapsedTime, setElapsedTime] = useState(0);
 
 
   const messageTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -75,7 +73,6 @@ export default function Home() {
   const scannedCodesRef = useRef(new Set<string>());
   const physicalScannerInputRef = useRef<HTMLInputElement | null>(null);
   const bufferRef = useRef('');
-  const timerStartedRef = useRef(false);
   
   const MIN_SCAN_INTERVAL = 1500; // 1.5 seconds
 
@@ -116,25 +113,6 @@ export default function Home() {
     }));
   }, [encargadosList]);
 
-  useEffect(() => {
-    let interval: NodeJS.Timeout | null = null;
-
-    if (timerStartTime) {
-      interval = setInterval(() => {
-        const now = new Date();
-        const seconds = Math.floor((now.getTime() - timerStartTime.getTime()) / 1000);
-        setElapsedTime(seconds);
-      }, 1000);
-    } else {
-        setElapsedTime(0);
-    }
-
-    return () => {
-      if (interval) {
-        clearInterval(interval);
-      }
-    };
-  }, [timerStartTime]);
 
   useEffect(() => {
     const handleBeforeUnload = (event: BeforeUnloadEvent) => {
@@ -256,10 +234,6 @@ export default function Home() {
             playWarningSound();
             showModalNotification('Paquete Reportado', 'Este paquete no está listo para ser enviado, tiene un reporte activo.', 'destructive');
         } else if (isValidationOverridden || data.status === 'CALIFICADO') {
-            if (!timerStartedRef.current) {
-                setTimerStartTime(new Date());
-                timerStartedRef.current = true;
-            }
             playBeep();
             const newItem: DeliveryItem = {
                 code: finalCode,
@@ -465,7 +439,7 @@ export default function Home() {
       
       if (error) throw error;
       
-      await saveKpiData(encargado, deliveryList.length, elapsedTime);
+      await saveKpiData(encargado, deliveryList.length, 0);
 
       setIsDeliveryModalOpen(false);
       showModalNotification('Éxito', `Se marcaron ${deliveryList.length} paquetes como "ENTREGADO".`);
@@ -474,8 +448,6 @@ export default function Home() {
       setDriverName('');
       setDriverPlate('');
       setLotesCargadosCount(0); // Reset lotes count
-      setTimerStartTime(null);
-      timerStartedRef.current = false;
       showAppMessage('Esperando para escanear...', 'info');
 
     } catch (e: any) {
@@ -530,10 +502,6 @@ export default function Home() {
       const newItems = data.reduce((acc: DeliveryItem[], item) => {
         if (!scannedCodesRef.current.has(item.code)) {
            // Aquí podrías añadir lógica para filtrar por status si es necesario
-          if (!timerStartedRef.current) {
-            setTimerStartTime(new Date());
-            timerStartedRef.current = true;
-          }
           scannedCodesRef.current.add(item.code);
           addedCount++;
           acc.push({
@@ -717,13 +685,6 @@ export default function Home() {
                     <p className="text-gray-600 text-sm mt-1">Escanea los paquetes para confirmar su entrega.</p>
                 </header>
                 
-                <div className="grid grid-cols-2 gap-4">
-                    <div className={`p-2 rounded-lg bg-blue-100 text-blue-800 text-center col-span-2`}>
-                        <h3 className="font-bold uppercase text-xs flex items-center justify-center gap-1"><Clock className="h-4 w-4" /> Tiempo</h3>
-                        <p className="text-2xl font-mono">{formatElapsedTime(elapsedTime)}</p>
-                    </div>
-                </div>
-
                  {dbError && (
                     <Alert variant="destructive">
                         <AlertTriangle className="h-4 w-4" />
