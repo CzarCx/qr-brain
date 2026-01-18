@@ -87,7 +87,8 @@ export default function Home() {
         if (error) {
             setDbError('Error al cargar encargados. Revisa los permisos RLS de la tabla `personal_name`.');
         } else if (data && data.length > 0) {
-            setEncargadosList(data as Encargado[] || []);
+            const uniqueEncargados = Array.from(new Map(data.map(item => [item.name, item])).values());
+            setEncargadosList(uniqueEncargados as Encargado[] || []);
         } else {
             setDbError('No se encontraron encargados de entrega. Revisa los datos o los permisos RLS.');
         }
@@ -174,20 +175,16 @@ export default function Home() {
   };
   
     const formatElapsedTime = (totalSeconds: number) => {
-        if (totalSeconds < 0) return '00:00';
+        if (totalSeconds < 0) return '00:00:00';
         const hours = Math.floor(totalSeconds / 3600);
         const minutes = Math.floor((totalSeconds % 3600) / 60);
         const seconds = totalSeconds % 60;
 
+        const paddedHours = String(hours).padStart(2, '0');
         const paddedMinutes = String(minutes).padStart(2, '0');
         const paddedSeconds = String(seconds).padStart(2, '0');
-
-        if (hours > 0) {
-            const paddedHours = String(hours).padStart(2, '0');
-            return `${paddedHours}:${paddedMinutes}:${paddedSeconds}`;
-        }
         
-        return `${paddedMinutes}:${paddedSeconds}`;
+        return `${paddedHours}:${paddedMinutes}:${paddedSeconds}`;
     };
 
   const onScanSuccess = useCallback(async (decodedText: string) => {
@@ -587,10 +584,7 @@ export default function Home() {
         const lastDate = validEntries[validEntries.length - 1].date;
         const diff = lastDate.getTime() - firstDate.getTime();
         const timeInSeconds = Math.round(diff / 1000);
-        const hours = Math.floor(diff / 3600000);
-        const minutes = Math.floor((diff % 3600000) / 60000);
-        const seconds = Math.floor(((diff % 3600000) % 60000) / 1000);
-        const elapsedTime = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+        const elapsedTime = formatElapsedTime(timeInSeconds);
 
         const codesFromCsv = validEntries.map(entry => entry.code);
         const csvDataMap = new Map(validEntries.map(entry => [entry.code, entry.date.toISOString()]));
@@ -607,7 +601,7 @@ export default function Home() {
           const codesToUpdate = codesFromCsv.filter(code => existingCodeSet.has(code));
           const codesNotFound = codesFromCsv.filter(code => !existingCodeSet.has(code));
           
-          await saveKpiData(encargado, codesToUpdate.length, timeInSeconds, file.name);
+          await saveKpiData(encargado, codesFromCsv.length, timeInSeconds, file.name);
 
           setNotFoundCodes(codesNotFound);
           setCsvProcessingStats({
@@ -986,5 +980,7 @@ export default function Home() {
     </>
   );
 }
+
+    
 
     
