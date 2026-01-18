@@ -85,6 +85,7 @@ type CreatedLote = {
 
 type Encargado = {
   name: string;
+  organization: string;
 };
 
 type PersonalOperativo = {
@@ -320,7 +321,7 @@ export default function Home() {
     const fetchEncargados = async () => {
         const { data, error } = await supabase
             .from('personal_name')
-            .select('name')
+            .select('name, organization')
             .eq('rol', 'barra');
 
         if (error) {
@@ -1505,6 +1506,24 @@ const deleteRow = (codeToDelete: string) => {
         options: grouped[org].sort((a, b) => a.label.localeCompare(b.label))
     }));
   }, [personalList]);
+  
+  const groupedEncargadoOptions = useMemo(() => {
+    if (encargadosList.length === 0) return [];
+    
+    const grouped = encargadosList.reduce((acc, person) => {
+        const org = person.organization || 'Sin Empresa';
+        if (!acc[org]) {
+            acc[org] = [];
+        }
+        acc[org].push({ value: person.name, label: person.name });
+        return acc;
+    }, {} as Record<string, { value: string; label: string }[]>);
+
+    return Object.keys(grouped).sort().map(org => ({
+        label: org,
+        options: grouped[org].sort((a, b) => a.label.localeCompare(b.label))
+    }));
+  }, [encargadosList]);
 
   const CargarProduccionSection = (
     <div className="w-full mt-4 p-4 border-t-2 border-dashed border-gray-300">
@@ -1845,18 +1864,15 @@ const deleteRow = (codeToDelete: string) => {
                     <div className="space-y-4">
                          <div>
                             <label htmlFor="encargado" className="block text-sm font-bold text-starbucks-dark mb-1">Nombre del Encargado:</label>
-                            <Select onValueChange={setEncargado} value={encargado} disabled={scannerActive}>
-                                <SelectTrigger className="bg-transparent hover:bg-gray-50 border border-input">
-                                    <SelectValue placeholder="Selecciona un encargado" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {encargadosList.map((enc) => (
-                                        <SelectItem key={enc.name} value={enc.name}>
-                                            {enc.name}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
+                            <Combobox
+                                groupedOptions={groupedEncargadoOptions}
+                                value={encargado}
+                                onValueChange={setEncargado}
+                                placeholder="Selecciona un encargado..."
+                                emptyMessage="No se encontró encargado."
+                                buttonClassName="bg-transparent hover:bg-gray-50 border-input"
+                                disabled={scannerActive}
+                            />
                         </div>
                         
                         <RadioGroup value={scanMode} onValueChange={(value) => setScanMode(value as any)} className="grid grid-cols-3 gap-2 bg-gray-100 p-2 rounded-lg">
@@ -2047,3 +2063,5 @@ const deleteRow = (codeToDelete: string) => {
     </>
   );
 }
+
+    
