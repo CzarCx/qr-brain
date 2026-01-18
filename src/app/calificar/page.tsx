@@ -1,6 +1,6 @@
 
 'use client';
-import {useEffect, useRef, useState, useCallback} from 'react';
+import {useEffect, useRef, useState, useCallback, useMemo} from 'react';
 import Head from 'next/head';
 import { Html5Qrcode, Html5QrcodeScannerState } from 'html5-qrcode';
 import { supabase, supabaseEtiquetas } from '@/lib/supabaseClient';
@@ -37,6 +37,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertTriangle, Trash2, Zap, ZoomIn, PlusCircle, Download, Clock } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Switch } from '@/components/ui/switch';
+import { Combobox } from '@/components/ui/combobox';
 
 
 type ScanResult = {
@@ -62,6 +63,7 @@ type ReportReason = {
 type Encargado = {
   name: string;
   rol: string;
+  organization: string;
 };
 
 type LoteConfirmationState = {
@@ -123,7 +125,7 @@ export default function CalificarPage() {
     const fetchEncargados = async () => {
         const { data, error } = await supabase
             .from('personal_name')
-            .select('name, rol')
+            .select('name, rol, organization')
             .eq('rol', 'Control de calidad');
 
         if (error) {
@@ -137,6 +139,24 @@ export default function CalificarPage() {
     };
     fetchEncargados();
   }, []);
+
+  const groupedEncargadoOptions = useMemo(() => {
+    if (encargadosList.length === 0) return [];
+    
+    const grouped = encargadosList.reduce((acc, person) => {
+        const org = person.organization || 'Sin Empresa';
+        if (!acc[org]) {
+            acc[org] = [];
+        }
+        acc[org].push({ value: person.name, label: person.name });
+        return acc;
+    }, {} as Record<string, { value: string; label: string }[]>);
+
+    return Object.keys(grouped).sort().map(org => ({
+        label: org,
+        options: grouped[org].sort((a, b) => a.label.localeCompare(b.label))
+    }));
+  }, [encargadosList]);
 
   useEffect(() => {
     let interval: NodeJS.Timeout | null = null;
@@ -368,10 +388,10 @@ export default function CalificarPage() {
 
         if (hours > 0) {
             const paddedHours = String(hours).padStart(2, '0');
-            return `${paddedHours}:${paddedMinutes}:${paddedSeconds}`;
+            return `\${paddedHours}:\${paddedMinutes}:\${paddedSeconds}`;
         }
         
-        return `${paddedMinutes}:${paddedSeconds}`;
+        return `\${paddedMinutes}:\${paddedSeconds}`;
     };
 
     useEffect(() => {
@@ -548,7 +568,7 @@ export default function CalificarPage() {
 
     } catch (e: any) {
         console.error('Error enviando el reporte:', e);
-        alert(`Error al enviar el reporte: ${e.message}`);
+        alert(`Error al enviar el reporte: \${e.message}`);
     } finally {
         setLoading(false);
     }
@@ -578,7 +598,7 @@ export default function CalificarPage() {
     } catch (e: any) {
         console.error('Error guardando la calificación:', e);
         const errorMessage = e.message || JSON.stringify(e);
-        alert(`Error al guardar la calificación: ${errorMessage}`);
+        alert(`Error al guardar la calificación: \${errorMessage}`);
     } finally {
         setLoading(false);
     }
@@ -645,9 +665,9 @@ const handleMassQualify = async () => {
         }
 
         if (errorCount > 0) {
-            alert(`Se procesaron ${successCount} etiquetas con éxito, pero ${errorCount} fallaron. Revisa la consola.`);
+            alert(`Se procesaron \${successCount} etiquetas con éxito, pero \${errorCount} fallaron. Revisa la consola.`);
         } else {
-            alert(`Se calificaron ${successCount} etiquetas correctamente con el lote ${loteId}.`);
+            alert(`Se calificaron \${successCount} etiquetas correctamente con el lote \${loteId}.`);
         }
 
         if (successCount > 0) {
@@ -663,7 +683,7 @@ const handleMassQualify = async () => {
     } catch (e: any) {
         console.error('Error en la calificación masiva:', e);
         const errorMessage = e.message || JSON.stringify(e);
-        alert(`Error al calificar masivamente: ${errorMessage}`);
+        alert(`Error al calificar masivamente: \${errorMessage}`);
     } finally {
         setLoading(false);
     }
@@ -686,7 +706,7 @@ const triggerMassQualify = async () => {
             .eq('lote', loteId.trim());
 
         if (error) {
-            throw new Error(`Error al verificar el lote: ${error.message}`);
+            throw new Error(`Error al verificar el lote: \${error.message}`);
         }
 
         if (count && count > 0) {
@@ -701,7 +721,7 @@ const triggerMassQualify = async () => {
             await handleMassQualify();
         }
     } catch (e: any) {
-        alert(`Error: ${e.message}`);
+        alert(`Error: \${e.message}`);
     } finally {
         setLoading(false);
     }
@@ -710,7 +730,7 @@ const triggerMassQualify = async () => {
   const removeFromMassList = (codeToRemove: string) => {
     setMassScannedCodes(prev => prev.filter(item => item.code !== codeToRemove));
     massScannedCodesRef.current.delete(codeToRemove);
-    showAppMessage(`Código ${codeToRemove} eliminado de la lista.`, 'info');
+    showAppMessage(`Código \${codeToRemove} eliminado de la lista.`, 'info');
   };
 
 
@@ -757,7 +777,7 @@ const triggerMassQualify = async () => {
       return;
     }
     setLoading(true);
-    showAppMessage(`Cargando paquetes del lote ${loteToLoad}...`, 'info');
+    showAppMessage(`Cargando paquetes del lote \${loteToLoad}...`, 'info');
 
     try {
       const { data, error } = await supabase
@@ -768,7 +788,7 @@ const triggerMassQualify = async () => {
       if (error) throw error;
 
       if (!data || data.length === 0) {
-        showAppMessage(`No se encontraron paquetes para el lote ${loteToLoad}.`, 'warning');
+        showAppMessage(`No se encontraron paquetes para el lote \${loteToLoad}.`, 'warning');
         return;
       }
       
@@ -799,11 +819,11 @@ const triggerMassQualify = async () => {
       });
 
       setMassScannedCodes(prev => [...prev, ...itemsToAdd]);
-      showAppMessage(`Se agregaron ${addedCount} nuevos paquetes del lote ${loteToLoad}.`, 'success');
+      showAppMessage(`Se agregaron \${addedCount} nuevos paquetes del lote \${loteToLoad}.`, 'success');
       setLoteToLoad('');
 
     } catch (e: any) {
-      showAppMessage(`Error al cargar el lote: ${e.message}`, 'error');
+      showAppMessage(`Error al cargar el lote: \${e.message}`, 'error');
     } finally {
       setLoading(false);
     }
@@ -840,33 +860,30 @@ const triggerMassQualify = async () => {
           <div className="space-y-4">
               <div>
                   <label htmlFor="encargado" className="block text-sm font-bold text-starbucks-dark mb-1">Nombre del Encargado:</label>
-                   <Select onValueChange={setEncargado} value={encargado} disabled={scannerActive}>
-                      <SelectTrigger className="bg-transparent hover:bg-gray-50 border border-input">
-                          <SelectValue placeholder="Selecciona un encargado" />
-                      </SelectTrigger>
-                      <SelectContent>
-                          {encargadosList.map((enc) => (
-                              <SelectItem key={`${enc.name}-${enc.rol}`} value={enc.name}>
-                                  {enc.name}
-                              </SelectItem>
-                          ))}
-                      </SelectContent>
-                  </Select>
+                   <Combobox
+                      groupedOptions={groupedEncargadoOptions}
+                      value={encargado}
+                      onValueChange={setEncargado}
+                      placeholder="Selecciona un encargado..."
+                      emptyMessage="No se encontró encargado."
+                      buttonClassName="bg-transparent hover:bg-gray-50 border-input"
+                      disabled={scannerActive}
+                  />
               </div>
 
               <div>
                   <label className="block text-sm font-bold text-starbucks-dark mb-1">Método de Escaneo:</label>
                   <div className="grid grid-cols-2 gap-2">
-                      <button onClick={() => setSelectedScannerMode('camara')} className={`area-btn w-full px-4 py-3 text-sm rounded-md shadow-sm focus:outline-none ${selectedScannerMode === 'camara' ? 'scanner-mode-selected' : ''}`} disabled={scannerActive}>CÁMARA</button>
-                      <button onClick={() => setSelectedScannerMode('fisico')} className={`area-btn w-full px-4 py-3 text-sm rounded-md shadow-sm focus:outline-none ${selectedScannerMode === 'fisico' ? 'scanner-mode-selected' : ''}`} disabled={scannerActive}>ESCÁNER FÍSICO</button>
+                      <button onClick={() => setSelectedScannerMode('camara')} className={`area-btn w-full px-4 py-3 text-sm rounded-md shadow-sm focus:outline-none \${selectedScannerMode === 'camara' ? 'scanner-mode-selected' : ''}`} disabled={scannerActive}>CÁMARA</button>
+                      <button onClick={() => setSelectedScannerMode('fisico')} className={`area-btn w-full px-4 py-3 text-sm rounded-md shadow-sm focus:outline-none \${selectedScannerMode === 'fisico' ? 'scanner-mode-selected' : ''}`} disabled={scannerActive}>ESCÁNER FÍSICO</button>
                   </div>
               </div>
               
               <div>
                   <label className="block text-sm font-bold text-starbucks-dark mb-1">Tipo de Escaneo:</label>
                   <div className="grid grid-cols-2 gap-2">
-                      <button onClick={() => setScanMode('individual')} className={`area-btn w-full px-4 py-3 text-sm rounded-md shadow-sm focus:outline-none ${scanMode === 'individual' ? 'scanner-mode-selected' : ''}`} disabled={scannerActive}>Individual</button>
-                      <button onClick={() => setScanMode('masivo')} className={`area-btn w-full px-4 py-3 text-sm rounded-md shadow-sm focus:outline-none ${scanMode === 'masivo' ? 'scanner-mode-selected' : ''}`} disabled={scannerActive}>Masivo</button>
+                      <button onClick={() => setScanMode('individual')} className={`area-btn w-full px-4 py-3 text-sm rounded-md shadow-sm focus:outline-none \${scanMode === 'individual' ? 'scanner-mode-selected' : ''}`} disabled={scannerActive}>Individual</button>
+                      <button onClick={() => setScanMode('masivo')} className={`area-btn w-full px-4 py-3 text-sm rounded-md shadow-sm focus:outline-none \${scanMode === 'masivo' ? 'scanner-mode-selected' : ''}`} disabled={scannerActive}>Masivo</button>
                   </div>
               </div>
 
@@ -878,13 +895,13 @@ const triggerMassQualify = async () => {
           
           <div className="grid grid-cols-2 gap-4">
               {timerStartedRef.current && (
-                  <div className={`p-2 rounded-lg bg-blue-100 text-blue-800 text-center ${scanMode === 'individual' ? 'col-span-2' : 'col-span-1'}`}>
+                  <div className={`p-2 rounded-lg bg-blue-100 text-blue-800 text-center \${scanMode === 'individual' ? 'col-span-2' : 'col-span-1'}`}>
                       <h3 className="font-bold uppercase text-xs flex items-center justify-center gap-1"><Clock className="h-4 w-4" /> Tiempo</h3>
                       <p className="text-2xl font-mono">{formatElapsedTime(elapsedTime)}</p>
                   </div>
               )}
               {scanMode === 'masivo' && (
-                  <div className={`bg-starbucks-cream p-2 rounded-lg border text-center ${!timerStartedRef.current ? 'col-span-2' : 'col-span-1'}`}>
+                  <div className={`bg-starbucks-cream p-2 rounded-lg border text-center \${!timerStartedRef.current ? 'col-span-2' : 'col-span-1'}`}>
                       <h3 className="font-bold text-starbucks-dark uppercase text-xs">Escaneados</h3>
                       <p className="text-2xl font-mono text-starbucks-green">{massScannedCodes.length}</p>
                   </div>
@@ -895,7 +912,7 @@ const triggerMassQualify = async () => {
             <div className="scanner-container relative">
                 <div id="reader" ref={readerRef} style={{ display: selectedScannerMode === 'camara' && scannerActive ? 'block' : 'none' }}></div>
                 {message.show && (
-                    <div className={`scanner-message ${messageClasses[message.type]}`}>
+                    <div className={`scanner-message \${messageClasses[message.type]}`}>
                         {message.text}
                     </div>
                 )}
@@ -977,7 +994,7 @@ const triggerMassQualify = async () => {
             {/* Fallback message display for when scanner is off */}
             {!message.show && (
                 <div className="p-3 rounded-lg text-center font-semibold text-base bg-gray-100 text-gray-800">
-                    {lastScannedResult?.found ? `Último escaneo: ${lastScannedResult.code}` : 'Apunte la cámara a un código QR.'}
+                    {lastScannedResult?.found ? `Último escaneo: \${lastScannedResult.code}` : 'Apunte la cámara a un código QR.'}
                 </div>
             )}
 

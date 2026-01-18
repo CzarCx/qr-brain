@@ -1,6 +1,6 @@
 
 'use client';
-import {useEffect, useRef, useState, useCallback} from 'react';
+import {useEffect, useRef, useState, useCallback, useMemo} from 'react';
 import Head from 'next/head';
 import Image from 'next/image';
 import { Html5Qrcode, Html5QrcodeScannerState } from 'html5-qrcode';
@@ -22,6 +22,7 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import Papa from 'papaparse';
+import { Combobox } from '@/components/ui/combobox';
 
 
 type DeliveryItem = {
@@ -32,6 +33,7 @@ type DeliveryItem = {
 
 type Encargado = {
   name: string;
+  organization: string;
 };
 
 export default function Home() {
@@ -79,7 +81,7 @@ export default function Home() {
     const fetchEncargados = async () => {
         const { data, error } = await supabase
             .from('personal_name')
-            .select('name')
+            .select('name, organization')
             .eq('rol', 'entrega');
 
         if (error) {
@@ -92,6 +94,24 @@ export default function Home() {
     };
     fetchEncargados();
   }, []);
+
+  const groupedEncargadoOptions = useMemo(() => {
+    if (encargadosList.length === 0) return [];
+    
+    const grouped = encargadosList.reduce((acc, person) => {
+        const org = person.organization || 'Sin Empresa';
+        if (!acc[org]) {
+            acc[org] = [];
+        }
+        acc[org].push({ value: person.name, label: person.name });
+        return acc;
+    }, {} as Record<string, { value: string; label: string }[]>);
+
+    return Object.keys(grouped).sort().map(org => ({
+        label: org,
+        options: grouped[org].sort((a, b) => a.label.localeCompare(b.label))
+    }));
+  }, [encargadosList]);
 
   useEffect(() => {
     const handleBeforeUnload = (event: BeforeUnloadEvent) => {
@@ -174,7 +194,7 @@ export default function Home() {
     
     if (scannedCodesRef.current.has(finalCode)) {
         setLoading(false);
-        showAppMessage(`Código ya en la lista: ${finalCode}`, 'warning');
+        showAppMessage(`Código ya en la lista: \${finalCode}`, 'warning');
         return;
     }
 
@@ -204,14 +224,14 @@ export default function Home() {
             };
             setDeliveryList(prev => [newItem, ...prev]);
             scannedCodesRef.current.add(finalCode);
-            showAppMessage(`Paquete listo: ${finalCode}`, 'success');
+            showAppMessage(`Paquete listo: \${finalCode}`, 'success');
         } else {
              playWarningSound();
-             showModalNotification('Paquete no Calificado', `Este paquete aún no ha sido calificado (Estado: ${data.status}).`);
+             showModalNotification('Paquete no Calificado', `Este paquete aún no ha sido calificado (Estado: \${data.status}).`);
         }
 
     } catch (e: any) {
-        showModalNotification('Error de Base de Datos', `Hubo un problema al consultar el código: ${e.message}`, 'destructive');
+        showModalNotification('Error de Base de Datos', `Hubo un problema al consultar el código: \${e.message}`, 'destructive');
     } finally {
         setLoading(false);
     }
@@ -344,7 +364,7 @@ export default function Home() {
   const removeFromList = (codeToRemove: string) => {
     setDeliveryList(prev => prev.filter(item => item.code !== codeToRemove));
     scannedCodesRef.current.delete(codeToRemove);
-    showAppMessage(`Código ${codeToRemove} eliminado de la lista.`, 'info');
+    showAppMessage(`Código \${codeToRemove} eliminado de la lista.`, 'info');
   };
 
   const handleOpenDeliveryModal = () => {
@@ -381,7 +401,7 @@ export default function Home() {
       if (error) throw error;
       
       setIsDeliveryModalOpen(false);
-      showModalNotification('Éxito', `Se marcaron ${deliveryList.length} paquetes como "ENTREGADO".`);
+      showModalNotification('Éxito', `Se marcaron \${deliveryList.length} paquetes como "ENTREGADO".`);
       setDeliveryList([]);
       scannedCodesRef.current.clear();
       setDriverName('');
@@ -390,7 +410,7 @@ export default function Home() {
       showAppMessage('Esperando para escanear...', 'info');
 
     } catch (e: any) {
-      showModalNotification('Error al Actualizar', `No se pudieron actualizar los registros: ${e.message}`, 'destructive');
+      showModalNotification('Error al Actualizar', `No se pudieron actualizar los registros: \${e.message}`, 'destructive');
     } finally {
       setLoading(false);
     }
@@ -420,7 +440,7 @@ export default function Home() {
       return;
     }
     setLoading(true);
-    showAppMessage(`Buscando paquetes del lote ${loteId}...`, 'info');
+    showAppMessage(`Buscando paquetes del lote \${loteId}...`, 'info');
 
     try {
       const { data, error } = await supabase
@@ -431,7 +451,7 @@ export default function Home() {
       if (error) throw error;
 
       if (!data || data.length === 0) {
-        showAppMessage(`No se encontraron paquetes para el lote ${loteId}.`, 'warning');
+        showAppMessage(`No se encontraron paquetes para el lote \${loteId}.`, 'warning');
         return;
       }
 
@@ -459,11 +479,11 @@ export default function Home() {
         setLotesCargadosCount(prev => prev + 1);
       }
       
-      showAppMessage(`Lote cargado: ${addedCount} paquetes añadidos, ${skippedCount} ya estaban en la lista.`, 'success');
+      showAppMessage(`Lote cargado: \${addedCount} paquetes añadidos, \${skippedCount} ya estaban en la lista.`, 'success');
       setLoteId('');
 
     } catch (e: any) {
-      showAppMessage(`Error al cargar el lote: ${e.message}`, 'error');
+      showAppMessage(`Error al cargar el lote: \${e.message}`, 'error');
     } finally {
       setLoading(false);
     }
@@ -494,7 +514,7 @@ export default function Home() {
 
             if (!codeValue || !dateStr || !timeStr) return null;
             
-            const dateObj = new Date(`${dateStr} ${timeStr} UTC`);
+            const dateObj = new Date(`\${dateStr} \${timeStr} UTC`);
             if (isNaN(dateObj.getTime())) return null;
 
             try {
@@ -529,7 +549,7 @@ export default function Home() {
         const hours = Math.floor(diff / 3600000);
         const minutes = Math.floor((diff % 3600000) / 60000);
         const seconds = Math.floor(((diff % 3600000) % 60000) / 1000);
-        const elapsedTime = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+        const elapsedTime = `\${String(hours).padStart(2, '0')}:\${String(minutes).padStart(2, '0')}:\${String(seconds).padStart(2, '0')}`;
 
         const codesFromCsv = validEntries.map(entry => entry.code);
         const csvDataMap = new Map(validEntries.map(entry => [entry.code, entry.date.toISOString()]));
@@ -544,7 +564,7 @@ export default function Home() {
             });
 
           if (kpiError) {
-              throw new Error(`Error al guardar KPI: ${kpiError.message}`);
+              throw new Error(`Error al guardar KPI: \${kpiError.message}`);
           }
             
           const { data: existingCodes, error: fetchError } = await supabase
@@ -585,13 +605,13 @@ export default function Home() {
           setIsNotFoundModalOpen(true);
 
         } catch (e: any) {
-          showModalNotification('Error de Base de Datos', `Ocurrió un error: ${e.message}`, 'destructive');
+          showModalNotification('Error de Base de Datos', `Ocurrió un error: \${e.message}`, 'destructive');
         } finally {
           setLoading(false);
         }
       },
       error: (error: any) => {
-        showModalNotification('Error al Leer CSV', `No se pudo procesar el archivo: ${error.message}`, 'destructive');
+        showModalNotification('Error al Leer CSV', `No se pudo procesar el archivo: \${error.message}`, 'destructive');
         setLoading(false);
       },
     });
@@ -645,25 +665,22 @@ export default function Home() {
                 <div className="space-y-4">
                     <div>
                         <label htmlFor="encargado" className="block text-sm font-bold text-starbucks-dark mb-1">Nombre del Encargado:</label>
-                         <Select onValueChange={setEncargado} value={encargado} disabled={scannerActive}>
-                            <SelectTrigger className="bg-transparent hover:bg-gray-50 border border-input">
-                                <SelectValue placeholder="Selecciona un encargado" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {encargadosList.map((enc) => (
-                                    <SelectItem key={enc.name} value={enc.name}>
-                                        {enc.name}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
+                         <Combobox
+                            groupedOptions={groupedEncargadoOptions}
+                            value={encargado}
+                            onValueChange={setEncargado}
+                            placeholder="Selecciona un encargado..."
+                            emptyMessage="No se encontró encargado."
+                            buttonClassName="bg-transparent hover:bg-gray-50 border-input"
+                            disabled={scannerActive}
+                        />
                     </div>
                     
                     <div>
                         <label className="block text-sm font-bold text-starbucks-dark mb-1">Método de Escaneo:</label>
                         <div className="grid grid-cols-2 gap-2">
-                            <button onClick={() => setSelectedScannerMode('camara')} className={`area-btn w-full px-4 py-3 text-sm rounded-md shadow-sm focus:outline-none ${selectedScannerMode === 'camara' ? 'scanner-mode-selected' : ''}`} disabled={scannerActive}>CÁMARA</button>
-                            <button onClick={() => setSelectedScannerMode('fisico')} className={`area-btn w-full px-4 py-3 text-sm rounded-md shadow-sm focus:outline-none ${selectedScannerMode === 'fisico' ? 'scanner-mode-selected' : ''}`} disabled={scannerActive}>ESCÁNER FÍSICO</button>
+                            <button onClick={() => setSelectedScannerMode('camara')} className={`area-btn w-full px-4 py-3 text-sm rounded-md shadow-sm focus:outline-none \${selectedScannerMode === 'camara' ? 'scanner-mode-selected' : ''}`} disabled={scannerActive}>CÁMARA</button>
+                            <button onClick={() => setSelectedScannerMode('fisico')} className={`area-btn w-full px-4 py-3 text-sm rounded-md shadow-sm focus:outline-none \${selectedScannerMode === 'fisico' ? 'scanner-mode-selected' : ''}`} disabled={scannerActive}>ESCÁNER FÍSICO</button>
                         </div>
                     </div>
                     
@@ -679,7 +696,7 @@ export default function Home() {
                     <div className="scanner-container relative">
                         <div id="reader" ref={readerRef} style={{ display: selectedScannerMode === 'camara' && scannerActive ? 'block' : 'none' }}></div>
                          {message.show && (
-                            <div className={`scanner-message ${messageClasses[message.type]}`}>
+                            <div className={`scanner-message \${messageClasses[message.type]}`}>
                                 {message.text}
                             </div>
                         )}
@@ -818,7 +835,7 @@ export default function Home() {
                      {/* Fallback message display for when scanner is off */}
                     {!message.show && (
                         <div className="p-3 rounded-lg text-center font-semibold text-base bg-gray-100 text-gray-800">
-                           {lastScanned ? `Último escaneo: ${lastScanned}` : 'Esperando para escanear...'}
+                           {lastScanned ? `Último escaneo: \${lastScanned}` : 'Esperando para escanear...'}
                         </div>
                     )}
                      <div className="mt-4 flex justify-center">
