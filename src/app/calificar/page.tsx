@@ -894,14 +894,12 @@ const triggerMassQualify = async () => {
           </div>
           
           <div className="grid grid-cols-2 gap-4">
-              {timerStartedRef.current && (
-                  <div className={`p-2 rounded-lg bg-blue-100 text-blue-800 text-center \${scanMode === 'individual' ? 'col-span-2' : 'col-span-1'}`}>
-                      <h3 className="font-bold uppercase text-xs flex items-center justify-center gap-1"><Clock className="h-4 w-4" /> Tiempo</h3>
-                      <p className="text-2xl font-mono">{formatElapsedTime(elapsedTime)}</p>
-                  </div>
-              )}
+              <div className={`p-2 rounded-lg bg-blue-100 text-blue-800 text-center \${scanMode === 'individual' ? 'col-span-2' : ''}`}>
+                  <h3 className="font-bold uppercase text-xs flex items-center justify-center gap-1"><Clock className="h-4 w-4" /> Tiempo</h3>
+                  <p className="text-2xl font-mono">{formatElapsedTime(elapsedTime)}</p>
+              </div>
               {scanMode === 'masivo' && (
-                  <div className={`bg-starbucks-cream p-2 rounded-lg border text-center \${!timerStartedRef.current ? 'col-span-2' : 'col-span-1'}`}>
+                  <div className="bg-starbucks-cream p-2 rounded-lg border text-center">
                       <h3 className="font-bold text-starbucks-dark uppercase text-xs">Escaneados</h3>
                       <p className="text-2xl font-mono text-starbucks-green">{massScannedCodes.length}</p>
                   </div>
