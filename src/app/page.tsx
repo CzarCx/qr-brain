@@ -1272,24 +1272,48 @@ const deleteRow = (codeToDelete: string) => {
       setLoading(true);
 
       try {
-          const codesToUpdate = loadedProgData.map(item => item.code);
-          
-          const { error: updateError } = await supabase
-              .from('personal_prog')
-              .update({
-                  name: personToAssign,
-                  status: 'ASIGNADO',
-                  date: new Date().toISOString(), // Update assignment date
-              })
-              .in('code', codesToUpdate);
-          
-          if (updateError) {
-              throw new Error(`Error al re-asociar en 'personal_prog': ${updateError.message}`);
+          // 1. Prepare data for insertion into 'personal' table
+          const dataToInsert = loadedProgData.map(item => ({
+              code: String(item.code),
+              sku: item.sku,
+              name: personToAssign, // The newly assigned person
+              name_inc: item.name_inc,
+              place: item.place,
+              product: item.product,
+              quantity: item.quantity,
+              organization: item.organization,
+              sales_num: item.sales_num,
+              date: new Date().toISOString(), // New assignment date
+              status: 'ASIGNADO',
+              esti_time: item.esti_time,
+              deli_date: item.deli_date,
+          }));
+
+          // 2. Insert records into 'personal' table
+          const { error: insertError } = await supabase.from('personal').insert(dataToInsert);
+
+          if (insertError) {
+              // Check for unique constraint violation
+              if (insertError.code === '23505') { // Postgres unique violation code
+                  throw new Error(`Uno o más códigos ya existen en la tabla de asignaciones. No se puede duplicar.`);
+              }
+              throw new Error(`Error al guardar en 'personal': ${insertError.message}`);
           }
 
-          showModalNotification('¡Éxito!', `Se re-asociaron ${loadedProgData.length} códigos a ${personToAssign}.`, 'success');
+          // 3. Delete records from 'personal_prog' table
+          const codesToDelete = loadedProgData.map(item => item.code);
+          const { error: deleteError } = await supabase
+              .from('personal_prog')
+              .delete()
+              .in('code', codesToDelete);
+          
+          if (deleteError) {
+              throw new Error(`Error al eliminar de 'personal_prog': ${deleteError.message}. Los registros fueron asignados, pero no se eliminaron de la lista de programados.`);
+          }
 
-          // Reset modal state
+          showModalNotification('¡Éxito!', `Se asignaron y guardaron ${loadedProgData.length} códigos a ${personToAssign}.`, 'success');
+
+          // 4. Reset state
           setShowCargarProduccion(false);
           setLoadedProgData([]);
           setPersonToAssign('');
@@ -2063,5 +2087,3 @@ const deleteRow = (codeToDelete: string) => {
     </>
   );
 }
-
-    
