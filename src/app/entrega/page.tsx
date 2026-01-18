@@ -8,7 +8,7 @@ import { supabase } from '@/lib/supabaseClient';
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { XCircle, PackageCheck, AlertTriangle, Trash2, Zap, ZoomIn, PlusCircle, Download, FileUp } from 'lucide-react';
+import { XCircle, PackageCheck, AlertTriangle, Trash2, Zap, ZoomIn, PlusCircle, Download, FileUp, Clock } from 'lucide-react';
 import {
   Select,
   SelectContent,
@@ -62,6 +62,8 @@ export default function Home() {
   const [notFoundCodes, setNotFoundCodes] = useState<string[]>([]);
   const [isNotFoundModalOpen, setIsNotFoundModalOpen] = useState(false);
   const [csvProcessingStats, setCsvProcessingStats] = useState<{ found: number; notFound: number; total: number; elapsedTime?: string; } | null>(null);
+  const [timerStartTime, setTimerStartTime] = useState<Date | null>(null);
+  const [elapsedTime, setElapsedTime] = useState(0);
 
 
   const messageTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -73,6 +75,7 @@ export default function Home() {
   const scannedCodesRef = useRef(new Set<string>());
   const physicalScannerInputRef = useRef<HTMLInputElement | null>(null);
   const bufferRef = useRef('');
+  const timerStartedRef = useRef(false);
   
   const MIN_SCAN_INTERVAL = 1500; // 1.5 seconds
 
@@ -112,6 +115,26 @@ export default function Home() {
         options: grouped[org].sort((a, b) => a.label.localeCompare(b.label))
     }));
   }, [encargadosList]);
+
+  useEffect(() => {
+    let interval: NodeJS.Timeout | null = null;
+
+    if (timerStartTime) {
+      interval = setInterval(() => {
+        const now = new Date();
+        const seconds = Math.floor((now.getTime() - timerStartTime.getTime()) / 1000);
+        setElapsedTime(seconds);
+      }, 1000);
+    } else {
+        setElapsedTime(0);
+    }
+
+    return () => {
+      if (interval) {
+        clearInterval(interval);
+      }
+    };
+  }, [timerStartTime]);
 
   useEffect(() => {
     const handleBeforeUnload = (event: BeforeUnloadEvent) => {
@@ -171,6 +194,23 @@ export default function Home() {
     oscillator.start();
     oscillator.stop(context.currentTime + 0.2);
   };
+  
+    const formatElapsedTime = (totalSeconds: number) => {
+        if (totalSeconds < 0) return '00:00';
+        const hours = Math.floor(totalSeconds / 3600);
+        const minutes = Math.floor((totalSeconds % 3600) / 60);
+        const seconds = totalSeconds % 60;
+
+        const paddedMinutes = String(minutes).padStart(2, '0');
+        const paddedSeconds = String(seconds).padStart(2, '0');
+
+        if (hours > 0) {
+            const paddedHours = String(hours).padStart(2, '0');
+            return `${paddedHours}:${paddedMinutes}:${paddedSeconds}`;
+        }
+        
+        return `${paddedMinutes}:${paddedSeconds}`;
+    };
 
   const onScanSuccess = useCallback(async (decodedText: string) => {
     if (loading || Date.now() - lastScanTimeRef.current < MIN_SCAN_INTERVAL) return;
@@ -216,6 +256,10 @@ export default function Home() {
             playWarningSound();
             showModalNotification('Paquete Reportado', 'Este paquete no está listo para ser enviado, tiene un reporte activo.', 'destructive');
         } else if (isValidationOverridden || data.status === 'CALIFICADO') {
+            if (!timerStartedRef.current) {
+                setTimerStartTime(new Date());
+                timerStartedRef.current = true;
+            }
             playBeep();
             const newItem: DeliveryItem = {
                 code: finalCode,
@@ -374,6 +418,27 @@ export default function Home() {
     }
     setIsDeliveryModalOpen(true);
   };
+  
+  const saveKpiData = async (name: string, quantity: number, timeInSeconds: number, csvFileName?: string) => {
+    if (quantity === 0 || !name) return;
+
+    try {
+      const kpiData: { name: string; quantity: number; time: string; csv_file?: string } = {
+        name: name,
+        quantity: quantity,
+        time: formatElapsedTime(timeInSeconds),
+      };
+      if (csvFileName) {
+        kpiData.csv_file = csvFileName;
+      }
+      const { error } = await supabase.from('kpis').insert([kpiData]);
+      if (error) {
+        console.error('Error saving KPI data:', error.message);
+      }
+    } catch (e: any) {
+      console.error('Exception while saving KPI data:', e.message);
+    }
+  };
 
   const handleUpdateStatusToDelivered = async () => {
     if (!driverName.trim() || !driverPlate.trim()) {
@@ -400,6 +465,8 @@ export default function Home() {
       
       if (error) throw error;
       
+      await saveKpiData(encargado, deliveryList.length, elapsedTime);
+
       setIsDeliveryModalOpen(false);
       showModalNotification('Éxito', `Se marcaron ${deliveryList.length} paquetes como "ENTREGADO".`);
       setDeliveryList([]);
@@ -407,6 +474,8 @@ export default function Home() {
       setDriverName('');
       setDriverPlate('');
       setLotesCargadosCount(0); // Reset lotes count
+      setTimerStartTime(null);
+      timerStartedRef.current = false;
       showAppMessage('Esperando para escanear...', 'info');
 
     } catch (e: any) {
@@ -461,6 +530,10 @@ export default function Home() {
       const newItems = data.reduce((acc: DeliveryItem[], item) => {
         if (!scannedCodesRef.current.has(item.code)) {
            // Aquí podrías añadir lógica para filtrar por status si es necesario
+          if (!timerStartedRef.current) {
+            setTimerStartTime(new Date());
+            timerStartedRef.current = true;
+          }
           scannedCodesRef.current.add(item.code);
           addedCount++;
           acc.push({
@@ -555,18 +628,6 @@ export default function Home() {
         const csvDataMap = new Map(validEntries.map(entry => [entry.code, entry.date.toISOString()]));
 
         try {
-          const { error: kpiError } = await supabase
-            .from('kpis')
-            .insert({
-                time: elapsedTime,
-                name: encargado,
-                csv_file: file.name,
-            });
-
-          if (kpiError) {
-              throw new Error(`Error al guardar KPI: ${kpiError.message}`);
-          }
-            
           const { data: existingCodes, error: fetchError } = await supabase
             .from('personal')
             .select('code')
@@ -577,6 +638,8 @@ export default function Home() {
           const existingCodeSet = new Set(existingCodes.map(item => String(item.code)));
           const codesToUpdate = codesFromCsv.filter(code => existingCodeSet.has(code));
           const codesNotFound = codesFromCsv.filter(code => !existingCodeSet.has(code));
+          
+          await saveKpiData(encargado, codesToUpdate.length, timeInSeconds, file.name);
 
           setNotFoundCodes(codesNotFound);
           setCsvProcessingStats({
@@ -653,6 +716,13 @@ export default function Home() {
                     <h1 className="text-xl md:text-2xl font-bold text-starbucks-green">Módulo de Entrega</h1>
                     <p className="text-gray-600 text-sm mt-1">Escanea los paquetes para confirmar su entrega.</p>
                 </header>
+                
+                <div className="grid grid-cols-2 gap-4">
+                    <div className={`p-2 rounded-lg bg-blue-100 text-blue-800 text-center col-span-2`}>
+                        <h3 className="font-bold uppercase text-xs flex items-center justify-center gap-1"><Clock className="h-4 w-4" /> Tiempo</h3>
+                        <p className="text-2xl font-mono">{formatElapsedTime(elapsedTime)}</p>
+                    </div>
+                </div>
 
                  {dbError && (
                     <Alert variant="destructive">
@@ -955,3 +1025,5 @@ export default function Home() {
     </>
   );
 }
+
+    
