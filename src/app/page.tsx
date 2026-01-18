@@ -1157,24 +1157,34 @@ const deleteRow = (codeToDelete: string) => {
             return;
         }
 
-        const dataToInsert = scannedData.map(item => ({
-            code: String(item.code),
-            sku: item.sku,
-            name: selectedPersonal,
-            name_inc: item.encargado,
-            place: skipAreaSelection ? null : selectedArea,
-            product: item.producto,
-            quantity: item.cantidad,
-            organization: item.empresa,
-            sales_num: Number(item.venta),
-            date: new Date().toISOString(),
-            esti_time: item.esti_time,
-            status: 'PROGRAMADO',
-            date_ini: null,
-            date_esti: null,
-            lote_p: loteId,
-            deli_date: item.deli_date,
-        }));
+        let lastFinishTime = new Date();
+        const dataToInsert = scannedData.map(item => {
+            const startTime = new Date(lastFinishTime.getTime());
+            let finishTime = new Date(startTime.getTime());
+            if (item.esti_time) {
+                finishTime.setMinutes(finishTime.getMinutes() + item.esti_time);
+            }
+            lastFinishTime = finishTime;
+
+            return {
+                code: String(item.code),
+                sku: item.sku,
+                name: selectedPersonal,
+                name_inc: item.encargado,
+                place: skipAreaSelection ? null : selectedArea,
+                product: item.producto,
+                quantity: item.cantidad,
+                organization: item.empresa,
+                sales_num: Number(item.venta),
+                date: new Date().toISOString(),
+                esti_time: item.esti_time,
+                status: 'PROGRAMADO',
+                date_ini: startTime.toISOString(),
+                date_esti: finishTime.toISOString(),
+                lote_p: loteId,
+                deli_date: item.deli_date,
+            };
+        });
 
         const { error } = await supabase.from('personal_prog').insert(dataToInsert);
         if (error) throw error;
@@ -1287,6 +1297,8 @@ const deleteRow = (codeToDelete: string) => {
               status: 'ASIGNADO',
               esti_time: item.esti_time,
               deli_date: item.deli_date,
+              date_ini: item.date_ini,
+              date_esti: item.date_esti,
           }));
 
           // 2. Insert records into 'personal' table
