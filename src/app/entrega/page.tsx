@@ -601,7 +601,6 @@ export default function Home() {
           const codesToUpdate = codesFromCsv.filter(code => existingCodeSet.has(code));
           const codesNotFound = codesFromCsv.filter(code => !existingCodeSet.has(code));
           
-          await saveKpiData(encargado, codesFromCsv.length, timeInSeconds, file.name);
 
           setNotFoundCodes(codesNotFound);
           setCsvProcessingStats({
@@ -612,6 +611,8 @@ export default function Home() {
           });
 
           if (codesToUpdate.length > 0) {
+            await saveKpiData(encargado, codesToUpdate.length, timeInSeconds, file.name);
+
             const updatePromises = codesToUpdate.map(code => 
                 supabase
                     .from('personal')
@@ -980,6 +981,8 @@ export default function Home() {
     </>
   );
 }
+
+    
 
     
 
