@@ -1275,69 +1275,83 @@ const deleteRow = (codeToDelete: string) => {
 
 
   const handleFinalizeAssociation = async () => {
-      if (!personToAssign || loadedProgData.length === 0) {
-          showModalNotification('Error', 'No hay datos o persona seleccionada para asociar.', 'destructive');
-          return;
-      }
-      setLoading(true);
+    if (!personToAssign || loadedProgData.length === 0) {
+        showModalNotification('Error', 'No hay datos o persona seleccionada para asociar.', 'destructive');
+        return;
+    }
+    setLoading(true);
 
-      try {
-          // 1. Prepare data for insertion into 'personal' table
-          const dataToInsert = loadedProgData.map(item => ({
-              code: String(item.code),
-              sku: item.sku,
-              name: personToAssign, // The newly assigned person
-              name_inc: item.name_inc,
-              place: item.place,
-              product: item.product,
-              quantity: item.quantity,
-              organization: item.organization,
-              sales_num: item.sales_num,
-              date: new Date().toISOString(), // New assignment date
-              status: 'ASIGNADO',
-              esti_time: item.esti_time,
-              deli_date: item.deli_date,
-              date_ini: item.date_ini,
-              date_esti: item.date_esti,
-          }));
+    try {
+        const associationTimestamp = new Date();
+        let lastFinishTime = associationTimestamp;
 
-          // 2. Insert records into 'personal' table
-          const { error: insertError } = await supabase.from('personal').insert(dataToInsert);
+        // Ensure data is sorted for sequential calculation
+        const sortedData = [...loadedProgData].sort((a, b) => new Date(a.date_ini).getTime() - new Date(b.date_ini).getTime());
 
-          if (insertError) {
-              // Check for unique constraint violation
-              if (insertError.code === '23505') { // Postgres unique violation code
-                  throw new Error(`Uno o más códigos ya existen en la tabla de asignaciones. No se puede duplicar.`);
-              }
-              throw new Error(`Error al guardar en 'personal': ${insertError.message}`);
-          }
+        const dataToInsert = sortedData.map((item) => {
+            const startTime = new Date(lastFinishTime.getTime());
+            let finishTime = new Date(startTime.getTime());
+            if (item.esti_time) {
+                finishTime.setMinutes(finishTime.getMinutes() + item.esti_time);
+            }
+            lastFinishTime = finishTime;
 
-          // 3. Delete records from 'personal_prog' table
-          const codesToDelete = loadedProgData.map(item => item.code);
-          const { error: deleteError } = await supabase
-              .from('personal_prog')
-              .delete()
-              .in('code', codesToDelete);
-          
-          if (deleteError) {
-              throw new Error(`Error al eliminar de 'personal_prog': ${deleteError.message}. Los registros fueron asignados, pero no se eliminaron de la lista de programados.`);
-          }
+            return {
+                code: String(item.code),
+                sku: item.sku,
+                name: personToAssign, // The newly assigned person
+                name_inc: item.name_inc,
+                place: item.place,
+                product: item.product,
+                quantity: item.quantity,
+                organization: item.organization,
+                sales_num: item.sales_num && !isNaN(Number(item.sales_num)) ? Number(item.sales_num) : null,
+                date: associationTimestamp.toISOString(), // New assignment date, same for all in batch
+                status: 'ASIGNADO',
+                esti_time: item.esti_time,
+                deli_date: item.deli_date,
+                date_ini: startTime.toISOString(), // Sequentially calculated start time
+                date_esti: finishTime.toISOString(), // Sequentially calculated end time
+            };
+        });
 
-          showModalNotification('¡Éxito!', `Se asignaron y guardaron ${loadedProgData.length} códigos a ${personToAssign}.`, 'success');
+        // 2. Insert records into 'personal' table
+        const { error: insertError } = await supabase.from('personal').insert(dataToInsert);
 
-          // 4. Reset state
-          setShowCargarProduccion(false);
-          setLoadedProgData([]);
-          setPersonToAssign('');
-          setSelectedPersonalParaCargar('');
-          setSelectedLoteParaCargar('');
-          fetchCreatedLotes();
+        if (insertError) {
+            // Check for unique constraint violation
+            if (insertError.code === '23505') { // Postgres unique violation code
+                throw new Error(`Uno o más códigos ya existen en la tabla de asignaciones. No se puede duplicar.`);
+            }
+            throw new Error(`Error al guardar en 'personal': ${insertError.message}`);
+        }
 
-      } catch (error: any) {
-          showModalNotification('Error', `Error al asociar: ${error.message}`, 'destructive');
-      } finally {
-          setLoading(false);
-      }
+        // 3. Delete records from 'personal_prog' table
+        const codesToDelete = loadedProgData.map(item => item.code);
+        const { error: deleteError } = await supabase
+            .from('personal_prog')
+            .delete()
+            .in('code', codesToDelete);
+        
+        if (deleteError) {
+            throw new Error(`Error al eliminar de 'personal_prog': ${deleteError.message}. Los registros fueron asignados, pero no se eliminaron de la lista de programados.`);
+        }
+
+        showModalNotification('¡Éxito!', `Se asignaron y guardaron ${loadedProgData.length} códigos a ${personToAssign}.`, 'success');
+
+        // 4. Reset state
+        setShowCargarProduccion(false);
+        setLoadedProgData([]);
+        setPersonToAssign('');
+        setSelectedPersonalParaCargar('');
+        setSelectedLoteParaCargar('');
+        fetchCreatedLotes();
+
+    } catch (error: any) {
+        showModalNotification('Error', `Error al asociar: ${error.message}`, 'destructive');
+    } finally {
+        setLoading(false);
+    }
   };
 
  const handleVerifyCode = async () => {
