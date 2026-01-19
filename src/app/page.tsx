@@ -1175,7 +1175,7 @@ const deleteRow = (codeToDelete: string) => {
                 product: item.producto,
                 quantity: item.cantidad,
                 organization: item.empresa,
-                sales_num: Number(item.venta),
+                sales_num: item.venta && !isNaN(Number(item.venta)) ? Number(item.venta) : null,
                 date: new Date().toISOString(),
                 esti_time: item.esti_time,
                 status: 'PROGRAMADO',
