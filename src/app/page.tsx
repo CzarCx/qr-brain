@@ -493,21 +493,35 @@ export default function Home() {
       showAppMessage('Guardando asignación...', 'info');
 
       try {
-          const dataToInsert = scannedData.map(item => ({
-              code: String(item.code),
-              sku: item.sku,
-              name: personName,
-              name_inc: item.encargado,
-              place: skipAreaSelection ? null : selectedArea,
-              product: item.producto,
-              quantity: item.cantidad,
-              organization: item.empresa,
-              sales_num: item.venta ? Number(item.venta) : null,
-              date: new Date().toISOString(),
-              status: 'ASIGNADO',
-              esti_time: item.esti_time,
-              deli_date: item.deli_date,
-          }));
+          const associationTimestamp = new Date();
+          let lastFinishTime = associationTimestamp;
+
+          const dataToInsert = scannedData.map(item => {
+            const startTime = new Date(lastFinishTime.getTime());
+            let finishTime = new Date(startTime.getTime());
+            if (item.esti_time) {
+                finishTime.setMinutes(finishTime.getMinutes() + item.esti_time);
+            }
+            lastFinishTime = finishTime;
+
+            return {
+                code: String(item.code),
+                sku: item.sku,
+                name: personName,
+                name_inc: item.encargado,
+                place: skipAreaSelection ? null : selectedArea,
+                product: item.producto,
+                quantity: item.cantidad,
+                organization: item.empresa,
+                sales_num: item.venta ? Number(item.venta) : null,
+                date: associationTimestamp.toISOString(),
+                status: 'ASIGNADO',
+                esti_time: item.esti_time,
+                deli_date: item.deli_date,
+                date_ini: startTime.toISOString(),
+                date_esti: finishTime.toISOString(),
+            };
+          });
 
           const { error } = await supabase.from('personal').insert(dataToInsert);
           if (error) {
