@@ -493,8 +493,25 @@ export default function Home() {
       showAppMessage('Guardando asignación...', 'info');
 
       try {
+          const { data: lastRecord, error: lastRecordError } = await supabase
+              .from('personal')
+              .select('date_esti')
+              .eq('name', personName)
+              .not('date_esti', 'is', null)
+              .order('date_esti', { ascending: false })
+              .limit(1)
+              .single();
+
+          if (lastRecordError && lastRecordError.code !== 'PGRST116') {
+              throw new Error(`Error al buscar último registro: ${lastRecordError.message}`);
+          }
+          
           const associationTimestamp = new Date();
-          let lastFinishTime = associationTimestamp;
+          let lastFinishTime = lastRecord?.date_esti ? new Date(lastRecord.date_esti) : associationTimestamp;
+          
+          if (lastFinishTime < associationTimestamp) {
+              lastFinishTime = associationTimestamp;
+          }
 
           const dataToInsert = scannedData.map(item => {
             const startTime = new Date(lastFinishTime.getTime());
@@ -1296,10 +1313,26 @@ const deleteRow = (codeToDelete: string) => {
     setLoading(true);
 
     try {
-        const associationTimestamp = new Date();
-        let lastFinishTime = associationTimestamp;
+        const { data: lastRecord, error: lastRecordError } = await supabase
+            .from('personal')
+            .select('date_esti')
+            .eq('name', personToAssign)
+            .not('date_esti', 'is', null)
+            .order('date_esti', { ascending: false })
+            .limit(1)
+            .single();
 
-        // Ensure data is sorted for sequential calculation
+        if (lastRecordError && lastRecordError.code !== 'PGRST116') {
+            throw new Error(`Error al buscar último registro: ${lastRecordError.message}`);
+        }
+        
+        const associationTimestamp = new Date();
+        let lastFinishTime = lastRecord?.date_esti ? new Date(lastRecord.date_esti) : associationTimestamp;
+
+        if (lastFinishTime < associationTimestamp) {
+            lastFinishTime = associationTimestamp;
+        }
+
         const sortedData = [...loadedProgData].sort((a, b) => new Date(a.date_ini).getTime() - new Date(b.date_ini).getTime());
 
         const dataToInsert = sortedData.map((item) => {
@@ -1313,34 +1346,31 @@ const deleteRow = (codeToDelete: string) => {
             return {
                 code: String(item.code),
                 sku: item.sku,
-                name: personToAssign, // The newly assigned person
+                name: personToAssign,
                 name_inc: item.name_inc,
                 place: item.place,
                 product: item.product,
                 quantity: item.quantity,
                 organization: item.organization,
                 sales_num: item.sales_num && !isNaN(Number(item.sales_num)) ? Number(item.sales_num) : null,
-                date: associationTimestamp.toISOString(), // New assignment date, same for all in batch
+                date: associationTimestamp.toISOString(),
                 status: 'ASIGNADO',
                 esti_time: item.esti_time,
                 deli_date: item.deli_date,
-                date_ini: startTime.toISOString(), // Sequentially calculated start time
-                date_esti: finishTime.toISOString(), // Sequentially calculated end time
+                date_ini: startTime.toISOString(),
+                date_esti: finishTime.toISOString(),
             };
         });
 
-        // 2. Insert records into 'personal' table
         const { error: insertError } = await supabase.from('personal').insert(dataToInsert);
 
         if (insertError) {
-            // Check for unique constraint violation
-            if (insertError.code === '23505') { // Postgres unique violation code
+            if (insertError.code === '23505') {
                 throw new Error(`Uno o más códigos ya existen en la tabla de asignaciones. No se puede duplicar.`);
             }
             throw new Error(`Error al guardar en 'personal': ${insertError.message}`);
         }
 
-        // 3. Delete records from 'personal_prog' table
         const codesToDelete = loadedProgData.map(item => item.code);
         const { error: deleteError } = await supabase
             .from('personal_prog')
@@ -1353,7 +1383,6 @@ const deleteRow = (codeToDelete: string) => {
 
         showModalNotification('¡Éxito!', `Se asignaron y guardaron ${loadedProgData.length} códigos a ${personToAssign}.`, 'success');
 
-        // 4. Reset state
         setShowCargarProduccion(false);
         setLoadedProgData([]);
         setPersonToAssign('');
