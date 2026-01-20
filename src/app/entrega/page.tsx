@@ -555,23 +555,41 @@ export default function Home() {
             }
 
             Papa.parse(text, {
-              header: true, // Let PapaParse handle the header row
-              skipEmptyLines: true, // More robust for mobile-generated files
+              header: true,
+              skipEmptyLines: true,
               complete: async (results) => {
                 
-                if (!results.meta.fields || results.meta.fields.length < 9) {
-                    showModalNotification('Error de Formato', 'El archivo CSV no parece tener el formato correcto o está vacío.', 'destructive');
+                if (!results.meta.fields || results.meta.fields.length === 0) {
+                    showModalNotification('Error de Formato', 'El archivo CSV no parece tener encabezados o está vacío.', 'destructive');
+                    setLoading(false);
+                    return;
+                }
+
+                // Helper to find header names flexibly
+                const findHeader = (fields: readonly string[], keywords: string[]): string | undefined => {
+                    for (const keyword of keywords) {
+                        const header = fields.find(f => f.toLowerCase().trim().includes(keyword));
+                        if (header) return header;
+                    }
+                    return undefined;
+                };
+
+                // Find header names dynamically
+                const codeHeader = findHeader(results.meta.fields, ['code', 'código']);
+                const dateHeader = findHeader(results.meta.fields, ['date', 'fecha']);
+                const timeHeader = findHeader(results.meta.fields, ['time', 'hora']);
+
+                if (!codeHeader || !dateHeader || !timeHeader) {
+                    const missing = [];
+                    if (!codeHeader) missing.push("código/code");
+                    if (!dateHeader) missing.push("fecha/date");
+                    if (!timeHeader) missing.push("hora/time");
+                    showModalNotification('Error de Formato', `El archivo CSV no contiene los encabezados esperados. Faltan columnas para: ${missing.join(', ')}.`, 'destructive');
                     setLoading(false);
                     return;
                 }
 
                 const dataRows = results.data as Record<string, string>[];
-                
-                // Get header names dynamically from the parsed file
-                const codeHeader = results.meta.fields[4];
-                const dateHeader = results.meta.fields[7];
-                const timeHeader = results.meta.fields[8];
-
 
                 const validEntries = dataRows.map(row => {
                     // Use header names to access data
@@ -1078,3 +1096,5 @@ export default function Home() {
     </>
   );
 }
+
+    
