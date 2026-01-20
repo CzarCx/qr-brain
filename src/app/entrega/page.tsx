@@ -555,16 +555,29 @@ export default function Home() {
             }
 
             Papa.parse(text, {
-              skipEmptyLines: 'greedy',
+              header: true, // Let PapaParse handle the header row
+              skipEmptyLines: true, // More robust for mobile-generated files
               complete: async (results) => {
-                const dataRows = results.data.slice(1) as string[][];
+                
+                if (!results.meta.fields || results.meta.fields.length < 9) {
+                    showModalNotification('Error de Formato', 'El archivo CSV no parece tener el formato correcto o está vacío.', 'destructive');
+                    setLoading(false);
+                    return;
+                }
+
+                const dataRows = results.data as Record<string, string>[];
+                
+                // Get header names dynamically from the parsed file
+                const codeHeader = results.meta.fields[4];
+                const dateHeader = results.meta.fields[7];
+                const timeHeader = results.meta.fields[8];
+
 
                 const validEntries = dataRows.map(row => {
-                    if (!Array.isArray(row) || row.length < 9) return null;
-
-                    let codeValue = row[4] ? String(row[4]).trim() : null;
-                    const dateStr = row[7] ? String(row[7]).trim() : null;
-                    const timeStr = row[8] ? String(row[8]).trim() : null;
+                    // Use header names to access data
+                    let codeValue = row[codeHeader] ? String(row[codeHeader]).trim() : null;
+                    const dateStr = row[dateHeader] ? String(row[dateHeader]).trim() : null;
+                    const timeStr = row[timeHeader] ? String(row[timeHeader]).trim() : null;
 
                     if (!codeValue || !dateStr || !timeStr) return null;
                     
@@ -580,6 +593,7 @@ export default function Home() {
                         // Not a JSON string, use as is
                     }
 
+                    // A simple validation for the code format can be useful
                     if (!/^\d+$/.test(codeValue)) {
                         return null;
                     }
@@ -596,6 +610,7 @@ export default function Home() {
                 }
 
                 // Calculate time
+                validEntries.sort((a, b) => a.date.getTime() - b.date.getTime()); // Sort entries by date to be sure
                 const firstDate = validEntries[0].date;
                 const lastDate = validEntries[validEntries.length - 1].date;
                 const diff = lastDate.getTime() - firstDate.getTime();
