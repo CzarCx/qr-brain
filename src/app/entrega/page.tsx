@@ -543,110 +543,129 @@ export default function Home() {
 
     setLoading(true);
     showAppMessage('Procesando archivo CSV...', 'info');
+    
+    const reader = new FileReader();
 
-    Papa.parse(file, {
-      skipEmptyLines: 'greedy',
-      complete: async (results) => {
-        const dataRows = results.data.slice(1) as string[][];
+    reader.onload = async (e) => {
+        let text = e.target?.result as string;
+        if (text) {
+            // Remove BOM if present, which is common in files from Excel/mobile.
+            if (text.startsWith('\uFEFF')) {
+                text = text.substring(1);
+            }
 
-        const validEntries = dataRows.map(row => {
-            if (!Array.isArray(row) || row.length < 9) return null;
+            Papa.parse(text, {
+              skipEmptyLines: 'greedy',
+              complete: async (results) => {
+                const dataRows = results.data.slice(1) as string[][];
 
-            let codeValue = row[4] ? String(row[4]).trim() : null;
-            const dateStr = row[7] ? String(row[7]).trim() : null;
-            const timeStr = row[8] ? String(row[8]).trim() : null;
+                const validEntries = dataRows.map(row => {
+                    if (!Array.isArray(row) || row.length < 9) return null;
 
-            if (!codeValue || !dateStr || !timeStr) return null;
-            
-            const dateObj = new Date(`${dateStr} ${timeStr} UTC`);
-            if (isNaN(dateObj.getTime())) return null;
+                    let codeValue = row[4] ? String(row[4]).trim() : null;
+                    const dateStr = row[7] ? String(row[7]).trim() : null;
+                    const timeStr = row[8] ? String(row[8]).trim() : null;
 
-            try {
-                const parsed = JSON.parse(codeValue);
-                if (parsed && parsed.id) {
-                    codeValue = String(parsed.id);
+                    if (!codeValue || !dateStr || !timeStr) return null;
+                    
+                    const dateObj = new Date(`${dateStr} ${timeStr} UTC`);
+                    if (isNaN(dateObj.getTime())) return null;
+
+                    try {
+                        const parsed = JSON.parse(codeValue);
+                        if (parsed && parsed.id) {
+                            codeValue = String(parsed.id);
+                        }
+                    } catch (e) {
+                        // Not a JSON string, use as is
+                    }
+
+                    if (!/^\d+$/.test(codeValue)) {
+                        return null;
+                    }
+
+                    return { code: codeValue, date: dateObj };
+                }).filter(Boolean) as { code: string, date: Date }[];
+
+
+                if (validEntries.length === 0) {
+                    setCsvProcessingStats({ found: 0, notFound: 0, total: dataRows.length, elapsedTime: 'N/A' });
+                    setIsNotFoundModalOpen(true);
+                    setLoading(false);
+                    return;
                 }
-            } catch (e) {
-                // Not a JSON string, use as is
-            }
 
-            if (!/^\d+$/.test(codeValue)) {
-                return null;
-            }
+                // Calculate time
+                const firstDate = validEntries[0].date;
+                const lastDate = validEntries[validEntries.length - 1].date;
+                const diff = lastDate.getTime() - firstDate.getTime();
+                const timeInSeconds = Math.round(diff / 1000);
+                const elapsedTime = formatElapsedTime(timeInSeconds);
 
-            return { code: codeValue, date: dateObj };
-        }).filter(Boolean) as { code: string, date: Date }[];
+                const codesFromCsv = validEntries.map(entry => entry.code);
+                const csvDataMap = new Map(validEntries.map(entry => [entry.code, entry.date.toISOString()]));
 
-
-        if (validEntries.length === 0) {
-            setCsvProcessingStats({ found: 0, notFound: 0, total: 0, elapsedTime: 'N/A' });
-            setIsNotFoundModalOpen(true);
-            setLoading(false);
-            return;
-        }
-
-        // Calculate time
-        const firstDate = validEntries[0].date;
-        const lastDate = validEntries[validEntries.length - 1].date;
-        const diff = lastDate.getTime() - firstDate.getTime();
-        const timeInSeconds = Math.round(diff / 1000);
-        const elapsedTime = formatElapsedTime(timeInSeconds);
-
-        const codesFromCsv = validEntries.map(entry => entry.code);
-        const csvDataMap = new Map(validEntries.map(entry => [entry.code, entry.date.toISOString()]));
-
-        try {
-          const { data: existingCodes, error: fetchError } = await supabase
-            .from('personal')
-            .select('code')
-            .in('code', codesFromCsv);
-            
-          if (fetchError) throw fetchError;
-
-          const existingCodeSet = new Set(existingCodes.map(item => String(item.code)));
-          const codesToUpdate = codesFromCsv.filter(code => existingCodeSet.has(code));
-          const codesNotFound = codesFromCsv.filter(code => !existingCodeSet.has(code));
-          
-
-          setNotFoundCodes(codesNotFound);
-          setCsvProcessingStats({
-            found: codesToUpdate.length,
-            notFound: codesNotFound.length,
-            total: codesFromCsv.length,
-            elapsedTime: elapsedTime
-          });
-
-          if (codesToUpdate.length > 0) {
-            await saveKpiData(encargado, codesToUpdate.length, timeInSeconds, file.name);
-
-            const updatePromises = codesToUpdate.map(code => 
-                supabase
+                try {
+                  const { data: existingCodes, error: fetchError } = await supabase
                     .from('personal')
-                    .update({ status: 'ENTREGADO', date_entre: csvDataMap.get(code) })
-                    .eq('code', code)
-            );
+                    .select('code')
+                    .in('code', codesFromCsv);
+                    
+                  if (fetchError) throw fetchError;
 
-            const results = await Promise.all(updatePromises);
-            const updateErrors = results.filter(res => res.error);
+                  const existingCodeSet = new Set(existingCodes.map(item => String(item.code)));
+                  const codesToUpdate = codesFromCsv.filter(code => existingCodeSet.has(code));
+                  const codesNotFound = codesFromCsv.filter(code => !existingCodeSet.has(code));
+                  
 
-            if (updateErrors.length > 0) {
-              throw updateErrors[0].error;
-            }
-          }
-          
-          setIsNotFoundModalOpen(true);
+                  setNotFoundCodes(codesNotFound);
+                  setCsvProcessingStats({
+                    found: codesToUpdate.length,
+                    notFound: codesNotFound.length,
+                    total: codesFromCsv.length,
+                    elapsedTime: elapsedTime
+                  });
 
-        } catch (e: any) {
-          showModalNotification('Error de Base de Datos', `Ocurrió un error: ${e.message}`, 'destructive');
-        } finally {
-          setLoading(false);
+                  if (codesToUpdate.length > 0) {
+                      await saveKpiData(encargado, codesToUpdate.length, timeInSeconds, file.name);
+
+                      const updatePromises = codesToUpdate.map(code => 
+                          supabase
+                              .from('personal')
+                              .update({ status: 'ENTREGADO', date_entre: csvDataMap.get(code) })
+                              .eq('code', code)
+                      );
+
+                      const results = await Promise.all(updatePromises);
+                      const updateErrors = results.filter(res => res.error);
+
+                      if (updateErrors.length > 0) {
+                        throw updateErrors[0].error;
+                      }
+                  }
+                  
+                  setIsNotFoundModalOpen(true);
+
+                } catch (e: any) {
+                  showModalNotification('Error de Base de Datos', `Ocurrió un error: ${e.message}`, 'destructive');
+                } finally {
+                  setLoading(false);
+                }
+              },
+              error: (error: any) => {
+                showModalNotification('Error al Leer CSV', `No se pudo procesar el archivo: ${error.message}`, 'destructive');
+                setLoading(false);
+              },
+            });
         }
-      },
-      error: (error: any) => {
-        showModalNotification('Error al Leer CSV', `No se pudo procesar el archivo: ${error.message}`, 'destructive');
+    };
+    
+    reader.onerror = () => {
+        showModalNotification('Error de Archivo', 'No se pudo leer el archivo seleccionado.', 'destructive');
         setLoading(false);
-      },
-    });
+    };
+
+    reader.readAsText(file);
     event.target.value = '';
   };
   
@@ -1044,9 +1063,3 @@ export default function Home() {
     </>
   );
 }
-
-    
-
-    
-
-    
