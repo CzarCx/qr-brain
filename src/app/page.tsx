@@ -1398,6 +1398,10 @@ const deleteRow = (codeToDelete: string) => {
   };
 
  const handleVerifyCode = async () => {
+    if (!encargado.trim()) {
+      showModalNotification('Falta Encargado', 'Por favor, selecciona un encargado para verificar el código.', 'destructive');
+      return;
+    }
     if (!verificationCode) {
         setVerificationResult({ status: 'error', message: 'Por favor, ingresa un código.' });
         return;
@@ -1408,7 +1412,7 @@ const deleteRow = (codeToDelete: string) => {
         // 1. Check if the code exists and get its current state.
         const { data: vCode, error: fetchError } = await supabaseEtiquetas
             .from('v_code')
-            .select('corte_etiquetas')
+            .select('corte_etiquetas, personal_bar')
             .eq('code_i', verificationCode)
             .single();
 
@@ -1430,7 +1434,7 @@ const deleteRow = (codeToDelete: string) => {
             });
             setVerificationResult({ 
                 status: 'error',
-                message: `Este código ya fue registrado el ${registeredTime}.` 
+                message: `Este código ya fue registrado por ${vCode.personal_bar || 'alguien'} el ${registeredTime}.` 
             });
             setIsVerifying(false);
             return;
@@ -1439,14 +1443,17 @@ const deleteRow = (codeToDelete: string) => {
         // 3. If corte_etiquetas is null, update it.
         const { error: updateError } = await supabaseEtiquetas
             .from('v_code')
-            .update({ corte_etiquetas: new Date().toISOString() })
+            .update({ 
+                corte_etiquetas: new Date().toISOString(),
+                personal_bar: encargado,
+            })
             .eq('code_i', verificationCode);
 
         if (updateError) {
             throw new Error(`Error al registrar el corte: ${updateError.message}`);
         }
         
-        setVerificationResult({ status: 'verified', message: `¡Éxito! Se registró el corte para el código ${verificationCode}.` });
+        setVerificationResult({ status: 'verified', message: `¡Éxito! Se registró el corte para ${verificationCode} por ${encargado}.` });
 
     } catch (e: any) {
         setVerificationResult({ status: 'error', message: e.message || 'Ocurrió un error inesperado.' });
@@ -1933,6 +1940,19 @@ const deleteRow = (codeToDelete: string) => {
                     </Alert>
                 )}
                 
+                <div>
+                    <label htmlFor="encargado" className="block text-sm font-bold text-starbucks-dark mb-1">Nombre del Encargado:</label>
+                    <Combobox
+                        groupedOptions={groupedEncargadoOptions}
+                        value={encargado}
+                        onValueChange={setEncargado}
+                        placeholder="Selecciona un encargado..."
+                        emptyMessage="No se encontró encargado."
+                        buttonClassName="bg-transparent hover:bg-gray-50 border-input"
+                        disabled={scannerActive}
+                    />
+                </div>
+
                 <div className="p-4 rounded-lg border-2 border-gray-300 bg-gray-50">
                     <Label className="text-sm font-bold text-starbucks-dark">Verificar Código de Corte</Label>
                      <div className="flex items-center gap-2 mt-1">
@@ -1943,9 +1963,9 @@ const deleteRow = (codeToDelete: string) => {
                             className="flex-grow bg-transparent"
                             placeholder="Ingresa el código de corte..."
                             onKeyDown={(e) => e.key === 'Enter' && handleVerifyCode()}
-                            disabled={isVerifying}
+                            disabled={isVerifying || !encargado.trim()}
                         />
-                        <Button onClick={handleVerifyCode} disabled={isVerifying}>
+                        <Button onClick={handleVerifyCode} disabled={isVerifying || !encargado.trim()}>
                             {isVerifying ? 'Verificando...' : <Search className="h-4 w-4"/>}
                         </Button>
                     </div>
@@ -1955,19 +1975,6 @@ const deleteRow = (codeToDelete: string) => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     {/* Columna Izquierda: Controles */}
                     <div className="space-y-4">
-                         <div>
-                            <label htmlFor="encargado" className="block text-sm font-bold text-starbucks-dark mb-1">Nombre del Encargado:</label>
-                            <Combobox
-                                groupedOptions={groupedEncargadoOptions}
-                                value={encargado}
-                                onValueChange={setEncargado}
-                                placeholder="Selecciona un encargado..."
-                                emptyMessage="No se encontró encargado."
-                                buttonClassName="bg-transparent hover:bg-gray-50 border-input"
-                                disabled={scannerActive}
-                            />
-                        </div>
-                        
                         <RadioGroup value={scanMode} onValueChange={(value) => setScanMode(value as any)} className="grid grid-cols-3 gap-2 bg-gray-100 p-2 rounded-lg">
                           <div>
                               <RadioGroupItem value="assign" id="assign" className="sr-only" />
