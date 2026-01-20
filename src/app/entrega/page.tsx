@@ -437,7 +437,9 @@ export default function Home() {
       
       if (error) throw error;
       
-      await saveKpiData(encargado, deliveryList.length, 0);
+      if (codesToUpdate.length > 0) {
+          await saveKpiData(encargado, codesToUpdate.length, 0);
+      }
 
       setIsDeliveryModalOpen(false);
       showModalNotification('Éxito', `Se marcaron ${deliveryList.length} paquetes como "ENTREGADO".`);
@@ -543,14 +545,16 @@ export default function Home() {
     showAppMessage('Procesando archivo CSV...', 'info');
 
     Papa.parse(file, {
-      skipEmptyLines: true,
+      skipEmptyLines: 'greedy',
       complete: async (results) => {
         const dataRows = results.data.slice(1) as string[][];
 
         const validEntries = dataRows.map(row => {
-            let codeValue = row[4]; // Column E for text/code
-            const dateStr = row[7]; // Column H for date_utc
-            const timeStr = row[8]; // Column I for time_utc
+            if (!Array.isArray(row) || row.length < 9) return null;
+
+            let codeValue = row[4] ? String(row[4]).trim() : null;
+            const dateStr = row[7] ? String(row[7]).trim() : null;
+            const timeStr = row[8] ? String(row[8]).trim() : null;
 
             if (!codeValue || !dateStr || !timeStr) return null;
             
