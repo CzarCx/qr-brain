@@ -62,6 +62,7 @@ export default function Home() {
   const [notFoundCodes, setNotFoundCodes] = useState<string[]>([]);
   const [isNotFoundModalOpen, setIsNotFoundModalOpen] = useState(false);
   const [csvProcessingStats, setCsvProcessingStats] = useState<{ found: number; notFound: number; total: number; elapsedTime?: string; } | null>(null);
+  const [cancelCode, setCancelCode] = useState('');
 
 
   const messageTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -659,6 +660,37 @@ export default function Home() {
     document.body.removeChild(link);
   };
 
+  const handleCancelPackage = async () => {
+    if (!cancelCode.trim()) {
+      showModalNotification('Código Vacío', 'Por favor, ingresa un código para cancelar.', 'destructive');
+      return;
+    }
+    setLoading(true);
+    showAppMessage(`Cancelando el paquete ${cancelCode}...`, 'info');
+
+    try {
+      const { data, error } = await supabase
+        .from('personal')
+        .update({ status: 'CANCELADO' })
+        .eq('code', cancelCode.trim())
+        .select();
+
+      if (error) throw error;
+
+      if (data && data.length > 0) {
+        showModalNotification('Éxito', `El paquete con código ${cancelCode} ha sido marcado como "CANCELADO".`, 'success');
+        setCancelCode('');
+      } else {
+        showModalNotification('No Encontrado', `No se encontró ningún paquete con el código ${cancelCode}.`, 'destructive');
+      }
+
+    } catch (e: any) {
+      showModalNotification('Error', `Ocurrió un error al cancelar el paquete: ${e.message}`, 'destructive');
+    } finally {
+      setLoading(false);
+    }
+  };
+
 
   const messageClasses: any = {
       success: 'bg-green-500/80 text-white',
@@ -813,6 +845,32 @@ export default function Home() {
                             className="h-8 w-8 bg-starbucks-green hover:bg-starbucks-dark text-white rounded-md mr-1"
                         >
                             <PlusCircle className="h-5 w-5" />
+                        </Button>
+                    </div>
+                </div>
+                
+                <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
+                    <Label htmlFor="cancel-code-input" className="block text-sm font-bold text-red-700 mb-1">Cancelar Paquete:</Label>
+                    <div className="relative mt-1 flex items-center rounded-lg border border-input bg-background focus-within:ring-2 focus-within:ring-destructive">
+                        <Input
+                            type="text"
+                            id="cancel-code-input"
+                            value={cancelCode}
+                            onChange={(e) => setCancelCode(e.target.value)}
+                            className="w-full border-0 bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0"
+                            placeholder="Escriba el código a cancelar..."
+                            onKeyDown={(e) => e.key === 'Enter' && handleCancelPackage()}
+                            disabled={loading}
+                        />
+                        <Button
+                            type="button"
+                            onClick={handleCancelPackage}
+                            size="icon"
+                            variant="destructive"
+                            className="h-8 w-8 rounded-md mr-1"
+                            disabled={loading || !cancelCode}
+                        >
+                            <XCircle className="h-5 w-5" />
                         </Button>
                     </div>
                 </div>
