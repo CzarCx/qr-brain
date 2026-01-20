@@ -543,6 +543,7 @@ export default function Home() {
     showAppMessage('Procesando archivo CSV...', 'info');
 
     Papa.parse(file, {
+      skipEmptyLines: true,
       complete: async (results) => {
         const dataRows = results.data.slice(1) as string[][];
 
@@ -678,7 +679,7 @@ export default function Home() {
       if (error) throw error;
 
       if (data && data.length > 0) {
-        showModalNotification('Éxito', `El paquete con código ${cancelCode} ha sido marcado como "CANCELADO".`, 'success');
+        showModalNotification('Éxito', `El paquete con código ${cancelCode} ha sido marcado como "CANCELADO".`);
         setCancelCode('');
       } else {
         showModalNotification('No Encontrado', `No se encontró ningún paquete con el código ${cancelCode}.`, 'destructive');
@@ -931,7 +932,7 @@ export default function Home() {
                                   </div>
                               </Button>
                           </Label>
-                          <Input id="csv-upload" type="file" accept=".csv" className="hidden" onChange={handleCsvUpload} />
+                          <Input id="csv-upload" type="file" accept=".csv,text/csv,application/vnd.ms-excel" className="hidden" onChange={handleCsvUpload} />
                       </div>
                 </div>
             </div>
