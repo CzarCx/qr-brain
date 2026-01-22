@@ -64,7 +64,7 @@ export default function RootLayout({
     const gainNode = context.createGain();
     oscillator.type = 'sine';
     oscillator.frequency.setValueAtTime(440, context.currentTime); // A4 note
-    gainNode.gain.setValueAtTime(1.8, context.currentTime); // Increased volume
+    gainNode.gain.setValueAtTime(3.6, context.currentTime); // Increased volume
     gainNode.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.5);
     oscillator.connect(gainNode);
     gainNode.connect(context.destination);
@@ -131,6 +131,8 @@ export default function RootLayout({
                   .order('deli_date', { ascending: true, nullsFirst: false });
 
               if (etiquetasError) throw etiquetasError;
+              
+              if (!etiquetasData) throw new Error("No se recibieron datos de etiquetas.");
 
               const { data: personalData, error: personalError } = await supabase
                   .from('personal')
