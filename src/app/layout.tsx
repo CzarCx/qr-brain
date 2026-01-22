@@ -1,4 +1,3 @@
-
 'use client';
 import type {Metadata} from 'next';
 import './globals.css';
@@ -43,7 +42,7 @@ export default function RootLayout({
     const gainNode = context.createGain();
     oscillator.type = 'sine';
     oscillator.frequency.setValueAtTime(440, context.currentTime); // A4 note
-    gainNode.gain.setValueAtTime(0.5, context.currentTime);
+    gainNode.gain.setValueAtTime(1, context.currentTime); // Increased volume
     gainNode.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.5);
     oscillator.connect(gainNode);
     gainNode.connect(context.destination);
@@ -85,6 +84,7 @@ export default function RootLayout({
           toast({
             title: "Alerta de Llegada",
             description: `${person.name} está a punto de llegar (15 min).`,
+            duration: 10000,
           });
           notifiedCheckins.current.add(notificationKey);
         }
