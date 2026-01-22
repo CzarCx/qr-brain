@@ -32,8 +32,9 @@ import {
 
 type UnassignedLabel = {
   code: string;
-  lote: string | null;
-  quien_imprime: string | null;
+  personal_inc: string | null;
+  code_i: string | null;
+  deli_date: string | null;
 };
 
 export default function RootLayout({
@@ -126,7 +127,9 @@ export default function RootLayout({
           try {
               const { data: etiquetasData, error: etiquetasError } = await supabaseEtiquetas
                   .from('etiquetas_i')
-                  .select('code, lote, quien_imprime');
+                  .select('code, personal_inc, code_i, deli_date')
+                  .order('deli_date', { ascending: true, nullsFirst: false });
+
               if (etiquetasError) throw etiquetasError;
 
               const { data: personalData, error: personalError } = await supabase
@@ -139,7 +142,12 @@ export default function RootLayout({
 
               if (unassigned.length > 0) {
                   playNotificationSound();
-                  setUnassignedLabels(unassigned.map(u => ({ code: u.code, lote: u.lote, quien_imprime: u.quien_imprime })));
+                  setUnassignedLabels(unassigned.map(u => ({ 
+                      code: u.code, 
+                      personal_inc: u.personal_inc,
+                      code_i: u.code_i,
+                      deli_date: u.deli_date
+                   })));
                   setIsUnassignedDialogOpen(true);
               }
 
@@ -354,16 +362,18 @@ export default function RootLayout({
                             <TableHeader>
                                 <TableRow>
                                     <TableHead>Código</TableHead>
+                                    <TableHead>Imprimió</TableHead>
                                     <TableHead>Lote</TableHead>
-                                    <TableHead>Impreso por</TableHead>
+                                    <TableHead>Fecha Entrega</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
                                {unassignedLabels.map(label => (
                                   <TableRow key={label.code}>
                                       <TableCell className="font-mono text-sm">{label.code}</TableCell>
-                                      <TableCell>{label.lote || 'N/A'}</TableCell>
-                                      <TableCell>{label.quien_imprime || 'N/A'}</TableCell>
+                                      <TableCell>{label.personal_inc || 'N/A'}</TableCell>
+                                      <TableCell>{label.code_i || 'N/A'}</TableCell>
+                                      <TableCell>{label.deli_date ? new Date(label.deli_date).toLocaleDateString('es-MX') : 'N/A'}</TableCell>
                                   </TableRow>
                               ))}
                             </TableBody>
