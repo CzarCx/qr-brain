@@ -134,20 +134,22 @@ export default function RootLayout({
                   .select('code');
               if (personalError) throw personalError;
 
-              const assignedCodes = new Set(personalData.map(p => p.code));
-              const unassigned = etiquetasData.filter(etiqueta => !assignedCodes.has(etiqueta.code));
+              const assignedCodes = new Set((personalData || []).map(p => p.code));
+              const unassigned = (etiquetasData || []).filter(etiqueta => !assignedCodes.has(etiqueta.code));
 
               if (unassigned.length > 0) {
+                  playNotificationSound();
                   setUnassignedLabels(unassigned.map(u => ({ code: u.code, lote: u.lote, quien_imprime: u.quien_imprime })));
                   setIsUnassignedDialogOpen(true);
               }
 
           } catch (err: any) {
-              console.error("Error fetching unassigned codes:", err);
+              const errorMessage = err.message || 'No se pudieron obtener las etiquetas no asignadas.';
+              console.error("Error fetching unassigned codes:", errorMessage, err);
               toast({
                   variant: "destructive",
                   title: "Error al generar reporte",
-                  description: "No se pudieron obtener las etiquetas no asignadas."
+                  description: errorMessage,
               });
           }
       }
@@ -386,5 +388,3 @@ export default function RootLayout({
     </html>
   );
 }
-
-
