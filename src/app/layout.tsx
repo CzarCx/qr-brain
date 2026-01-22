@@ -1,3 +1,4 @@
+
 'use client';
 import type {Metadata} from 'next';
 import './globals.css';
@@ -33,7 +34,11 @@ export default function RootLayout({
   const [feedbackCategory, setFeedbackCategory] = useState('');
   const [feedbackDescription, setFeedbackDescription] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isUnassignedDialogOpen, setIsUnassignedDialogOpen] = useState(false);
+  const [unassignedCodes, setUnassignedCodes] = useState<string[]>([]);
+
   const notifiedCheckins = useRef(new Set<string>());
+  const dailyReportRun = useRef(new Set<string>());
 
   const playNotificationSound = () => {
     const context = new (window.AudioContext || (window as any).webkitAudioContext)();
@@ -52,9 +57,11 @@ export default function RootLayout({
 
 
   useEffect(() => {
-    const checkUpcomingCheckins = async () => {
+    const runTimedTasks = async () => {
       const now = new Date();
+      const todayStr = now.toDateString(); 
 
+      // Check for upcoming check-ins
       const { data, error } = await supabase
         .from('personal_name')
         .select('name, checkin_time')
@@ -62,42 +69,77 @@ export default function RootLayout({
 
       if (error) {
         console.error('Error fetching check-in times:', error);
-        return;
+      } else if (data) {
+          data.forEach(person => {
+            if (!person.checkin_time) return;
+
+            const [hours, minutes] = person.checkin_time.split(':').map(Number);
+            
+            const checkinDate = new Date();
+            checkinDate.setHours(hours, minutes, 0, 0);
+
+            const diffMinutes = (checkinDate.getTime() - now.getTime()) / 1000 / 60;
+            
+            const notificationKey = `${person.name}-${todayStr}`;
+
+            if (diffMinutes > 14 && diffMinutes <= 15 && !notifiedCheckins.current.has(notificationKey)) {
+              playNotificationSound();
+              toast({
+                variant: 'success',
+                title: "Alerta de Llegada",
+                description: `${person.name} está a punto de llegar (15 min).`,
+                duration: 10000,
+              });
+              notifiedCheckins.current.add(notificationKey);
+            }
+          });
       }
       
-      const todayStr = now.toDateString(); 
+      // Check for unassigned labels at 2:20 AM
+      const reportKey = `unassigned-${todayStr}`;
+      if (now.getHours() === 2 && now.getMinutes() === 20 && !dailyReportRun.current.has(reportKey)) {
+          dailyReportRun.current.add(reportKey);
+          
+          try {
+              const { data: etiquetasData, error: etiquetasError } = await supabaseEtiquetas
+                  .from('etiquetas_i')
+                  .select('code');
+              if (etiquetasError) throw etiquetasError;
 
-      data.forEach(person => {
-        if (!person.checkin_time) return;
+              const { data: personalData, error: personalError } = await supabase
+                  .from('personal')
+                  .select('code');
+              if (personalError) throw personalError;
 
-        const [hours, minutes] = person.checkin_time.split(':').map(Number);
-        
-        const checkinDate = new Date();
-        checkinDate.setHours(hours, minutes, 0, 0);
+              const assignedCodes = new Set(personalData.map(p => p.code));
+              const allEtiquetaCodes = etiquetasData.map(e => e.code);
+              
+              const unassigned = allEtiquetaCodes.filter(code => !assignedCodes.has(code));
 
-        const diffMinutes = (checkinDate.getTime() - now.getTime()) / 1000 / 60;
-        
-        const notificationKey = `${person.name}-${todayStr}`;
+              if (unassigned.length > 0) {
+                  setUnassignedCodes(unassigned);
+                  setIsUnassignedDialogOpen(true);
+              }
 
-        if (diffMinutes > 14 && diffMinutes <= 15 && !notifiedCheckins.current.has(notificationKey)) {
-          playNotificationSound();
-          toast({
-            variant: 'success',
-            title: "Alerta de Llegada",
-            description: `${person.name} está a punto de llegar (15 min).`,
-            duration: 10000,
-          });
-          notifiedCheckins.current.add(notificationKey);
-        }
-      });
-      
+          } catch (err: any) {
+              console.error("Error fetching unassigned codes:", err);
+              toast({
+                  variant: "destructive",
+                  title: "Error al generar reporte",
+                  description: "No se pudieron obtener las etiquetas no asignadas."
+              });
+          }
+      }
+
+      // Daily reset
       if (now.getHours() === 0 && now.getMinutes() === 0) {
           notifiedCheckins.current.clear();
+          dailyReportRun.current.clear();
       }
     };
     
-    checkUpcomingCheckins();
-    const intervalId = setInterval(checkUpcomingCheckins, 60000);
+    runTimedTasks();
+    const intervalId = setInterval(runTimedTasks, 60000);
 
     const observer = new MutationObserver((mutations) => {
       for (const mutation of mutations) {
@@ -234,6 +276,34 @@ export default function RootLayout({
                 </DialogFooter>
             </DialogContent>
             </Dialog>
+
+            <Dialog open={isUnassignedDialogOpen} onOpenChange={setIsUnassignedDialogOpen}>
+              <DialogContent className="sm:max-w-md">
+                  <DialogHeader>
+                      <DialogTitle>Reporte de Etiquetas No Asignadas</DialogTitle>
+                      <DialogDescription>
+                          Las siguientes etiquetas existen en el sistema pero aún no han sido asignadas a ningún operario.
+                      </DialogDescription>
+                  </DialogHeader>
+                  <div className="max-h-96 overflow-y-auto p-2 border rounded-md bg-gray-50">
+                      {unassignedCodes.length > 0 ? (
+                          <ul className="space-y-1">
+                              {unassignedCodes.map(code => (
+                                  <li key={code} className="font-mono text-sm bg-white p-2 rounded border">
+                                      {code}
+                                  </li>
+                              ))}
+                          </ul>
+                      ) : (
+                          <p className="text-sm text-gray-500 text-center py-4">No se encontraron etiquetas no asignadas.</p>
+                      )}
+                  </div>
+                  <DialogFooter>
+                      <Button variant="outline" onClick={() => setIsUnassignedDialogOpen(false)}>Cerrar</Button>
+                  </DialogFooter>
+              </DialogContent>
+          </Dialog>
+
             <Navbar />
             <main className="pt-16">
                 {children}
@@ -244,3 +314,4 @@ export default function RootLayout({
     </html>
   );
 }
+
