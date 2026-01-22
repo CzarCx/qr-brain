@@ -36,6 +36,8 @@ export default function RootLayout({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isUnassignedDialogOpen, setIsUnassignedDialogOpen] = useState(false);
   const [unassignedCodes, setUnassignedCodes] = useState<string[]>([]);
+  const [reportTime, setReportTime] = useState('02:20');
+
 
   const notifiedCheckins = useRef(new Set<string>());
   const dailyReportRun = useRef(new Set<string>());
@@ -57,6 +59,11 @@ export default function RootLayout({
 
 
   useEffect(() => {
+    const savedTime = localStorage.getItem('unassignedReportTime');
+    if (savedTime) {
+      setReportTime(savedTime);
+    }
+    
     const runTimedTasks = async () => {
       const now = new Date();
       const todayStr = now.toDateString(); 
@@ -95,9 +102,11 @@ export default function RootLayout({
           });
       }
       
-      // Check for unassigned labels at 2:20 AM
+      // Check for unassigned labels at user-defined time
       const reportKey = `unassigned-${todayStr}`;
-      if (now.getHours() === 2 && now.getMinutes() === 20 && !dailyReportRun.current.has(reportKey)) {
+      const [reportHour, reportMinute] = reportTime.split(':').map(Number);
+
+      if (now.getHours() === reportHour && now.getMinutes() === reportMinute && !dailyReportRun.current.has(reportKey)) {
           dailyReportRun.current.add(reportKey);
           
           try {
@@ -162,7 +171,7 @@ export default function RootLayout({
       clearInterval(intervalId);
       observer.disconnect();
     };
-  }, [toast]);
+  }, [toast, reportTime]);
 
   const handleFeedbackSubmit = async () => {
     if (!feedbackTitle || !feedbackCategory || !feedbackDescription) {
@@ -205,7 +214,18 @@ export default function RootLayout({
     } finally {
         setIsSubmitting(false);
     }
-};
+  };
+
+  const handleTimeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newTime = e.target.value;
+    setReportTime(newTime);
+    localStorage.setItem('unassignedReportTime', newTime);
+    toast({
+        title: "Hora de reporte actualizada",
+        description: `El reporte diario se generará a las ${newTime}.`,
+        variant: 'success'
+    });
+  };
 
   return (
     <html lang="es">
@@ -228,45 +248,68 @@ export default function RootLayout({
                             </div>
                         </TooltipTrigger>
                         <TooltipContent>
-                            <p>Reportar un problema o sugerencia</p>
+                            <p>Ajustes y Retroalimentación</p>
                         </TooltipContent>
                     </Tooltip>
                 </div>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-[425px]">
+            <DialogContent className="sm:max-w-md">
                 <DialogHeader>
-                    <DialogTitle>Centro de Retroalimentación</DialogTitle>
+                    <DialogTitle>Ajustes y Retroalimentación</DialogTitle>
                     <DialogDescription>
-                        ¿Encontraste un error o tienes una idea? Compártela con nosotros para futuras actualizaciones.
+                        Configura las notificaciones o reporta un problema.
                     </DialogDescription>
                 </DialogHeader>
-                <div className="grid gap-4 py-4">
-                    <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="title" className="text-right">
-                            Título
-                        </Label>
-                        <Input id="title" value={feedbackTitle} onChange={(e) => setFeedbackTitle(e.target.value)} className="col-span-3" placeholder="Un resumen corto del problema/idea" />
+                <div className="space-y-6 pt-4 pb-2">
+                    <div>
+                        <Label htmlFor="report-time" className="font-semibold">Hora del Reporte Diario</Label>
+                        <p className="text-sm text-muted-foreground mt-1 mb-2">Elige a qué hora recibir el pop-up con las etiquetas no asignadas.</p>
+                        <Input
+                            id="report-time"
+                            type="time"
+                            value={reportTime}
+                            onChange={handleTimeChange}
+                            className="bg-transparent"
+                        />
                     </div>
-                     <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="category" className="text-right">
-                            Categoría
-                        </Label>
-                        <Select onValueChange={setFeedbackCategory} value={feedbackCategory}>
-                            <SelectTrigger id="category" className="col-span-3">
-                                <SelectValue placeholder="Selecciona una categoría" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="Observacion">Observación</SelectItem>
-                                <SelectItem value="Reporte de error">Reporte de error</SelectItem>
-                                <SelectItem value="Sugerencia">Sugerencia</SelectItem>
-                            </SelectContent>
-                        </Select>
+                    
+                    <div className="relative">
+                        <div className="absolute inset-0 flex items-center">
+                            <span className="w-full border-t" />
+                        </div>
+                        <div className="relative flex justify-center text-xs uppercase">
+                            <span className="bg-background px-2 text-muted-foreground">Enviar Ticket</span>
+                        </div>
                     </div>
-                    <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="description" className="text-right">
-                            Descripción
-                        </Label>
-                        <Textarea id="description" value={feedbackDescription} onChange={(e) => setFeedbackDescription(e.target.value)} className="col-span-3" placeholder="Describe el problema o tu sugerencia con más detalle." />
+                    
+                    <div className="space-y-4">
+                        <div className="space-y-1.5">
+                            <Label htmlFor="title">
+                                Título
+                            </Label>
+                            <Input id="title" value={feedbackTitle} onChange={(e) => setFeedbackTitle(e.target.value)} placeholder="Un resumen corto del problema/idea" />
+                        </div>
+                         <div className="space-y-1.5">
+                            <Label htmlFor="category">
+                                Categoría
+                            </Label>
+                            <Select onValueChange={setFeedbackCategory} value={feedbackCategory}>
+                                <SelectTrigger id="category">
+                                    <SelectValue placeholder="Selecciona una categoría" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="Observacion">Observación</SelectItem>
+                                    <SelectItem value="Reporte de error">Reporte de error</SelectItem>
+                                    <SelectItem value="Sugerencia">Sugerencia</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label htmlFor="description">
+                                Descripción
+                            </Label>
+                            <Textarea id="description" value={feedbackDescription} onChange={(e) => setFeedbackDescription(e.target.value)} placeholder="Describe el problema o tu sugerencia con más detalle." />
+                        </div>
                     </div>
                 </div>
                 <DialogFooter>
