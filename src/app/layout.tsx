@@ -82,6 +82,7 @@ export default function RootLayout({
         if (diffMinutes > 14 && diffMinutes <= 15 && !notifiedCheckins.current.has(notificationKey)) {
           playNotificationSound();
           toast({
+            variant: 'success',
             title: "Alerta de Llegada",
             description: `${person.name} está a punto de llegar (15 min).`,
             duration: 10000,
