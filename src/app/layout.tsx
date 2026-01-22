@@ -3,7 +3,7 @@
 import type {Metadata} from 'next';
 import './globals.css';
 import Navbar from '@/components/Navbar'; // Import the new Navbar component
-import { useEffect, useState }from 'react';
+import { useEffect, useState, useRef }from 'react';
 import { Cog, Send } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogTrigger } from '@/components/ui/dialog';
@@ -12,7 +12,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { supabaseEtiquetas } from '@/lib/supabaseClient';
+import { supabase, supabaseEtiquetas } from '@/lib/supabaseClient';
 import { useToast } from '@/hooks/use-toast';
 import { Toaster } from '@/components/ui/toaster';
 
@@ -34,11 +34,70 @@ export default function RootLayout({
   const [feedbackCategory, setFeedbackCategory] = useState('');
   const [feedbackDescription, setFeedbackDescription] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const notifiedCheckins = useRef(new Set<string>());
+
+  const playNotificationSound = () => {
+    const context = new (window.AudioContext || (window as any).webkitAudioContext)();
+    if (!context) return;
+    const oscillator = context.createOscillator();
+    const gainNode = context.createGain();
+    oscillator.type = 'sine';
+    oscillator.frequency.setValueAtTime(440, context.currentTime); // A4 note
+    gainNode.gain.setValueAtTime(0.5, context.currentTime);
+    gainNode.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.5);
+    oscillator.connect(gainNode);
+    gainNode.connect(context.destination);
+    oscillator.start();
+    oscillator.stop(context.currentTime + 0.5);
+  };
 
 
   useEffect(() => {
-    // This is a workaround for the "Cannot transition to a new state" error.
-    // If the Next.js error overlay appears, reload the page.
+    const checkUpcomingCheckins = async () => {
+      const now = new Date();
+
+      const { data, error } = await supabase
+        .from('personal_name')
+        .select('name, checkin_time')
+        .not('checkin_time', 'is', null);
+
+      if (error) {
+        console.error('Error fetching check-in times:', error);
+        return;
+      }
+      
+      const todayStr = now.toDateString(); 
+
+      data.forEach(person => {
+        if (!person.checkin_time) return;
+
+        const [hours, minutes] = person.checkin_time.split(':').map(Number);
+        
+        const checkinDate = new Date();
+        checkinDate.setHours(hours, minutes, 0, 0);
+
+        const diffMinutes = (checkinDate.getTime() - now.getTime()) / 1000 / 60;
+        
+        const notificationKey = `${person.name}-${todayStr}`;
+
+        if (diffMinutes > 14.9 && diffMinutes <= 15 && !notifiedCheckins.current.has(notificationKey)) {
+          playNotificationSound();
+          toast({
+            title: "Alerta de Llegada",
+            description: `${person.name} está a punto de llegar (15 min).`,
+          });
+          notifiedCheckins.current.add(notificationKey);
+        }
+      });
+      
+      if (now.getHours() === 0 && now.getMinutes() === 0) {
+          notifiedCheckins.current.clear();
+      }
+    };
+    
+    checkUpcomingCheckins();
+    const intervalId = setInterval(checkUpcomingCheckins, 60000);
+
     const observer = new MutationObserver((mutations) => {
       for (const mutation of mutations) {
         if (mutation.type === 'attributes' && mutation.attributeName === 'id') {
@@ -56,11 +115,11 @@ export default function RootLayout({
       attributeFilter: ['id'],
     });
 
-    // Cleanup observer on component unmount
     return () => {
+      clearInterval(intervalId);
       observer.disconnect();
     };
-  }, []);
+  }, [toast]);
 
   const handleFeedbackSubmit = async () => {
     if (!feedbackTitle || !feedbackCategory || !feedbackDescription) {
