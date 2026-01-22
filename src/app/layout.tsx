@@ -4,7 +4,7 @@ import type {Metadata} from 'next';
 import './globals.css';
 import Navbar from '@/components/Navbar'; // Import the new Navbar component
 import { useEffect, useState, useRef }from 'react';
-import { Cog, Send } from 'lucide-react';
+import { Cog, Send, AlertTriangle } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -15,12 +15,26 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { supabase, supabaseEtiquetas } from '@/lib/supabaseClient';
 import { useToast } from '@/hooks/use-toast';
 import { Toaster } from '@/components/ui/toaster';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 
 
 // export const metadata: Metadata = {
 //   title: 'Escáner de Códigos',
 //   description: 'Escáner de Códigos de Barra y QR',
 // };
+
+type UnassignedLabel = {
+  code: string;
+  lote: string | null;
+  quien_imprime: string | null;
+};
 
 export default function RootLayout({
   children,
@@ -35,7 +49,7 @@ export default function RootLayout({
   const [feedbackDescription, setFeedbackDescription] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isUnassignedDialogOpen, setIsUnassignedDialogOpen] = useState(false);
-  const [unassignedCodes, setUnassignedCodes] = useState<string[]>([]);
+  const [unassignedLabels, setUnassignedLabels] = useState<UnassignedLabel[]>([]);
   const [reportTime, setReportTime] = useState('02:20');
 
 
@@ -112,7 +126,7 @@ export default function RootLayout({
           try {
               const { data: etiquetasData, error: etiquetasError } = await supabaseEtiquetas
                   .from('etiquetas_i')
-                  .select('code');
+                  .select('code, lote, quien_imprime');
               if (etiquetasError) throw etiquetasError;
 
               const { data: personalData, error: personalError } = await supabase
@@ -121,12 +135,10 @@ export default function RootLayout({
               if (personalError) throw personalError;
 
               const assignedCodes = new Set(personalData.map(p => p.code));
-              const allEtiquetaCodes = etiquetasData.map(e => e.code);
-              
-              const unassigned = allEtiquetaCodes.filter(code => !assignedCodes.has(code));
+              const unassigned = etiquetasData.filter(etiqueta => !assignedCodes.has(etiqueta.code));
 
               if (unassigned.length > 0) {
-                  setUnassignedCodes(unassigned);
+                  setUnassignedLabels(unassigned.map(u => ({ code: u.code, lote: u.lote, quien_imprime: u.quien_imprime })));
                   setIsUnassignedDialogOpen(true);
               }
 
@@ -321,22 +333,39 @@ export default function RootLayout({
             </Dialog>
 
             <Dialog open={isUnassignedDialogOpen} onOpenChange={setIsUnassignedDialogOpen}>
-              <DialogContent className="sm:max-w-md">
+              <DialogContent className="sm:max-w-2xl">
                   <DialogHeader>
-                      <DialogTitle>Reporte de Etiquetas No Asignadas</DialogTitle>
+                      <DialogTitle>
+                        <div className="flex items-center gap-2 text-destructive">
+                           <AlertTriangle className="h-6 w-6" />
+                           Reporte de Etiquetas No Asignadas
+                        </div>
+                      </DialogTitle>
                       <DialogDescription>
                           Las siguientes etiquetas existen en el sistema pero aún no han sido asignadas a ningún operario.
+                          Este reporte se generó a las {reportTime}.
                       </DialogDescription>
                   </DialogHeader>
-                  <div className="max-h-96 overflow-y-auto p-2 border rounded-md bg-gray-50">
-                      {unassignedCodes.length > 0 ? (
-                          <ul className="space-y-1">
-                              {unassignedCodes.map(code => (
-                                  <li key={code} className="font-mono text-sm bg-white p-2 rounded border">
-                                      {code}
-                                  </li>
+                  <div className="max-h-[60vh] overflow-y-auto p-1 border rounded-md bg-gray-50">
+                      {unassignedLabels.length > 0 ? (
+                          <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead>Código</TableHead>
+                                    <TableHead>Lote</TableHead>
+                                    <TableHead>Impreso por</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                               {unassignedLabels.map(label => (
+                                  <TableRow key={label.code}>
+                                      <TableCell className="font-mono text-sm">{label.code}</TableCell>
+                                      <TableCell>{label.lote || 'N/A'}</TableCell>
+                                      <TableCell>{label.quien_imprime || 'N/A'}</TableCell>
+                                  </TableRow>
                               ))}
-                          </ul>
+                            </TableBody>
+                          </Table>
                       ) : (
                           <p className="text-sm text-gray-500 text-center py-4">No se encontraron etiquetas no asignadas.</p>
                       )}
@@ -357,4 +386,5 @@ export default function RootLayout({
     </html>
   );
 }
+
 
