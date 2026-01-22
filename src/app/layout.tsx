@@ -80,7 +80,7 @@ export default function RootLayout({
         
         const notificationKey = `${person.name}-${todayStr}`;
 
-        if (diffMinutes > 14.9 && diffMinutes <= 15 && !notifiedCheckins.current.has(notificationKey)) {
+        if (diffMinutes > 14 && diffMinutes <= 15 && !notifiedCheckins.current.has(notificationKey)) {
           playNotificationSound();
           toast({
             title: "Alerta de Llegada",
