@@ -575,13 +575,13 @@ export default function Home() {
                 };
 
                 // Find header names dynamically
-                const codeHeader = findHeader(results.meta.fields, ['code', 'código']);
+                const codeHeader = findHeader(results.meta.fields, ['code', 'código', 'text']);
                 const dateHeader = findHeader(results.meta.fields, ['date', 'fecha']);
                 const timeHeader = findHeader(results.meta.fields, ['time', 'hora']);
 
                 if (!codeHeader || !dateHeader || !timeHeader) {
                     const missing = [];
-                    if (!codeHeader) missing.push("código/code");
+                    if (!codeHeader) missing.push("código/code/text");
                     if (!dateHeader) missing.push("fecha/date");
                     if (!timeHeader) missing.push("hora/time");
                     showModalNotification('Error de Formato', `El archivo CSV no contiene los encabezados esperados. Faltan columnas para: ${missing.join(', ')}.`, 'destructive');
