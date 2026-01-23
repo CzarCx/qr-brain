@@ -1120,6 +1120,7 @@ const deleteRow = (codeToDelete: string) => {
         name: name,
         quantity: quantity,
         time: formatElapsedTime(timeInSeconds),
+        rol: 'Barra',
       });
 
       if (error) {

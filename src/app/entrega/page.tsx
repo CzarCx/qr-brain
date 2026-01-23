@@ -395,10 +395,11 @@ export default function Home() {
     if (quantity === 0 || !name) return;
 
     try {
-      const kpiData: { name: string; quantity: number; time: string; csv_file?: string } = {
+      const kpiData: { name: string; quantity: number; time: string; rol: string; csv_file?: string } = {
         name: name,
         quantity: quantity,
         time: formatElapsedTime(timeInSeconds),
+        rol: 'Entrega',
       };
       if (csvFileName) {
         kpiData.csv_file = csvFileName;

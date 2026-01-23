@@ -535,6 +535,7 @@ export default function CalificarPage() {
         name: name,
         quantity: quantity,
         time: formatElapsedTime(timeInSeconds),
+        rol: 'Control de calidad',
       });
 
       if (error) {
