@@ -163,12 +163,6 @@ export default function RootLayout({
               });
           }
       }
-
-      // Daily reset
-      if (now.getHours() === 0 && now.getMinutes() === 0) {
-          notifiedCheckins.current.clear();
-          dailyReportRun.current.clear();
-      }
     };
     
     runTimedTasks();
