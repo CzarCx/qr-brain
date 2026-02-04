@@ -83,38 +83,48 @@ export default function RootLayout({
       const now = new Date();
       const todayStr = now.toDateString(); 
 
+      // Clear old task flags at the beginning of a new day (local time)
+      if (now.getHours() === 0 && now.getMinutes() === 0) {
+        notifiedCheckins.current.clear();
+        dailyReportRun.current.clear();
+      }
+
       // Check for upcoming check-ins
-      const { data, error } = await supabase
-        .from('personal_name')
-        .select('name, checkin_time')
-        .not('checkin_time', 'is', null);
+      try {
+        const { data, error } = await supabase
+          .from('personal_name')
+          .select('name, checkin_time')
+          .not('checkin_time', 'is', null);
 
-      if (error) {
-        console.error('Error fetching check-in times:', error);
-      } else if (data) {
-          data.forEach(person => {
-            if (!person.checkin_time) return;
+        if (error) {
+          console.error('Error fetching check-in times:', error);
+        } else if (data) {
+            data.forEach(person => {
+              if (!person.checkin_time) return;
 
-            const [hours, minutes] = person.checkin_time.split(':').map(Number);
-            
-            const checkinDate = new Date();
-            checkinDate.setHours(hours, minutes, 0, 0);
+              const [hours, minutes] = person.checkin_time.split(':').map(Number);
+              
+              const checkinDate = new Date();
+              checkinDate.setHours(hours, minutes, 0, 0);
 
-            const diffMinutes = (checkinDate.getTime() - now.getTime()) / 1000 / 60;
-            
-            const notificationKey = `${person.name}-${todayStr}`;
+              const diffMinutes = (checkinDate.getTime() - now.getTime()) / 1000 / 60;
+              
+              const notificationKey = `${person.name}-${todayStr}`;
 
-            if (diffMinutes > 14 && diffMinutes <= 15 && !notifiedCheckins.current.has(notificationKey)) {
-              playNotificationSound();
-              toast({
-                variant: 'success',
-                title: "Alerta de Llegada",
-                description: `${person.name} está a punto de llegar (15 min).`,
-                duration: 10000,
-              });
-              notifiedCheckins.current.add(notificationKey);
-            }
-          });
+              if (diffMinutes > 14 && diffMinutes <= 15 && !notifiedCheckins.current.has(notificationKey)) {
+                playNotificationSound();
+                toast({
+                  variant: 'success',
+                  title: "Alerta de Llegada",
+                  description: `${person.name} está a punto de llegar (15 min).`,
+                  duration: 10000,
+                });
+                notifiedCheckins.current.add(notificationKey);
+              }
+            });
+        }
+      } catch (e) {
+        console.error("Failed to process check-in alerts:", e);
       }
       
       // Check for unassigned labels at user-defined time
