@@ -4,7 +4,7 @@ import Link from 'next/link';
 import Head from 'next/head';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { UserCog, UserCheck, ClipboardList, ScanLine, PackageCheck, UserPlus } from 'lucide-react';
+import { UserCog, UserCheck, ClipboardList, ScanLine, PackageCheck, UserPlus, Undo2 } from 'lucide-react';
 
 const navItems = [
   {
@@ -34,6 +34,13 @@ const navItems = [
     description: 'Registra los paquetes que salen a entrega.',
     icon: <PackageCheck className="h-8 w-8 text-starbucks-green" />,
     cta: 'Ir a Entrega',
+  },
+  {
+    href: '/devoluciones',
+    title: 'Gestionar Devoluciones',
+    description: 'Registra las devoluciones de paquetes.',
+    icon: <Undo2 className="h-8 w-8 text-starbucks-green" />,
+    cta: 'Ir a Devoluciones',
   },
   {
     href: '/registro-personal',
