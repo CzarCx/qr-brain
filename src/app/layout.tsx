@@ -83,12 +83,6 @@ export default function RootLayout({
       const now = new Date();
       const todayStr = now.toDateString(); 
 
-      // Clear old task flags at the beginning of a new day (local time)
-      if (now.getHours() === 0 && now.getMinutes() === 0) {
-        notifiedCheckins.current.clear();
-        dailyReportRun.current.clear();
-      }
-
       // Check for upcoming check-ins
       try {
         const { data, error } = await supabase
@@ -175,29 +169,10 @@ export default function RootLayout({
       }
     };
     
-    runTimedTasks();
     const intervalId = setInterval(runTimedTasks, 60000);
-
-    const observer = new MutationObserver((mutations) => {
-      for (const mutation of mutations) {
-        if (mutation.type === 'attributes' && mutation.attributeName === 'id') {
-          const htmlElement = document.documentElement;
-          if (htmlElement.id === '__next_error__') {
-            console.warn("Next.js error overlay detected. Reloading page...");
-            window.location.reload();
-          }
-        }
-      }
-    });
-
-    observer.observe(document.documentElement, {
-      attributes: true,
-      attributeFilter: ['id'],
-    });
 
     return () => {
       clearInterval(intervalId);
-      observer.disconnect();
     };
   }, [toast, reportTime]);
 
