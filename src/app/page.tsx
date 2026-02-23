@@ -414,6 +414,7 @@ export default function Home() {
     let estimatedTime: number | null = null;
     if (details.sku) {
         try {
+            console.log(`Searching for SKU: ${details.sku}`);
             // Step 1: Query sku_alterno to get sku_mdr
             const { data: skuAlternoData, error: skuAlternoError } = await supabaseEtiquetas
                 .from('sku_alterno')
@@ -428,6 +429,7 @@ export default function Home() {
 
             if (skuAlternoData && skuAlternoData.sku_mdr) {
                 const skuMdr = skuAlternoData.sku_mdr;
+                console.log(`Found sku_mdr: ${skuMdr}`);
 
                 // Step 2: Query sku_m to get esti_time using sku_mdr
                 const { data: skuMData, error: skuMError } = await supabaseEtiquetas
@@ -444,9 +446,12 @@ export default function Home() {
 
                 if (skuMData && skuMData.esti_time) {
                     estimatedTime = skuMData.esti_time;
+                    console.log(`Found esti_time: ${estimatedTime}`);
+                } else {
+                    console.log(`esti_time not found for sku_mdr: ${skuMdr}`);
                 }
             } else {
-                 console.log(`SKU ${details.sku} not found in sku_alterno.`);
+                 console.log(`SKU ${details.sku} not found in sku_alterno, or sku_mdr is null.`);
             }
 
         } catch (e: any) {
