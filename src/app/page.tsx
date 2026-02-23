@@ -423,7 +423,7 @@ export default function Home() {
                 .single();
 
             if (skuAlternoError && skuAlternoError.code !== 'PGRST116') {
-                console.error("Error fetching sku_mdr from sku_alterno:", skuAlternoError);
+                console.error("Error fetching sku_mdr from sku_alterno:", skuAlternoError.message);
             }
 
             if (skuAlternoData && skuAlternoData.sku_mdr) {
@@ -439,7 +439,7 @@ export default function Home() {
                     .single();
                 
                 if (skuMError && skuMError.code !== 'PGRST116') {
-                    console.error("Error fetching esti_time from sku_m:", skuMError);
+                    console.error("Error fetching esti_time from sku_m:", skuMError.message);
                 }
 
                 if (skuMData && skuMData.esti_time) {
