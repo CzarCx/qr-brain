@@ -414,20 +414,41 @@ export default function Home() {
     let estimatedTime: number | null = null;
     if (details.sku) {
         try {
-            const { data: personalData, error: personalError } = await supabase
-                .from('personal')
-                .select('esti_time')
+            // Step 1: Query sku_alterno to get sku_mdr
+            const { data: skuAlternoData, error: skuAlternoError } = await supabaseEtiquetas
+                .from('sku_alterno')
+                .select('sku_mdr')
                 .eq('sku', details.sku)
-                .not('esti_time', 'is', null)
                 .limit(1)
                 .single();
 
-            if (personalError && personalError.code !== 'PGRST116') {
-                console.error("Error fetching estimated time:", personalError);
+            if (skuAlternoError && skuAlternoError.code !== 'PGRST116') {
+                console.error("Error fetching sku_mdr from sku_alterno:", skuAlternoError);
             }
-            if (personalData) {
-                estimatedTime = personalData.esti_time;
+
+            if (skuAlternoData && skuAlternoData.sku_mdr) {
+                const skuMdr = skuAlternoData.sku_mdr;
+
+                // Step 2: Query sku_m to get esti_time using sku_mdr
+                const { data: skuMData, error: skuMError } = await supabaseEtiquetas
+                    .from('sku_m')
+                    .select('esti_time')
+                    .eq('sku_mdr', skuMdr)
+                    .not('esti_time', 'is', null)
+                    .limit(1)
+                    .single();
+                
+                if (skuMError && skuMError.code !== 'PGRST116') {
+                    console.error("Error fetching esti_time from sku_m:", skuMError);
+                }
+
+                if (skuMData && skuMData.esti_time) {
+                    estimatedTime = skuMData.esti_time;
+                }
+            } else {
+                 console.log(`SKU ${details.sku} not found in sku_alterno.`);
             }
+
         } catch (e: any) {
              console.error("Exception fetching estimated time:", e.message);
         }
