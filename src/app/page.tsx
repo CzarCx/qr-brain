@@ -2187,5 +2187,3 @@ const deleteRow = (codeToDelete: string) => {
 }
 
     
-
-    
