@@ -140,7 +140,7 @@ export default function DevolucionesPage() {
     
     try {
         const { data: devolucionData, error: findError } = await supabaseEtiquetas
-            .from('devoluciones')
+            .from('devoluciones_ml')
             .select('code, entregado')
             .eq('code', finalCode)
             .single();
@@ -162,7 +162,7 @@ export default function DevolucionesPage() {
         }
         
         const { error: updateError } = await supabaseEtiquetas
-            .from('devoluciones')
+            .from('devoluciones_ml')
             .update({ entregado: true, name_inc: encargado })
             .eq('code', finalCode);
 
