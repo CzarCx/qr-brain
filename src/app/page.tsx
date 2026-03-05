@@ -51,6 +51,7 @@ type ScannedItem = {
   encargado: string;
   area: string;
   sku: string | null;
+  subcategoria?: string | null;
   cantidad: number | null;
   producto: string | null;
   empresa: string | null;
@@ -412,6 +413,7 @@ export default function Home() {
     }
 
     let estimatedTime: number | null = null;
+    let subcategoria: string | null = null;
     if (details.sku) {
         try {
             console.log(`Searching for SKU: ${details.sku}`);
@@ -431,24 +433,24 @@ export default function Home() {
                 const skuMdr = skuAlternoData.sku_mdr;
                 console.log(`Found sku_mdr: ${skuMdr}`);
 
-                // Step 2: Query sku_m to get esti_time using sku_mdr
+                // Step 2: Query sku_m to get esti_time and subcategoria using sku_mdr
                 const { data: skuMData, error: skuMError } = await supabaseEtiquetas
                     .from('sku_m')
-                    .select('esti_time')
+                    .select('esti_time, subcategoria')
                     .eq('sku_mdr', skuMdr)
-                    .not('esti_time', 'is', null)
                     .limit(1)
                     .single();
                 
                 if (skuMError && skuMError.code !== 'PGRST116') {
-                    console.error("Error fetching esti_time from sku_m:", skuMError.message);
+                    console.error("Error fetching data from sku_m:", skuMError.message);
                 }
 
-                if (skuMData && skuMData.esti_time) {
+                if (skuMData) {
                     estimatedTime = skuMData.esti_time;
-                    console.log(`Found esti_time: ${estimatedTime}`);
+                    subcategoria = skuMData.subcategoria;
+                    console.log(`Found esti_time: ${estimatedTime}, subcategoria: ${subcategoria}`);
                 } else {
-                    console.log(`esti_time not found for sku_mdr: ${skuMdr}`);
+                    console.log(`Data not found for sku_mdr: ${skuMdr}`);
                 }
             } else {
                  console.log(`SKU ${details.sku} not found in sku_alterno, or sku_mdr is null.`);
@@ -500,6 +502,7 @@ export default function Home() {
       encargado: encargado.trim(),
       area: selectedArea,
       sku: details.sku,
+      subcategoria: subcategoria,
       cantidad: details.cantidad,
       producto: details.producto,
       empresa: details.empresa,
@@ -1600,6 +1603,7 @@ const deleteRow = (codeToDelete: string) => {
             </td>
             <td className="px-4 py-3 whitespace-nowrap text-sm">{data.producto}</td>
             <td className="px-4 py-3 whitespace-nowrap text-sm">{data.sku}</td>
+            <td className="px-4 py-3 whitespace-nowrap text-sm">{data.subcategoria || 'N/A'}</td>
             <td className="px-4 py-3 whitespace-nowrap text-sm">{data.cantidad}</td>
             <td className="px-4 py-3 whitespace-nowrap text-sm">{data.empresa}</td>
             <td className="px-4 py-3 whitespace-nowrap text-sm">{data.venta}</td>
@@ -1917,6 +1921,7 @@ const deleteRow = (codeToDelete: string) => {
                         <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">TIEMPO ESTIMADO</th>
                         <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">PRODUCTO</th>
                         <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">SKU</th>
+                        <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">SUBCATEGORÍA</th>
                         <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">CANT</th>
                         <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">EMPRESA</th>
                         <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">Venta</th>
@@ -2190,5 +2195,3 @@ const deleteRow = (codeToDelete: string) => {
     </>
   );
 }
-
-    
