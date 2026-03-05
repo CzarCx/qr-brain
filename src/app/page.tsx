@@ -16,7 +16,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Zap, ZoomIn, UserPlus, PlusCircle, Clock, AlertTriangle, Wifi, WifiOff, Search, XCircle, CheckCircle, Trash2, Lock, Unlock } from 'lucide-react';
+import { Zap, ZoomIn, UserPlus, PlusCircle, Clock, AlertTriangle, Wifi, WifiOff, Search, XCircle, CheckCircle, Trash2, Lock, Unlock, FileText } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Combobox, ComboboxGroup } from '@/components/ui/combobox';
 import {
@@ -39,9 +39,11 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
   AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
+} from "@/AlertDialog";
 import { Checkbox } from '@/components/ui/checkbox';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 
 type ScannedItem = {
@@ -170,7 +172,7 @@ export default function Home() {
   // Refs para elementos del DOM y la instancia del escáner
   const html5QrCodeRef = useRef<Html5Qrcode | null>(null);
   const physicalScannerInputRef = useRef<HTMLInputElement | null>(null);
-  const readerRef = useRef<HTMLDivElement | null>(null);
+  const readerRef = useRef<HTMLDivElement>(null);
   const scannerSectionRef = useRef<HTMLDivElement | null>(null);
 
 
@@ -433,10 +435,10 @@ export default function Home() {
                 const skuMdr = skuAlternoData.sku_mdr;
                 console.log(`Found sku_mdr: ${skuMdr}`);
 
-                // Step 2: Query sku_m to get esti_time and subcategoria using sku_mdr
+                // Step 2: Query sku_m to get esti_time and sub_cat using sku_mdr
                 const { data: skuMData, error: skuMError } = await supabaseEtiquetas
                     .from('sku_m')
-                    .select('esti_time, subcategoria')
+                    .select('esti_time, sub_cat')
                     .eq('sku_mdr', skuMdr)
                     .limit(1)
                     .single();
@@ -447,7 +449,7 @@ export default function Home() {
 
                 if (skuMData) {
                     estimatedTime = skuMData.esti_time;
-                    subcategoria = skuMData.subcategoria;
+                    subcategoria = skuMData.sub_cat;
                     console.log(`Found esti_time: ${estimatedTime}, subcategoria: ${subcategoria}`);
                 } else {
                     console.log(`Data not found for sku_mdr: ${skuMdr}`);
@@ -1114,6 +1116,54 @@ const deleteRow = (codeToDelete: string) => {
       }
   };
 
+  const generateSubcategoryTicket = () => {
+    if (scannedData.length === 0) {
+      showModalNotification('Lista Vacía', 'No hay datos para generar el ticket.', 'info');
+      return;
+    }
+
+    const doc = new jsPDF();
+    
+    // Header
+    doc.setFillColor(0, 98, 65); // Starbucks Green
+    doc.rect(0, 0, 210, 40, 'F');
+    
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(22);
+    doc.text('TICKET DE REQUERIMIENTOS', 105, 25, { align: 'center' });
+    
+    // Subheader info
+    doc.setTextColor(0, 0, 0);
+    doc.setFontSize(10);
+    const now = new Date();
+    doc.text(`Generado: ${now.toLocaleString()}`, 15, 50);
+    doc.text(`Encargado: ${encargado || 'No especificado'}`, 15, 55);
+    doc.text(`Área: ${selectedArea || (skipAreaSelection ? 'Sin área' : 'No especificada')}`, 15, 60);
+
+    // Aggregate by subcategory
+    const aggregation: Record<string, number> = {};
+    scannedData.forEach(item => {
+      const cat = item.subcategoria || 'SIN CATEGORÍA';
+      const qty = item.cantidad || 0;
+      aggregation[cat] = (aggregation[cat] || 0) + qty;
+    });
+
+    const tableData = Object.entries(aggregation).map(([cat, total]) => [cat, total]);
+    const totalPieces = Object.values(aggregation).reduce((a, b) => a + b, 0);
+
+    autoTable(doc, {
+      startY: 70,
+      head: [['Subcategoría', 'Total Piezas']],
+      body: tableData,
+      theme: 'grid',
+      headStyles: { fillColor: [0, 98, 65], textColor: [255, 255, 255] },
+      foot: [['TOTAL GENERAL', totalPieces]],
+      footStyles: { fillColor: [243, 241, 231], textColor: [0, 98, 65], fontStyle: 'bold' },
+    });
+
+    doc.save(`Ticket_Requerimientos_${now.getTime()}.pdf`);
+  };
+
   const ingresarDatos = async () => {
     if (scannedData.length === 0) return showAppMessage('No hay datos para ingresar.', 'duplicate');
     setLoading(true);
@@ -1162,7 +1212,7 @@ const deleteRow = (codeToDelete: string) => {
   };
 
 
- const handleProduccionProgramada = async () => {
+  const handleProduccionProgramada = async () => {
     if (scannedData.length === 0) {
       showModalNotification('Lista Vacía', 'No hay registros pendientes para programar.', 'info');
       return;
@@ -1488,8 +1538,8 @@ const deleteRow = (codeToDelete: string) => {
     } catch (e: any) {
         setVerificationResult({ status: 'error', message: e.message || 'Ocurrió un error inesperado.' });
     } finally {
-        setIsVerifying(false);
         setVerificationCode('');
+        setIsVerifying(false);
     }
 };
 
@@ -1786,6 +1836,9 @@ const deleteRow = (codeToDelete: string) => {
         <div className="flex flex-wrap justify-between items-center mb-2 gap-2">
             <h2 className="text-lg font-bold text-starbucks-dark">Registros Pendientes</h2>
              <div className="flex flex-wrap gap-2">
+                <Button onClick={generateSubcategoryTicket} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-sm text-sm transition-colors duration-200" disabled={scannedData.length === 0}>
+                    <FileText className="mr-2 h-4 w-4" /> Ticket
+                </Button>
                 <Button onClick={handleOpenCargarSeccion} className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg shadow-sm text-sm transition-colors duration-200" disabled={loading}>
                     Cargar
                 </Button>
