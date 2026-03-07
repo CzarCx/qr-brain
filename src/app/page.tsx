@@ -1,3 +1,4 @@
+
 'use client';
 import React, {useEffect, useRef, useState, useCallback, useMemo} from 'react';
 import Head from 'next/head';
@@ -15,7 +16,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Zap, ZoomIn, UserPlus, PlusCircle, Clock, AlertTriangle, Wifi, WifiOff, Search, XCircle, CheckCircle, Trash2, Lock, Unlock, FileText } from 'lucide-react';
+import { Zap, ZoomIn, UserPlus, PlusCircle, Clock, AlertTriangle, Wifi, WifiOff, Search, XCircle, CheckCircle, Trash2, Lock, Unlock, FileText, Printer } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Combobox, ComboboxGroup } from '@/components/ui/combobox';
 import {
@@ -41,8 +42,8 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Checkbox } from '@/components/ui/checkbox';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
+import { useReactToPrint } from "react-to-print";
+import TicketPreview from "@/components/TicketPreview";
 
 
 type ScannedItem = {
@@ -166,6 +167,7 @@ export default function Home() {
   const [skipAreaSelection, setSkipAreaSelection] = useState(false);
   const [timerStartTime, setTimerStartTime] = useState<Date | null>(null);
   const [elapsedTime, setElapsedTime] = useState(0);
+  const [isPrintDialogOpen, setIsPrintDialogOpen] = useState(false);
 
 
   // Refs para elementos del DOM y la instancia del escáner
@@ -173,6 +175,7 @@ export default function Home() {
   const physicalScannerInputRef = useRef<HTMLInputElement | null>(null);
   const readerRef = useRef<HTMLDivElement>(null);
   const scannerSectionRef = useRef<HTMLDivElement | null>(null);
+  const printRef = useRef<HTMLDivElement>(null);
 
 
   // Refs para valores que no necesitan re-renderizar el componente
@@ -188,6 +191,8 @@ export default function Home() {
   const APPS_SCRIPT_URL =
     'https://script.google.com/macros/s/AKfycbwxN5n-iE00pi3JlOkImBgWD3-qptWsJxdyMJjXbRySgGvi7jqIsU9Puo7p2uvu5BioIbQ/exec';
   const MIN_SCAN_INTERVAL = 500;
+
+  const reactToPrintFn = useReactToPrint({ contentRef: printRef });
 
   const fetchCreatedLotes = useCallback(async () => {
     const { data, error } = await supabase
@@ -1115,32 +1120,15 @@ const deleteRow = (codeToDelete: string) => {
       }
   };
 
-  const generateSubcategoryTicket = () => {
+  const handleShowTicketPreview = () => {
     if (scannedData.length === 0) {
       showModalNotification('Lista Vacía', 'No hay datos para generar el ticket.', 'info');
       return;
     }
+    setIsPrintDialogOpen(true);
+  };
 
-    const doc = new jsPDF();
-    
-    // Header
-    doc.setFillColor(0, 98, 65); // Starbucks Green
-    doc.rect(0, 0, 210, 40, 'F');
-    
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(22);
-    doc.text('TICKET DE REQUERIMIENTOS', 105, 25, { align: 'center' });
-    
-    // Subheader info
-    doc.setTextColor(0, 0, 0);
-    doc.setFontSize(10);
-    const now = new Date();
-    doc.text(`Generado: ${now.toLocaleString()}`, 15, 50);
-    doc.text(`Encargado: ${encargado || 'No especificado'}`, 15, 55);
-    doc.text(`Área: ${selectedArea || (skipAreaSelection ? 'Sin área' : 'No especificada')}`, 15, 60);
-    doc.text(`Empacador: ${selectedPersonal || 'No seleccionado'}`, 15, 65);
-
-    // Aggregate by subcategory
+  const ticketData = useMemo(() => {
     const aggregation: Record<string, number> = {};
     scannedData.forEach(item => {
       const cat = item.subcategoria || 'SIN CATEGORÍA';
@@ -1148,21 +1136,15 @@ const deleteRow = (codeToDelete: string) => {
       aggregation[cat] = (aggregation[cat] || 0) + qty;
     });
 
-    const tableData = Object.entries(aggregation).map(([cat, total]) => [cat, total]);
-    const totalPieces = Object.values(aggregation).reduce((a, b) => a + b, 0);
-
-    autoTable(doc, {
-      startY: 75,
-      head: [['Subcategoría', 'Total Piezas']],
-      body: tableData,
-      theme: 'grid',
-      headStyles: { fillColor: [0, 98, 65], textColor: [255, 255, 255] },
-      foot: [['TOTAL GENERAL', totalPieces]],
-      footStyles: { fillColor: [243, 241, 231], textColor: [0, 98, 65], fontStyle: 'bold' },
-    });
-
-    doc.save(`Ticket_Requerimientos_${now.getTime()}.pdf`);
-  };
+    return {
+      date: new Date().toLocaleString('es-MX'),
+      encargado: encargado || 'No especificado',
+      area: selectedArea || (skipAreaSelection ? 'Sin área' : 'No especificada'),
+      packer: selectedPersonal || 'No seleccionado',
+      items: Object.entries(aggregation).map(([sub_cat, quantity]) => ({ sub_cat, quantity })),
+      totalPieces: Object.values(aggregation).reduce((a, b) => a + b, 0),
+    };
+  }, [scannedData, encargado, selectedArea, skipAreaSelection, selectedPersonal]);
 
   const ingresarDatos = async () => {
     if (scannedData.length === 0) return showAppMessage('No hay datos para ingresar.', 'duplicate');
@@ -1836,7 +1818,7 @@ const deleteRow = (codeToDelete: string) => {
         <div className="flex flex-wrap justify-between items-center mb-2 gap-2">
             <h2 className="text-lg font-bold text-starbucks-dark">Registros Pendientes</h2>
              <div className="flex flex-wrap gap-2">
-                <Button onClick={generateSubcategoryTicket} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-sm text-sm transition-colors duration-200" disabled={scannedData.length === 0}>
+                <Button onClick={handleShowTicketPreview} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-sm text-sm transition-colors duration-200" disabled={scannedData.length === 0}>
                     <FileText className="mr-2 h-4 w-4" /> Ticket
                 </Button>
                 <Button onClick={handleOpenCargarSeccion} className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg shadow-sm text-sm transition-colors duration-200" disabled={loading}>
@@ -2185,10 +2167,10 @@ const deleteRow = (codeToDelete: string) => {
                      <div className="p-4 bg-starbucks-cream rounded-lg">
                         <label htmlFor="manual-code-input" className="block text-sm font-bold text-starbucks-dark mb-1">Ingreso Manual:</label>
                         <div className="relative mt-1 flex items-center rounded-lg border border-input bg-background focus-within:ring-2 focus-within:ring-ring">
-                            <Input
+                            <input
                                 type="text"
                                 id="manual-code-input"
-                                className="w-full border-0 bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0"
+                                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 w-full border-0 bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0"
                                 placeholder="Escriba el código..."
                                 onKeyDown={(e) => e.key === 'Enter' && handleManualAdd()}
                             />
@@ -2244,6 +2226,25 @@ const deleteRow = (codeToDelete: string) => {
                     </div>
                 </div>
             </div>}
+
+            <Dialog open={isPrintDialogOpen} onOpenChange={setIsPrintDialogOpen}>
+                <DialogContent className="max-w-[400px] bg-gray-100 p-0 overflow-hidden sm:rounded-xl border-none">
+                    <DialogHeader className="p-4 bg-white border-b flex flex-row items-center justify-between space-y-0">
+                        <DialogTitle className="text-starbucks-green">Vista Previa de Ticket</DialogTitle>
+                    </DialogHeader>
+                    <div className="max-h-[70vh] overflow-y-auto p-4 flex justify-center bg-gray-200">
+                        <TicketPreview ref={printRef} data={ticketData} />
+                    </div>
+                    <DialogFooter className="p-4 bg-white border-t sm:justify-center flex flex-row gap-3">
+                        <Button variant="outline" onClick={() => setIsPrintDialogOpen(false)} className="flex-1 border-gray-300">
+                            Cerrar
+                        </Button>
+                        <Button onClick={() => reactToPrintFn()} className="bg-starbucks-green hover:bg-starbucks-dark flex-1">
+                            <Printer className="mr-2 h-4 w-4" /> Imprimir
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </main>
     </>
   );
