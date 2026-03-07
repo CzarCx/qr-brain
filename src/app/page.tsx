@@ -183,13 +183,10 @@ export default function Home() {
   const lastSuccessfullyScannedCodeRef = useRef<string | null>(null);
   const scannedCodesRef = useRef(new Set<string>());
   const bufferRef = useRef('');
-  const scanTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const messageTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const timerStartedRef = useRef(false);
 
 
-  const APPS_SCRIPT_URL =
-    'https://script.google.com/macros/s/AKfycbwxN5n-iE00pi3JlOkImBgWD3-qptWsJxdyMJjXbRySgGvi7jqIsU9Puo7p2uvu5BioIbQ/exec';
   const MIN_SCAN_INTERVAL = 500;
 
   const reactToPrintFn = useReactToPrint({ contentRef: printRef });
@@ -259,14 +256,42 @@ export default function Home() {
     };
   }, [timerStartTime]);
 
+  // Persistencia de sesión en LocalStorage
   useEffect(() => {
     setIsMounted(true);
+    
+    // Recuperar datos guardados
+    const savedData = localStorage.getItem('scannedData');
+    if (savedData) {
+        try {
+            const parsed = JSON.parse(savedData);
+            setScannedData(parsed);
+            parsed.forEach((item: ScannedItem) => scannedCodesRef.current.add(item.code));
+            
+            const mel = parsed.filter((item: ScannedItem) => String(item.code).startsWith('4')).length;
+            setMelCodesCount(mel);
+            setOtherCodesCount(parsed.length - mel);
+        } catch (e) {
+            console.error("Error al recuperar sesión guardada:", e);
+        }
+    }
+
+    const savedEncargado = localStorage.getItem('encargado');
+    if (savedEncargado) setEncargado(savedEncargado);
+
+    const savedArea = localStorage.getItem('selectedArea');
+    if (savedArea) setSelectedArea(savedArea);
+
+    const savedPersonal = localStorage.getItem('selectedPersonal');
+    if (savedPersonal) setSelectedPersonal(savedPersonal);
+
+    const savedLoteProg = localStorage.getItem('loteProgramado');
+    if (savedLoteProg) setLoteProgramado(savedLoteProg);
+
     const checkDbConnections = async () => {
-      // Check personal DB
       const { error: personalError } = await supabase.from('personal_name').select('name').limit(1);
       setDbStatus(prev => ({ ...prev, personalDb: personalError ? 'error' : 'success' }));
 
-      // Check etiquetas DB
       const { error: etiquetasError } = await supabaseEtiquetas.from('etiquetas_i').select('code').limit(1);
       setDbStatus(prev => ({ ...prev, etiquetasDb: etiquetasError ? 'error' : 'success' }));
     };
@@ -288,6 +313,17 @@ export default function Home() {
       supabase.removeChannel(channel);
     };
   }, [fetchCreatedLotes]);
+
+  // Guardar cambios en LocalStorage automáticamente
+  useEffect(() => {
+    if (isMounted) {
+        localStorage.setItem('scannedData', JSON.stringify(scannedData));
+        localStorage.setItem('encargado', encargado);
+        localStorage.setItem('selectedArea', selectedArea);
+        localStorage.setItem('selectedPersonal', selectedPersonal);
+        localStorage.setItem('loteProgramado', loteProgramado);
+    }
+  }, [scannedData, encargado, selectedArea, selectedPersonal, loteProgramado, isMounted]);
   
   useEffect(() => {
     if (isMobile && encargado && scannerSectionRef.current) {
@@ -372,6 +408,11 @@ export default function Home() {
     setIngresarDatosEnabled(false);
     setTimerStartTime(null);
     timerStartedRef.current = false;
+    
+    // Limpiar localStorage
+    localStorage.removeItem('scannedData');
+    localStorage.removeItem('selectedPersonal');
+    localStorage.removeItem('loteProgramado');
   };
 
   const playBeep = () => {
@@ -422,8 +463,6 @@ export default function Home() {
     let subcategoria: string | null = null;
     if (details.sku) {
         try {
-            console.log(`Searching for SKU: ${details.sku}`);
-            // Step 1: Query sku_alterno to get sku_mdr
             const { data: skuAlternoData, error: skuAlternoError } = await supabaseEtiquetas
                 .from('sku_alterno')
                 .select('sku_mdr')
@@ -437,9 +476,6 @@ export default function Home() {
 
             if (skuAlternoData && skuAlternoData.sku_mdr) {
                 const skuMdr = skuAlternoData.sku_mdr;
-                console.log(`Found sku_mdr: ${skuMdr}`);
-
-                // Step 2: Query sku_m to get esti_time and sub_cat using sku_mdr
                 const { data: skuMData, error: skuMError } = await supabaseEtiquetas
                     .from('sku_m')
                     .select('esti_time, sub_cat')
@@ -453,20 +489,17 @@ export default function Home() {
 
                 if (skuMData) {
                     estimatedTime = skuMData.esti_time;
-                    subcategoria = skuMData.sub_cat || details.sku; // Use SKU if sub_cat is null/empty
-                    console.log(`Found esti_time: ${estimatedTime}, subcategoria: ${subcategoria}`);
+                    subcategoria = skuMData.sub_cat || details.sku; 
                 } else {
-                    subcategoria = details.sku; // Fallback if record not found in sku_m
-                    console.log(`Data not found for sku_mdr: ${skuMdr}. Using SKU as fallback.`);
+                    subcategoria = details.sku; 
                 }
             } else {
-                 subcategoria = details.sku; // Fallback if record not found in sku_alterno
-                 console.log(`SKU ${details.sku} not found in sku_alterno. Using SKU as fallback.`);
+                 subcategoria = details.sku; 
             }
 
         } catch (e: any) {
              console.error("Exception fetching estimated time:", e.message);
-             subcategoria = details.sku; // Final fallback on error
+             subcategoria = details.sku; 
         }
     }
 
@@ -524,7 +557,7 @@ export default function Home() {
 
     invalidateCSV();
     return true;
-  }, [encargado, selectedArea, skipAreaSelection]);
+  }, [encargado, selectedArea]);
 
   const saveToPersonal = async (personName: string) => {
       setLoading(true);
@@ -631,12 +664,6 @@ export default function Home() {
     saveToPersonal(selectedPersonal);
   };
   
-  const showConfirmationDialog = (title: string, message: string, code: string): Promise<boolean> => {
-      return new Promise((resolve) => {
-          setConfirmation({ isOpen: true, title, message, code, resolve });
-      });
-  };
-
   const onScanSuccess = useCallback((decodedText: string, decodedResult: any) => {
     if (!scannerActive || Date.now() - lastScanTimeRef.current < MIN_SCAN_INTERVAL) return;
     lastScanTimeRef.current = Date.now();
@@ -768,7 +795,6 @@ export default function Home() {
 
 
         // Strict validation flow
-        // 1. Find code_i from etiquetas_i
         const { data: etiquetaInfo, error: etiquetaInfoError } = await supabaseEtiquetas
             .from('etiquetas_i')
             .select('code_i')
@@ -780,13 +806,12 @@ export default function Home() {
         }
 
         if (!etiquetaInfo || !etiquetaInfo.code_i) {
-            showModalNotification('Error de Etiqueta', `La etiqueta ${finalCode} no tiene un código de corte (code_i) asociado.`, 'destructive');
+            showModalNotification('Error de Etiqueta', `La etiqueta ${finalCode} no tiene un código de corte asociado.`, 'destructive');
             playErrorSound();
             setLoading(false);
             return;
         }
 
-        // 2. Find corte_etiquetas from v_code using code_i
         const { data: vCodeInfo, error: vCodeInfoError } = await supabaseEtiquetas
             .from('v_code')
             .select('corte_etiquetas')
@@ -797,7 +822,6 @@ export default function Home() {
              throw new Error(`Error al verificar el corte en 'v_code': ${vCodeInfoError.message}`);
         }
         
-        // 3. Check if corte_etiquetas is null
         if (!vCodeInfo || vCodeInfo.corte_etiquetas === null) {
             showModalNotification('Corte no Realizado', `La etiqueta ${finalCode} no puede ser asignada porque el corte aún no ha sido realizado.`, 'destructive');
             playErrorSound();
@@ -806,7 +830,6 @@ export default function Home() {
         }
 
 
-        // Continue with existing assignment checks if validation passes
         const { data: personalData, error: personalError } = await supabase
             .from('personal')
             .select('code, name, name_inc')
@@ -857,7 +880,7 @@ export default function Home() {
   useEffect(() => {
     if(lastScannedCode) {
       processScan(lastScannedCode);
-      setLastScannedCode(null); // Reset after processing
+      setLastScannedCode(null); 
     }
   }, [lastScannedCode, processScan]);
 
@@ -1004,14 +1027,6 @@ export default function Home() {
     window.location.reload();
   };
 
-  const handleConfirmation = (decision: boolean) => {
-      confirmation.resolve(decision);
-      setConfirmation({ isOpen: false, title: '', message: '', code: '', resolve: () => {} });
-      if (selectedScannerMode === 'fisico' && scannerActive) {
-          setTimeout(() => physicalScannerInputRef.current?.focus(), 100);
-      }
-  };
-
   const handleManualAdd = async () => {
       const manualCodeInput = document.getElementById('manual-code-input') as HTMLInputElement;
       if (!encargado.trim()) {
@@ -1066,63 +1081,6 @@ const deleteRow = (codeToDelete: string) => {
     invalidateCSV();
   };
 
-  const exportCsv = async () => {
-      if(scannedData.length === 0) return showAppMessage('No hay datos para exportar.', 'duplicate');
-      
-      try {
-          const response = await fetch('https://worldtimeapi.org/api/timezone/America/Mexico_City');
-          if (!response.ok) throw new Error(`Error en API de hora: ${response.status}`);
-          const data = await response.json();
-          const now = new Date(data.datetime);
-          
-          const encargadoName = (encargado || "SIN_NOMBRE").trim().toUpperCase().replace(/ /g, '_');
-          const etiquetas = `ETIQUETAS(${scannedCodesRef.current.size})`;
-          const removeAccents = (str: string) => str.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-          const areaName = removeAccents((selectedArea).toUpperCase().replace(/ /g, '_'));
-
-          const day = String(now.getDate()).padStart(2, '0');
-          const year = String(now.getFullYear()).slice(-2);
-          const monthNames = ["ENERO", "FEBRERO", "MARZO", "ABRIL", "MAYO", "JUNIO", "JULIO", "AGOSTO", "SEPTIEMBRE", "OCTUBRE", "NOVIEMBRE", "DICIEMBRE"];
-          const month = monthNames[now.getMonth()];
-          const fechaFormateada = `${day}-${month}-${year}`;
-
-          let hours = now.getHours();
-          const ampm = hours >= 12 ? 'PM' : 'AM';
-          hours = hours % 12;
-          hours = hours ? hours : 12;
-          const timeString = `${String(hours).padStart(2, '0')}-${String(now.getMinutes()).padStart(2, '0')}-${String(now.getSeconds()).padStart(2, '0')}-${ampm}`;
-
-          const fileName = `${encargadoName}-${etiquetas}-${areaName}-${fechaFormateada}-${timeString}.csv`;
-          const BOM = "\uFEFF";
-          const headers = "CODIGO,TIEMPO ESTIMADO,PRODUCTO,SKU,CANTIDAD,EMPRESA,VENTA,HORA DE ASIGNACION\n";
-          let csvRows = scannedData.map(row => [
-              `="${row.code}"`,
-              `="${row.esti_time || ''}"`,
-              `="${(row.producto || '').replace(/"/g, '""')}"`,
-              `="${row.sku || ''}"`,
-              `="${row.cantidad || 0}"`,
-              `="${(row.empresa || '').replace(/"/g, '""')}"`,
-              `="${(row.venta || '').replace(/"/g, '""')}"`,
-              `="${row.hora}"`
-          ].join(',')).join('\n');
-          
-          const blob = new Blob([BOM + headers + csvRows], { type: 'text/csv;charset=utf-t' });
-          const link = document.createElement("a");
-          link.href = URL.createObjectURL(blob);
-          link.download = fileName;
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
-
-          setIngresarDatosEnabled(true);
-          showAppMessage('CSV exportado. Ahora puedes ingresar los datos.', 'success');
-
-      } catch (error) {
-          console.error("Error al exportar CSV:", error);
-          showAppMessage('Error al obtener la hora de la red. Intenta de nuevo.', 'duplicate');
-      }
-  };
-
   const handleShowTicketPreview = () => {
     if (scannedData.length === 0) {
       showModalNotification('Lista Vacía', 'No hay datos para generar el ticket.', 'info');
@@ -1157,33 +1115,6 @@ const deleteRow = (codeToDelete: string) => {
     };
   }, [scannedData, encargado, selectedArea, skipAreaSelection, selectedPersonal]);
 
-  const ingresarDatos = async () => {
-    if (scannedData.length === 0) return showAppMessage('No hay datos para ingresar.', 'duplicate');
-    setLoading(true);
-
-    try {
-        const { error } = await supabase.from('escaneos').insert(scannedData.map(item => ({
-          codigo: item.code,
-          fecha_escaneo: item.fecha,
-          hora_escaneo: item.hora,
-          encargado: item.encargado,
-          area: item.area,
-          esti_time: item.esti_time,
-        })));
-
-        if (error) throw error;
-        
-        showAppMessage(`¡Éxito! Se enviaron ${scannedData.length} registros a Supabase.`, 'success');
-        clearSessionData();
-
-    } catch (error: any) {
-        console.error("Error al enviar datos a Supabase:", error);
-        showAppMessage(`Error al enviar los datos: ${error.message}`, 'duplicate');
-    } finally {
-        setLoading(false);
-    }
-  };
-
   const saveKpiData = async (name: string, quantity: number, timeInSeconds: number) => {
     if (quantity === 0 || !name) return;
 
@@ -1197,7 +1128,6 @@ const deleteRow = (codeToDelete: string) => {
 
       if (error) {
         console.error('Error saving KPI data:', error.message);
-        // Silently fail for now, or show a non-blocking toast
       }
     } catch (e: any) {
       console.error('Exception while saving KPI data:', e.message);
@@ -1234,7 +1164,6 @@ const deleteRow = (codeToDelete: string) => {
       return;
     }
     
-    // Validation 1: Check if loteProgramado is numeric
     if (!/^\d+$/.test(loteId)) {
         showModalNotification('Lote Inválido', 'El identificador de lote debe ser solo numérico.', 'destructive');
         return;
@@ -1244,7 +1173,6 @@ const deleteRow = (codeToDelete: string) => {
     showAppMessage('Guardando producción programada...', 'info');
 
     try {
-        // Validation 2: Check if lote_p already exists
         const { data: existingLote, error: checkError } = await supabase
             .from('personal_prog')
             .select('lote_p')
@@ -1315,13 +1243,11 @@ const deleteRow = (codeToDelete: string) => {
     setShowCargarProduccion(true);
     setLoadingProgramados(true);
     try {
-        // Fetch unique names
         const { data: namesData, error: namesError } = await supabase.from('personal_prog').select('name');
         if (namesError) throw namesError;
         const uniqueNames = [...new Map(namesData.map(item => [item.name, item])).values()];
         setProgramadosPersonalList(uniqueNames);
 
-        // Fetch unique lotes
         const { data: lotesData, error: lotesError } = await supabase.from('personal_prog').select('lote_p');
         if (lotesError) throw lotesError;
         const uniqueLotes = [...new Map(lotesData.filter(item => item.lote_p).map(item => [item.lote_p, item])).values()];
@@ -1364,8 +1290,6 @@ const deleteRow = (codeToDelete: string) => {
         }
 
         setLoadedProgData(data);
-        // If loading by lot, we still might want to reassign.
-        // Let's set the first person found as the default person to assign, or leave it blank.
         const originalAssignee = byPerson ? filterValue : (data.length > 0 ? data[0].name : '');
         setPersonToAssign(originalAssignee);
 
@@ -1445,10 +1369,16 @@ const deleteRow = (codeToDelete: string) => {
         }
 
         const codesToDelete = loadedProgData.map(item => item.code);
-        const { error: deleteError } = await supabase
-            .from('personal_prog')
-            .delete()
-            .in('code', codesToDelete);
+        
+        // BORRADO SEGURO: Filtramos por lote o por persona para evitar borrar de más
+        let deleteQuery = supabase.from('personal_prog').delete().in('code', codesToDelete);
+        if (cargaFilterType === 'lote' && selectedLoteParaCargar) {
+            deleteQuery = deleteQuery.eq('lote_p', selectedLoteParaCargar);
+        } else if (cargaFilterType === 'persona' && selectedPersonalParaCargar) {
+            deleteQuery = deleteQuery.eq('name', selectedPersonalParaCargar);
+        }
+
+        const { error: deleteError } = await deleteQuery;
         
         if (deleteError) {
             throw new Error(`Error al eliminar de 'personal_prog': ${deleteError.message}. Los registros fueron asignados, pero no se eliminaron de la lista de programados.`);
@@ -1482,14 +1412,13 @@ const deleteRow = (codeToDelete: string) => {
     setIsVerifying(true);
     setVerificationResult({ status: 'pending', message: 'Verificando código...' });
     try {
-        // 1. Check if the code exists and get its current state.
         const { data: vCode, error: fetchError } = await supabaseEtiquetas
             .from('v_code')
             .select('corte_etiquetas, personal_bar')
             .eq('code_i', verificationCode)
             .single();
 
-        if (fetchError && fetchError.code !== 'PGRST116') { // PGRST116 = no rows found
+        if (fetchError && fetchError.code !== 'PGRST116') { 
              throw new Error(`Error al verificar el código: ${fetchError.message}`);
         }
 
@@ -1499,7 +1428,6 @@ const deleteRow = (codeToDelete: string) => {
             return;
         }
 
-        // 2. If corte_etiquetas is already set, show a message and stop.
         if (vCode.corte_etiquetas) {
             const registeredTime = new Date(vCode.corte_etiquetas).toLocaleString('es-MX', {
                 dateStyle: 'short',
@@ -1513,7 +1441,6 @@ const deleteRow = (codeToDelete: string) => {
             return;
         }
 
-        // 3. If corte_etiquetas is null, update it.
         const { error: updateError } = await supabaseEtiquetas
             .from('v_code')
             .update({ 
@@ -1603,7 +1530,6 @@ const deleteRow = (codeToDelete: string) => {
     const renderTime = new Date();
     let lastFinishTime: Date = renderTime;
     
-    // Failsafe to ensure no duplicates are rendered
     const uniqueData = Array.from(new Map(scannedData.map(item => [item.code, item])).values());
 
 
@@ -2051,7 +1977,6 @@ const deleteRow = (codeToDelete: string) => {
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {/* Columna Izquierda: Controles */}
                     <div className="space-y-4">
                         <RadioGroup value={scanMode} onValueChange={(value) => setScanMode(value as any)} className="grid grid-cols-3 gap-2 bg-gray-100 p-2 rounded-lg">
                           <div>
@@ -2082,7 +2007,6 @@ const deleteRow = (codeToDelete: string) => {
                             </div>
                         </div>
 
-                        {/* Contenedor de Registros para Móvil */}
                         {scanMode === 'assign' && (
                             <div className="md:hidden">
                                 {RegistrosPendientesSection}
@@ -2090,7 +2014,6 @@ const deleteRow = (codeToDelete: string) => {
                         )}
                     </div>
                     
-                    {/* Columna Derecha: Escáner */}
                      <div ref={scannerSectionRef} className="bg-starbucks-cream p-4 rounded-lg flex flex-col justify-between">
                         <div className="scanner-container relative w-full flex-grow min-h-[250px] md:min-h-0">
                             <div id="reader" ref={readerRef} className="w-full h-full" style={{ display: selectedScannerMode === 'camara' && scannerActive ? 'block' : 'none' }}></div>
@@ -2196,7 +2119,6 @@ const deleteRow = (codeToDelete: string) => {
                             </Button>
                         </div>
                     </div>
-                    {/* Contenedor de Registros para Escritorio */}
                     {scanMode === 'assign' && (
                         <div className="hidden md:block">
                             {RegistrosPendientesSection}
