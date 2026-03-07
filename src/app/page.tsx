@@ -453,17 +453,20 @@ export default function Home() {
 
                 if (skuMData) {
                     estimatedTime = skuMData.esti_time;
-                    subcategoria = skuMData.sub_cat;
+                    subcategoria = skuMData.sub_cat || details.sku; // Use SKU if sub_cat is null/empty
                     console.log(`Found esti_time: ${estimatedTime}, subcategoria: ${subcategoria}`);
                 } else {
-                    console.log(`Data not found for sku_mdr: ${skuMdr}`);
+                    subcategoria = details.sku; // Fallback if record not found in sku_m
+                    console.log(`Data not found for sku_mdr: ${skuMdr}. Using SKU as fallback.`);
                 }
             } else {
-                 console.log(`SKU ${details.sku} not found in sku_alterno, or sku_mdr is null.`);
+                 subcategoria = details.sku; // Fallback if record not found in sku_alterno
+                 console.log(`SKU ${details.sku} not found in sku_alterno. Using SKU as fallback.`);
             }
 
         } catch (e: any) {
              console.error("Exception fetching estimated time:", e.message);
+             subcategoria = details.sku; // Final fallback on error
         }
     }
 
@@ -1139,7 +1142,7 @@ const deleteRow = (codeToDelete: string) => {
   const ticketData = useMemo(() => {
     const aggregation: Record<string, number> = {};
     scannedData.forEach(item => {
-      const cat = item.subcategoria || 'SIN CATEGORÍA';
+      const cat = item.subcategoria || item.sku || 'SIN CATEGORÍA';
       const qty = item.cantidad || 0;
       aggregation[cat] = (aggregation[cat] || 0) + qty;
     });
