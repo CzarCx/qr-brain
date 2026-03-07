@@ -1138,6 +1138,7 @@ const deleteRow = (codeToDelete: string) => {
     doc.text(`Generado: ${now.toLocaleString()}`, 15, 50);
     doc.text(`Encargado: ${encargado || 'No especificado'}`, 15, 55);
     doc.text(`Área: ${selectedArea || (skipAreaSelection ? 'Sin área' : 'No especificada')}`, 15, 60);
+    doc.text(`Empacador: ${selectedPersonal || 'No seleccionado'}`, 15, 65);
 
     // Aggregate by subcategory
     const aggregation: Record<string, number> = {};
@@ -1151,7 +1152,7 @@ const deleteRow = (codeToDelete: string) => {
     const totalPieces = Object.values(aggregation).reduce((a, b) => a + b, 0);
 
     autoTable(doc, {
-      startY: 70,
+      startY: 75,
       head: [['Subcategoría', 'Total Piezas']],
       body: tableData,
       theme: 'grid',
