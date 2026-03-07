@@ -1,4 +1,3 @@
-
 'use client';
 import React, {useEffect, useRef, useState, useCallback, useMemo} from 'react';
 import Head from 'next/head';
@@ -39,7 +38,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
   AlertDialogTrigger,
-} from "@/AlertDialog";
+} from "@/components/ui/alert-dialog";
 import { Checkbox } from '@/components/ui/checkbox';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import jsPDF from 'jspdf';
@@ -1285,7 +1284,7 @@ const deleteRow = (codeToDelete: string) => {
                 place: skipAreaSelection ? null : selectedArea,
                 product: item.producto,
                 quantity: item.cantidad,
-                organization: item.empresa,
+                organization: item.organization,
                 sales_num: item.venta && !isNaN(Number(item.venta)) ? Number(item.venta) : null,
                 date: new Date().toISOString(),
                 esti_time: item.esti_time,
