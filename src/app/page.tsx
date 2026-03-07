@@ -1125,6 +1125,14 @@ const deleteRow = (codeToDelete: string) => {
       showModalNotification('Lista Vacía', 'No hay datos para generar el ticket.', 'info');
       return;
     }
+    if (!selectedPersonal) {
+      showModalNotification('Falta Empacador', 'Por favor, selecciona al personal que empacará los productos.', 'destructive');
+      return;
+    }
+    if (!selectedArea && !skipAreaSelection) {
+      showModalNotification('Falta Área', 'Por favor, selecciona un área de trabajo o marca la opción para continuar sin una.', 'destructive');
+      return;
+    }
     setIsPrintDialogOpen(true);
   };
 
