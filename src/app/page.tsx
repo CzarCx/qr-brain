@@ -16,7 +16,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Zap, ZoomIn, UserPlus, PlusCircle, Clock, AlertTriangle, Wifi, WifiOff, Search, XCircle, CheckCircle, Trash2, Lock, Unlock, FileText, Printer } from 'lucide-react';
+import { Zap, ZoomIn, UserPlus, PlusCircle, Clock, AlertTriangle, Wifi, WifiOff, Search, XCircle, CheckCircle, Trash2, Lock, Unlock, FileText, Printer, Download } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Combobox, ComboboxGroup } from '@/components/ui/combobox';
 import {
@@ -44,6 +44,8 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useReactToPrint } from "react-to-print";
 import TicketPreview from "@/components/TicketPreview";
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 
 type ScannedItem = {
@@ -1115,6 +1117,50 @@ const deleteRow = (codeToDelete: string) => {
     };
   }, [scannedData, encargado, selectedArea, skipAreaSelection, selectedPersonal]);
 
+  const generatePDF = () => {
+    const doc = new jsPDF();
+    const pageWidth = doc.internal.pageSize.getWidth();
+
+    // Title
+    doc.setFontSize(18);
+    doc.setTextColor(0, 98, 65); // Starbucks Green
+    doc.text("TICKET DE REQUERIMIENTOS", pageWidth / 2, 20, { align: "center" });
+    
+    doc.setFontSize(10);
+    doc.setTextColor(100);
+    doc.text(ticketData.date, pageWidth / 2, 28, { align: "center" });
+
+    // Header Info
+    doc.setFontSize(12);
+    doc.setTextColor(0);
+    doc.text(`ENCARGADO: ${ticketData.encargado}`, 14, 40);
+    doc.text(`ÁREA: ${ticketData.area}`, 14, 47);
+    doc.text(`EMPACADOR: ${ticketData.packer}`, 14, 54);
+
+    // Table
+    autoTable(doc, {
+      startY: 65,
+      head: [['SUBCATEGORÍA', 'CANTIDAD']],
+      body: ticketData.items.map(item => [item.sub_cat, item.quantity]),
+      theme: 'striped',
+      headStyles: { fillColor: [0, 98, 65] }, // Starbucks Green
+      styles: { cellPadding: 3, fontSize: 10 },
+    });
+
+    // Total
+    const finalY = (doc as any).lastAutoTable.finalY || 70;
+    doc.setFontSize(14);
+    doc.setTextColor(0, 98, 65);
+    doc.text(`TOTAL PIEZAS: ${ticketData.totalPieces}`, 14, finalY + 15);
+
+    doc.setFontSize(9);
+    doc.setTextColor(150);
+    doc.text("SISTEMA DE CONTROL DE CALIDAD - PRODUCCIÓN EFICIENTE", pageWidth / 2, finalY + 30, { align: "center" });
+    doc.text("*** FIN DE TICKET ***", pageWidth / 2, finalY + 35, { align: "center" });
+
+    doc.save(`ticket_${ticketData.packer.replace(/\s+/g, '_')}_${new Date().getTime()}.pdf`);
+  };
+
   const saveKpiData = async (name: string, quantity: number, timeInSeconds: number) => {
     if (quantity === 0 || !name) return;
 
@@ -2135,7 +2181,7 @@ const deleteRow = (codeToDelete: string) => {
 
             {showNotification && (
                 <div id="notification-overlay" className="p-4 fixed inset-0 bg-black/75 flex justify-center items-center z-[100]" onClick={() => setShowNotification(false)}>
-                     <div className="bg-starbucks-white rounded-lg shadow-xl p-6 w-full max-w-sm text-center space-y-4" onClick={(e) => e.stopPropagation()}>
+                     <div className="bg-starbucks-white rounded-lg shadow-xl p-6 w-full max-sm text-center space-y-4" onClick={(e) => e.stopPropagation()}>
                         <Alert variant={notification.variant as any} className={notification.variant === 'success' ? 'border-green-500 text-green-700 [&>svg]:text-green-700' : ''}>
                             {notification.variant === 'destructive' ? <XCircle className="h-5 w-5" /> : notification.variant === 'success' ? <CheckCircle className="h-5 w-5"/> : <AlertTriangle className="h-5 w-5" />}
                             <AlertTitle className="font-bold">{notification.title}</AlertTitle>
@@ -2171,6 +2217,9 @@ const deleteRow = (codeToDelete: string) => {
                     <DialogFooter className="p-4 bg-white border-t sm:justify-center flex flex-row gap-3">
                         <Button variant="outline" onClick={() => setIsPrintDialogOpen(false)} className="flex-1 border-gray-300">
                             Cerrar
+                        </Button>
+                        <Button onClick={generatePDF} variant="outline" className="flex-1 border-starbucks-green text-starbucks-green hover:bg-starbucks-cream">
+                            <Download className="mr-2 h-4 w-4" /> PDF
                         </Button>
                         <Button onClick={() => reactToPrintFn()} className="bg-starbucks-green hover:bg-starbucks-dark flex-1">
                             <Printer className="mr-2 h-4 w-4" /> Imprimir
