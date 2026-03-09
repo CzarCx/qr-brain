@@ -1108,6 +1108,7 @@ const deleteRow = (codeToDelete: string) => {
     });
 
     return {
+      ticketId: `TKT-${Date.now()}`,
       date: new Date().toLocaleString('es-MX'),
       encargado: encargado || 'No especificado',
       area: selectedArea || (skipAreaSelection ? 'Sin área' : 'No especificada'),
@@ -1133,13 +1134,14 @@ const deleteRow = (codeToDelete: string) => {
     // Header Info
     doc.setFontSize(12);
     doc.setTextColor(0);
-    doc.text(`ENCARGADO: ${ticketData.encargado}`, 14, 40);
-    doc.text(`ÁREA: ${ticketData.area}`, 14, 47);
-    doc.text(`EMPACADOR: ${ticketData.packer}`, 14, 54);
+    doc.text(`TICKET ID: ${ticketData.ticketId}`, 14, 40);
+    doc.text(`ENCARGADO: ${ticketData.encargado}`, 14, 47);
+    doc.text(`ÁREA: ${ticketData.area}`, 14, 54);
+    doc.text(`EMPACADOR: ${ticketData.packer}`, 14, 61);
 
     // Table
     autoTable(doc, {
-      startY: 65,
+      startY: 75,
       head: [['SUBCATEGORÍA', 'CANTIDAD']],
       body: ticketData.items.map(item => [item.sub_cat, item.quantity]),
       theme: 'striped',
@@ -1148,7 +1150,7 @@ const deleteRow = (codeToDelete: string) => {
     });
 
     // Total
-    const finalY = (doc as any).lastAutoTable.finalY || 70;
+    const finalY = (doc as any).lastAutoTable.finalY || 80;
     doc.setFontSize(14);
     doc.setTextColor(0, 98, 65);
     doc.text(`TOTAL PIEZAS: ${ticketData.totalPieces}`, 14, finalY + 15);

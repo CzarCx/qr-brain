@@ -2,8 +2,10 @@
 'use client';
 
 import React, { forwardRef } from 'react';
+import Barcode from 'react-barcode';
 
 type TicketData = {
+  ticketId: string;
   date: string;
   encargado: string;
   area: string;
@@ -19,7 +21,7 @@ const TicketPreview = forwardRef<HTMLDivElement, { data: TicketData }>(({ data }
       className="p-6 bg-white text-black font-mono mx-auto shadow-sm print:shadow-none"
       style={{ 
         width: '80mm',
-        minHeight: '100mm',
+        minHeight: '120mm',
         fontSize: '12px',
         lineHeight: '1.3'
       }}
@@ -61,12 +63,23 @@ const TicketPreview = forwardRef<HTMLDivElement, { data: TicketData }>(({ data }
         </div>
       </div>
 
-      <div className="flex justify-between items-center pt-2 font-bold text-base">
+      <div className="flex justify-between items-center pt-2 font-bold text-base mb-6">
         <span>TOTAL PIEZAS:</span>
         <span>{data.totalPieces}</span>
       </div>
+
+      <div className="flex justify-center mb-4 mt-4">
+        <Barcode 
+          value={data.ticketId} 
+          width={1.5} 
+          height={40} 
+          fontSize={10}
+          background="transparent"
+          margin={0}
+        />
+      </div>
       
-      <div className="mt-10 text-center text-[9px] border-t border-black border-dashed pt-4">
+      <div className="mt-6 text-center text-[9px] border-t border-black border-dashed pt-4">
         <p>SISTEMA DE CONTROL DE CALIDAD</p>
         <p>PRODUCCIÓN EFICIENTE</p>
         <p className="mt-2 font-bold">*** FIN DE TICKET ***</p>
