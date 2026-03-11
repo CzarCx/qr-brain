@@ -7,9 +7,36 @@ import { Button } from "@/components/ui/button";
 import { Input } from '@/components/ui/input';
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertTriangle, Zap, ZoomIn, PlusCircle, CheckCircle, XCircle } from 'lucide-react';
+import { 
+  AlertTriangle, 
+  Zap, 
+  ZoomIn, 
+  PlusCircle, 
+  CheckCircle, 
+  XCircle, 
+  Trash2, 
+  Truck, 
+  Undo2,
+  PackageSearch
+} from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Combobox } from '@/components/ui/combobox';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 
 type Encargado = {
   name: string;
@@ -17,10 +44,14 @@ type Encargado = {
   organization: string;
 };
 
+type ReturnItem = {
+  code: string;
+  scannedAt: string;
+};
+
 export default function DevolucionesPage() {
   const [isMounted, setIsMounted] = useState(false);
   const [message, setMessage] = useState({ text: 'Apunte la cámara a un código QR.', type: 'info' as 'info' | 'success' | 'error' | 'warning', show: false });
-  const [lastScannedCode, setLastScannedCode] = useState<string | null>(null);
   const [scannerActive, setScannerActive] = useState(false);
   const [loading, setLoading] = useState(false);
   const [selectedScannerMode, setSelectedScannerMode] = useState('camara');
@@ -34,6 +65,11 @@ export default function DevolucionesPage() {
   const [showNotification, setShowNotification] = useState(false);
   const [notification, setNotification] = useState({ title: '', message: '', variant: 'default' as 'default' | 'destructive' | 'success' });
 
+  // Batch states
+  const [returnsList, setReturnsList] = useState<ReturnItem[]>([]);
+  const [isFinalizeModalOpen, setIsFinalizeModalOpen] = useState(false);
+  const [driverName, setDriverName] = useState('');
+  const [driverPlate, setDriverPlate] = useState('');
 
   const messageTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const html5QrCodeRef = useRef<Html5Qrcode | null>(null);
@@ -41,8 +77,9 @@ export default function DevolucionesPage() {
   const lastScanTimeRef = useRef(Date.now());
   const physicalScannerInputRef = useRef<HTMLInputElement | null>(null);
   const bufferRef = useRef('');
+  const scannedCodesSetRef = useRef(new Set<string>());
 
-  const MIN_SCAN_INTERVAL = 2000; // 2 seconds
+  const MIN_SCAN_INTERVAL = 1500;
 
   const showAppMessage = (text: string, type: 'success' | 'error' | 'info' | 'warning') => {
     if (messageTimeoutRef.current) {
@@ -133,11 +170,19 @@ export default function DevolucionesPage() {
     
     lastScanTimeRef.current = Date.now();
     setLoading(true);
-    showAppMessage('Procesando devolución...', 'info');
+    showAppMessage('Validando código...', 'info');
     if ('vibrate' in navigator) navigator.vibrate(100);
 
     let finalCode = decodedText.trim();
     
+    // Check if already in current list
+    if (scannedCodesSetRef.current.has(finalCode)) {
+        playWarningSound();
+        showAppMessage(`Código ya en la lista: ${finalCode}`, 'warning');
+        setLoading(false);
+        return;
+    }
+
     try {
         const { data: devolucionData, error: findError } = await supabaseEtiquetas
             .from('devoluciones_ml')
@@ -146,33 +191,32 @@ export default function DevolucionesPage() {
             .single();
 
         if (findError && findError.code !== 'PGRST116') {
-            throw new Error(`Error al buscar la devolución: ${findError.message}`);
+            throw new Error(`Error al buscar: ${findError.message}`);
         }
         
         if (!devolucionData) {
             playWarningSound();
             showModalNotification('No Encontrado', `La devolución con código ${finalCode} no existe en el sistema.`, 'destructive');
+            setLoading(false);
             return;
         }
 
         if (devolucionData.entregado) {
             playWarningSound();
-            showModalNotification('Ya Procesado', `Esta devolución ya fue marcada como entregada.`, 'warning');
+            showModalNotification('Ya Procesado', `Esta devolución ya fue marcada como entregada anteriormente.`, 'warning');
+            setLoading(false);
             return;
         }
         
-        const { error: updateError } = await supabaseEtiquetas
-            .from('devoluciones_ml')
-            .update({ entregado: true, name_inc: encargado })
-            .eq('code', finalCode);
-
-        if (updateError) {
-            throw new Error(`Error al actualizar la devolución: ${updateError.message}`);
-        }
-
+        // Add to list
         playBeep();
-        showModalNotification('¡Éxito!', `La devolución ${finalCode} se marcó como entregada.`, 'success');
-        setLastScannedCode(finalCode);
+        const newItem: ReturnItem = {
+            code: finalCode,
+            scannedAt: new Date().toLocaleTimeString()
+        };
+        setReturnsList(prev => [newItem, ...prev]);
+        scannedCodesSetRef.current.add(finalCode);
+        showAppMessage(`Añadido: ${finalCode}`, 'success');
 
     } catch (e: any) {
         playWarningSound();
@@ -180,8 +224,63 @@ export default function DevolucionesPage() {
     } finally {
         setLoading(false);
     }
-  }, [loading, encargado]);
+  }, [loading]);
   
+  const removeFromList = (code: string) => {
+      setReturnsList(prev => prev.filter(item => item.code !== code));
+      scannedCodesSetRef.current.delete(code);
+      showAppMessage(`Eliminado: ${code}`, 'info');
+  };
+
+  const handleOpenFinalizeModal = () => {
+      if (returnsList.length === 0) {
+          showAppMessage('No hay códigos en la lista.', 'warning');
+          return;
+      }
+      setIsFinalizeModalOpen(true);
+  };
+
+  const handleFinalizeReturns = async () => {
+      if (!driverName.trim() || !driverPlate.trim()) {
+          alert("Por favor, ingresa el nombre del conductor y las placas.");
+          return;
+      }
+
+      setLoading(true);
+      const codes = returnsList.map(item => item.code);
+
+      try {
+          const { error } = await supabaseEtiquetas
+              .from('devoluciones_ml')
+              .update({ 
+                  entregado: true, 
+                  name_inc: encargado,
+                  driver_name: driverName,
+                  driver_plate: driverPlate,
+                  date_entregado: new Date().toISOString()
+              })
+              .in('code', codes);
+
+          if (error) throw error;
+
+          playBeep();
+          showModalNotification('¡Éxito!', `Se procesaron ${codes.length} devoluciones correctamente.`, 'success');
+          
+          // Reset session
+          setReturnsList([]);
+          scannedCodesSetRef.current.clear();
+          setDriverName('');
+          setDriverPlate('');
+          setIsFinalizeModalOpen(false);
+
+      } catch (e: any) {
+          playWarningSound();
+          showModalNotification('Error al Guardar', e.message, 'destructive');
+      } finally {
+          setLoading(false);
+      }
+  };
+
   useEffect(() => {
     const handlePhysicalScannerInput = (event: KeyboardEvent) => {
         if (event.key === 'Enter') {
@@ -257,7 +356,7 @@ export default function DevolucionesPage() {
     if (scannerActive && selectedScannerMode === 'camara') {
       if (qrCode.getState() !== Html5QrcodeScannerState.SCANNING) {
         const config = {
-          fps: 5,
+          fps: 10,
           qrbox: { width: 250, height: 250 },
         };
         qrCode.start({ facingMode: "environment" }, config, onScanSuccess, (e: any) => {})
@@ -324,10 +423,13 @@ export default function DevolucionesPage() {
         <title>Módulo de Devoluciones</title>
       </Head>
       <main className="text-starbucks-dark flex items-center justify-center p-4">
-        <div className="w-full max-w-md mx-auto bg-starbucks-white rounded-xl shadow-2xl p-4 md:p-6 space-y-4">
+        <div className="w-full max-w-2xl mx-auto bg-starbucks-white rounded-xl shadow-2xl p-4 md:p-6 space-y-4">
           <header className="text-center">
+            <div className="inline-block p-3 bg-starbucks-cream rounded-full mb-2">
+                <Undo2 className="h-8 w-8 text-starbucks-green" />
+            </div>
             <h1 className="text-xl md:text-2xl font-bold text-starbucks-green">Módulo de Devoluciones</h1>
-            <p className="text-gray-600 text-sm mt-1">Escanea el QR para confirmar la devolución.</p>
+            <p className="text-gray-600 text-sm mt-1">Escanea los paquetes devueltos por la paquetería.</p>
           </header>
 
           {dbError && (
@@ -338,120 +440,210 @@ export default function DevolucionesPage() {
               </Alert>
           )}
 
-          <div className="space-y-4">
-              <div>
-                  <label htmlFor="encargado" className="block text-sm font-bold text-starbucks-dark mb-1">Nombre del Encargado:</label>
-                   <Combobox
-                      groupedOptions={groupedEncargadoOptions}
-                      value={encargado}
-                      onValueChange={setEncargado}
-                      placeholder="Selecciona un encargado..."
-                      emptyMessage="No se encontró encargado."
-                      buttonClassName="bg-transparent hover:bg-gray-50 border-input"
-                      disabled={scannerActive}
-                  />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-4">
+                  <div>
+                      <label htmlFor="encargado" className="block text-sm font-bold text-starbucks-dark mb-1">Nombre del Encargado:</label>
+                       <Combobox
+                          groupedOptions={groupedEncargadoOptions}
+                          value={encargado}
+                          onValueChange={setEncargado}
+                          placeholder="Selecciona un encargado..."
+                          emptyMessage="No se encontró encargado."
+                          buttonClassName="bg-transparent hover:bg-gray-50 border-input"
+                          disabled={scannerActive}
+                      />
+                  </div>
+
+                  <div>
+                      <label className="block text-sm font-bold text-starbucks-dark mb-1">Método de Escaneo:</label>
+                      <div className="grid grid-cols-2 gap-2">
+                          <button onClick={() => setSelectedScannerMode('camara')} className={`area-btn w-full px-4 py-3 text-sm rounded-md shadow-sm focus:outline-none ${selectedScannerMode === 'camara' ? 'scanner-mode-selected' : ''}`} disabled={scannerActive}>CÁMARA</button>
+                          <button onClick={() => setSelectedScannerMode('fisico')} className={`area-btn w-full px-4 py-3 text-sm rounded-md shadow-sm focus:outline-none ${selectedScannerMode === 'fisico' ? 'scanner-mode-selected' : ''}`} disabled={scannerActive}>ESCÁNER FÍSICO</button>
+                      </div>
+                  </div>
+                  
+                  <div className="p-4 bg-starbucks-cream rounded-lg border border-dashed border-gray-300">
+                      <label htmlFor="manual-code-input-devoluciones" className="block text-sm font-bold text-starbucks-dark mb-1">Ingreso Manual:</label>
+                      <div className="relative mt-1 flex items-center rounded-lg border border-input bg-background focus-within:ring-2 focus-within:ring-ring">
+                          <Input
+                              type="text"
+                              id="manual-code-input-devoluciones"
+                              className="w-full border-0 bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0"
+                              placeholder="Escriba el código..."
+                              onKeyDown={(e) => e.key === 'Enter' && handleManualAdd()}
+                          />
+                          <Button
+                              type="button"
+                              onClick={handleManualAdd}
+                              size="icon"
+                              className="h-8 w-8 bg-starbucks-green hover:bg-starbucks-dark text-white rounded-md mr-1"
+                          >
+                              <PlusCircle className="h-5 w-5" />
+                          </Button>
+                      </div>
+                  </div>
               </div>
 
-              <div>
-                  <label className="block text-sm font-bold text-starbucks-dark mb-1">Método de Escaneo:</label>
-                  <div className="grid grid-cols-2 gap-2">
-                      <button onClick={() => setSelectedScannerMode('camara')} className={`area-btn w-full px-4 py-3 text-sm rounded-md shadow-sm focus:outline-none ${selectedScannerMode === 'camara' ? 'scanner-mode-selected' : ''}`} disabled={scannerActive}>CÁMARA</button>
-                      <button onClick={() => setSelectedScannerMode('fisico')} className={`area-btn w-full px-4 py-3 text-sm rounded-md shadow-sm focus:outline-none ${selectedScannerMode === 'fisico' ? 'scanner-mode-selected' : ''}`} disabled={scannerActive}>ESCÁNER FÍSICO</button>
+              <div className="space-y-4">
+                  <div className="bg-starbucks-cream p-4 rounded-lg flex flex-col h-full">
+                    <div className="scanner-container relative flex-grow min-h-[200px]">
+                        <div id="reader" ref={readerRef} style={{ display: selectedScannerMode === 'camara' && scannerActive ? 'block' : 'none' }}></div>
+                        {message.show && (
+                            <div className={`scanner-message ${messageClasses[message.type]}`}>
+                                {message.text}
+                            </div>
+                        )}
+                        {scannerActive && selectedScannerMode === 'camara' && <div id="laser-line"></div>}
+                        <input type="text" id="physical-scanner-input" ref={physicalScannerInputRef} className="hidden-input" autoComplete="off" />
+                        {selectedScannerMode === 'camara' && !scannerActive && (
+                            <div className="text-center p-8 border-2 border-dashed border-gray-300 rounded-lg h-full flex items-center justify-center">
+                                <p className="text-gray-500">Cámara inactiva.</p>
+                            </div>
+                        )}
+                    </div>
+
+                    {isMobile && scannerActive && selectedScannerMode === 'camara' && cameraCapabilities && (
+                        <div id="camera-controls" className="flex items-center gap-4 mt-4 p-2 rounded-lg bg-gray-200">
+                            {cameraCapabilities.torch && (
+                                <Button variant="ghost" size="icon" onClick={() => setIsFlashOn(prev => !prev)} className={isFlashOn ? 'bg-yellow-400' : ''}>
+                                    <Zap className="h-5 w-5" />
+                                </Button>
+                            )}
+                            {cameraCapabilities.zoom && (
+                                 <div className="flex-1 flex items-center gap-2">
+                                    <ZoomIn className="h-5 w-5" />
+                                    <input
+                                        id="zoom-slider"
+                                        type="range"
+                                        min={cameraCapabilities.zoom.min}
+                                        max={cameraCapabilities.zoom.max}
+                                        step={cameraCapabilities.zoom.step}
+                                        value={zoom}
+                                        onChange={(e) => setZoom(parseFloat(e.target.value))}
+                                        className="w-full"
+                                    />
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    <div id="scanner-controls" className="mt-4 flex flex-wrap gap-2 justify-center">
+                      <Button onClick={() => { setScannerActive(true); showAppMessage('Apunte la cámara a un código QR.', 'info'); }} disabled={scannerActive || loading || !encargado} className="bg-blue-600 hover:bg-blue-700 text-sm">
+                        Iniciar
+                      </Button>
+                      <Button onClick={() => setScannerActive(false)} variant="destructive" className="text-sm" disabled={!scannerActive}>
+                        Detener
+                      </Button>
+                    </div>
                   </div>
               </div>
           </div>
-          
-          <div className="bg-starbucks-cream p-4 rounded-lg">
-            <div className="scanner-container relative">
-                <div id="reader" ref={readerRef} style={{ display: selectedScannerMode === 'camara' && scannerActive ? 'block' : 'none' }}></div>
-                {message.show && (
-                    <div className={`scanner-message ${messageClasses[message.type]}`}>
-                        {message.text}
-                    </div>
-                )}
-                {scannerActive && selectedScannerMode === 'camara' && <div id="laser-line"></div>}
-                <input type="text" id="physical-scanner-input" ref={physicalScannerInputRef} className="hidden-input" autoComplete="off" />
-                {selectedScannerMode === 'camara' && !scannerActive && (
-                    <div className="text-center p-8 border-2 border-dashed border-gray-300 rounded-lg">
-                        <p className="text-gray-500">La cámara está desactivada.</p>
-                    </div>
-                )}
-            </div>
 
-            {isMobile && scannerActive && selectedScannerMode === 'camara' && cameraCapabilities && (
-                <div id="camera-controls" className="flex items-center gap-4 mt-4 p-2 rounded-lg bg-gray-200">
-                    {cameraCapabilities.torch && (
-                        <Button variant="ghost" size="icon" onClick={() => setIsFlashOn(prev => !prev)} className={isFlashOn ? 'bg-yellow-400' : ''}>
-                            <Zap className="h-5 w-5" />
-                        </Button>
-                    )}
-                    {cameraCapabilities.zoom && (
-                         <div className="flex-1 flex items-center gap-2">
-                            <ZoomIn className="h-5 w-5" />
-                            <input
-                                id="zoom-slider"
-                                type="range"
-                                min={cameraCapabilities.zoom.min}
-                                max={cameraCapabilities.zoom.max}
-                                step={cameraCapabilities.zoom.step}
-                                value={zoom}
-                                onChange={(e) => setZoom(parseFloat(e.target.value))}
-                                className="w-full"
-                            />
-                        </div>
-                    )}
-                </div>
-            )}
-
-             {loading && (
-                <div className="flex justify-center items-center mt-4">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-starbucks-green"></div>
-                    <p className="ml-3">Procesando...</p>
-                </div>
-             )}
-            <div id="scanner-controls" className="mt-4 flex flex-wrap gap-2 justify-center">
-              <button onClick={() => { setScannerActive(true); setLastScannedCode(null); showAppMessage('Apunte la cámara a un código QR.', 'info'); }} disabled={scannerActive || loading || !encargado} className="px-4 py-2 text-white font-semibold rounded-lg shadow-md transition-colors duration-200 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-sm">
-                Iniciar
-              </button>
-              <button onClick={() => window.location.reload()} className="px-4 py-2 text-white font-semibold rounded-lg shadow-md transition-colors duration-200 bg-red-600 hover:bg-red-700 disabled:bg-gray-400 text-sm">
-                Refrescar
-              </button>
-            </div>
-             <div id="physical-scanner-status" className="mt-4 text-center p-2 rounded-md bg-starbucks-accent text-white" style={{ display: scannerActive && selectedScannerMode === 'fisico' ? 'block' : 'none' }}>
-                Escáner físico listo.
-            </div>
-          </div>
-          
-           <div className="p-4 bg-starbucks-cream rounded-lg">
-              <label htmlFor="manual-code-input-devoluciones" className="block text-sm font-bold text-starbucks-dark mb-1">Ingreso Manual:</label>
-              <div className="relative mt-1 flex items-center rounded-lg border border-input bg-background focus-within:ring-2 focus-within:ring-ring">
-                  <Input
-                      type="text"
-                      id="manual-code-input-devoluciones"
-                      className="w-full border-0 bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0"
-                      placeholder="Escriba el código..."
-                      onKeyDown={(e) => e.key === 'Enter' && handleManualAdd()}
-                  />
-                  <Button
-                      type="button"
-                      onClick={handleManualAdd}
-                      size="icon"
-                      className="h-8 w-8 bg-starbucks-green hover:bg-starbucks-dark text-white rounded-md mr-1"
+          <div className="space-y-4 border-t pt-4">
+              <div className="flex justify-between items-center">
+                  <h2 className="text-lg font-bold text-starbucks-dark flex items-center gap-2">
+                      <PackageSearch className="h-5 w-5 text-starbucks-green" />
+                      Lista de Escaneo ({returnsList.length})
+                  </h2>
+                  <Button 
+                    onClick={handleOpenFinalizeModal} 
+                    disabled={returnsList.length === 0 || loading}
+                    className="bg-starbucks-accent hover:bg-starbucks-green text-white font-bold"
                   >
-                      <PlusCircle className="h-5 w-5" />
+                      Finalizar y Guardar
                   </Button>
               </div>
-          </div>
 
-          <div id="result-container" className="space-y-4">
-            {!message.show && (
-                <div className="p-3 rounded-lg text-center font-semibold text-base bg-gray-100 text-gray-800">
-                    {lastScannedCode ? `Último escaneo: ${lastScannedCode}` : 'Esperando para escanear...'}
-                </div>
-            )}
+              <div className="table-container border border-gray-200 rounded-lg max-h-64 overflow-auto bg-white shadow-inner">
+                  <Table>
+                      <TableHeader className="sticky top-0 bg-gray-50 z-10">
+                          <TableRow>
+                              <TableHead className="w-16 text-center">#</TableHead>
+                              <TableHead>Código de Devolución</TableHead>
+                              <TableHead>Hora Escaneo</TableHead>
+                              <TableHead className="text-right">Acción</TableHead>
+                          </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                          {returnsList.length > 0 ? returnsList.map((item, index) => (
+                              <TableRow key={item.code}>
+                                  <TableCell className="text-center font-bold text-gray-400">{index + 1}</TableCell>
+                                  <TableCell className="font-mono text-sm">{item.code}</TableCell>
+                                  <TableCell className="text-xs text-gray-500">{item.scannedAt}</TableCell>
+                                  <TableCell className="text-right">
+                                      <Button 
+                                        variant="ghost" 
+                                        size="icon" 
+                                        onClick={() => removeFromList(item.code)} 
+                                        className="text-red-500 hover:text-red-700 h-8 w-8"
+                                      >
+                                          <Trash2 className="h-4 w-4" />
+                                      </Button>
+                                  </TableCell>
+                              </TableRow>
+                          )) : (
+                              <TableRow>
+                                  <TableCell colSpan={4} className="text-center text-gray-500 py-12">
+                                      No has escaneado ninguna devolución todavía.
+                                  </TableCell>
+                              </TableRow>
+                          )}
+                      </TableBody>
+                  </Table>
+              </div>
           </div>
         </div>
       </main>
+
+      {/* Modal Finalizar Devoluciones */}
+      <Dialog open={isFinalizeModalOpen} onOpenChange={setIsFinalizeModalOpen}>
+          <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2 text-starbucks-green">
+                      <Truck className="h-6 w-6" />
+                      Confirmar Transporte de Devolución
+                  </DialogTitle>
+                  <DialogDescription>
+                      Ingresa los datos del transporte que trae las {returnsList.length} devoluciones.
+                  </DialogDescription>
+              </DialogHeader>
+              <div className="grid gap-4 py-4">
+                  <div className="space-y-2">
+                      <Label htmlFor="driver-name" className="font-bold">Nombre del Conductor:</Label>
+                      <Input
+                          id="driver-name"
+                          value={driverName}
+                          onChange={(e) => setDriverName(e.target.value)}
+                          placeholder="Ej. Juan Pérez"
+                          className="bg-transparent"
+                      />
+                  </div>
+                  <div className="space-y-2">
+                      <Label htmlFor="driver-plate" className="font-bold">Placas del Auto:</Label>
+                      <Input
+                          id="driver-plate"
+                          value={driverPlate}
+                          onChange={(e) => setDriverPlate(e.target.value)}
+                          placeholder="Ej. ABC-1234"
+                          className="bg-transparent"
+                      />
+                  </div>
+              </div>
+              <DialogFooter className="flex flex-col sm:flex-row gap-2">
+                  <Button variant="outline" onClick={() => setIsFinalizeModalOpen(false)} className="w-full sm:w-auto">
+                      Cancelar
+                  </Button>
+                  <Button 
+                    onClick={handleFinalizeReturns} 
+                    disabled={loading || !driverName.trim() || !driverPlate.trim()}
+                    className="w-full sm:w-auto bg-starbucks-green hover:bg-starbucks-dark text-white"
+                  >
+                      {loading ? 'Guardando...' : 'Confirmar y Guardar'}
+                  </Button>
+              </DialogFooter>
+          </DialogContent>
+      </Dialog>
 
       {showNotification && (
           <div id="notification-overlay" className="p-4 fixed inset-0 bg-black/75 flex justify-center items-center z-[100]" onClick={() => setShowNotification(false)}>
