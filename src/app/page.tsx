@@ -46,6 +46,7 @@ import { useReactToPrint } from "react-to-print";
 import TicketPreview from "@/components/TicketPreview";
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { Textarea } from '@/components/ui/textarea';
 
 
 type ScannedItem = {
@@ -170,6 +171,12 @@ export default function Home() {
   const [timerStartTime, setTimerStartTime] = useState<Date | null>(null);
   const [elapsedTime, setElapsedTime] = useState(0);
   const [isPrintDialogOpen, setIsPrintDialogOpen] = useState(false);
+
+  // States for deleting batch audit
+  const [isDeleteLoteModalOpen, setIsDeleteLoteModalOpen] = useState(false);
+  const [loteIdToDelete, setLoteIdToDelete] = useState('');
+  const [deleteLoteName, setDeleteLoteName] = useState('');
+  const [deleteLoteReason, setDeleteLoteReason] = useState('');
 
 
   // Refs para elementos del DOM y la instancia del escáner
@@ -1511,19 +1518,48 @@ const deleteRow = (codeToDelete: string) => {
     }
 };
 
-  const handleDeleteLote = async (lote_p: string) => {
+  const openDeleteLoteModal = (lote_p: string) => {
+    setLoteIdToDelete(lote_p);
+    setIsDeleteLoteModalOpen(true);
+  };
+
+  const handleFinalDeleteLote = async () => {
+    if (!deleteLoteName.trim() || !deleteLoteReason.trim()) {
+        alert("Por favor, completa tu nombre y el motivo.");
+        return;
+    }
+
     setLoading(true);
-    showAppMessage(`Eliminando lote ${lote_p}...`, 'info');
     try {
-      const { error } = await supabase
+      // 1. Guardar auditoria en drop_lote
+      const { error: auditError } = await supabase
+        .from('drop_lote')
+        .insert([{
+            name: deleteLoteName.trim(),
+            d_reason: deleteLoteReason.trim(),
+            lote_p: loteIdToDelete,
+            deleted_at: new Date().toISOString()
+        }]);
+
+      if (auditError) throw new Error(`Error al registrar auditoría: ${auditError.message}`);
+
+      // 2. Eliminar de personal_prog
+      const { error: deleteError } = await supabase
         .from('personal_prog')
         .delete()
-        .eq('lote_p', lote_p);
+        .eq('lote_p', loteIdToDelete);
 
-      if (error) throw error;
+      if (deleteError) throw deleteError;
 
-      showModalNotification('¡Éxito!', `El lote ${lote_p} ha sido eliminado.`, 'success');
+      showModalNotification('¡Éxito!', `El lote ${loteIdToDelete} ha sido eliminado y auditado.`, 'success');
+      
+      // Resetear estados
+      setIsDeleteLoteModalOpen(false);
+      setLoteIdToDelete('');
+      setDeleteLoteName('');
+      setDeleteLoteReason('');
       fetchCreatedLotes();
+
     } catch (error: any) {
       showModalNotification('Error', `No se pudo eliminar el lote: ${error.message}`, 'destructive');
     } finally {
@@ -1886,28 +1922,9 @@ const deleteRow = (codeToDelete: string) => {
                                     <TableCell className="font-semibold">{lote.count}</TableCell>
                                     <TableCell>{formatTotalTime(lote.total_esti_time)}</TableCell>
                                     <TableCell className="text-right">
-                                      <AlertDialog>
-                                          <AlertDialogTrigger asChild>
-                                              <Button variant="ghost" size="icon" className="text-red-500 hover:text-red-600 h-8 w-8">
-                                                  <Trash2 className="h-4 w-4" />
-                                              </Button>
-                                          </AlertDialogTrigger>
-                                          <AlertDialogContent>
-                                              <AlertDialogHeader>
-                                                  <AlertDialogTitle>¿Estás absolutamente seguro?</AlertDialogTitle>
-                                                  <AlertDialogDescription>
-                                                      Esta acción no se puede deshacer. Esto eliminará permanentemente el lote
-                                                      <span className="font-bold"> {lote.lote_p}</span> y todos sus registros asociados.
-                                                  </AlertDialogDescription>
-                                              </AlertDialogHeader>
-                                              <AlertDialogFooter>
-                                                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                                  <AlertDialogAction onClick={() => handleDeleteLote(lote.lote_p)} className="bg-destructive hover:bg-destructive/90">
-                                                      Eliminar Lote
-                                                  </AlertDialogAction>
-                                              </AlertDialogFooter>
-                                          </AlertDialogContent>
-                                      </AlertDialog>
+                                      <Button variant="ghost" size="icon" onClick={() => openDeleteLoteModal(lote.lote_p)} className="text-red-500 hover:text-red-600 h-8 w-8">
+                                          <Trash2 className="h-4 w-4" />
+                                      </Button>
                                     </TableCell>
                                 </TableRow>
                             )) : (
@@ -2178,7 +2195,7 @@ const deleteRow = (codeToDelete: string) => {
 
             {loading && <div id="loading-overlay" style={{display: 'flex'}}>
                 <div className="overlay-spinner"></div>
-                <p className="text-lg font-semibold">Enviando registros...</p>
+                <p className="text-lg font-semibold">Procesando...</p>
             </div>}
 
             {showNotification && (
@@ -2225,6 +2242,55 @@ const deleteRow = (codeToDelete: string) => {
                         </Button>
                         <Button onClick={() => reactToPrintFn()} className="bg-starbucks-green hover:bg-starbucks-dark flex-1">
                             <Printer className="mr-2 h-4 w-4" /> Imprimir
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Modal de auditoría para borrado de lote */}
+            <Dialog open={isDeleteLoteModalOpen} onOpenChange={setIsDeleteLoteModalOpen}>
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2 text-red-600">
+                            <Trash2 className="h-6 w-6" />
+                            Eliminar Lote Programado
+                        </DialogTitle>
+                        <DialogDescription>
+                            Para eliminar el lote <span className="font-bold text-black">{loteIdToDelete}</span>, es necesario registrar el responsable y el motivo.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="grid gap-4 py-4">
+                        <div className="space-y-2">
+                            <Label htmlFor="delete-name" className="font-bold">Tu Nombre:</Label>
+                            <Input
+                                id="delete-name"
+                                value={deleteLoteName}
+                                onChange={(e) => setDeleteLoteName(e.target.value)}
+                                placeholder="Escribe tu nombre completo"
+                                className="bg-transparent"
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="delete-reason" className="font-bold">Motivo del Borrado:</Label>
+                            <Textarea
+                                id="delete-reason"
+                                value={deleteLoteReason}
+                                onChange={(e) => setDeleteLoteReason(e.target.value)}
+                                placeholder="Explica por qué se elimina este lote (ej. Error de asignación, cambio de turno...)"
+                                className="bg-transparent min-h-[100px]"
+                            />
+                        </div>
+                    </div>
+                    <DialogFooter className="flex flex-col sm:flex-row gap-2">
+                        <Button variant="outline" onClick={() => { setIsDeleteLoteModalOpen(false); setDeleteLoteName(''); setDeleteLoteReason(''); }} className="w-full sm:w-auto">
+                            Cancelar
+                        </Button>
+                        <Button 
+                            onClick={handleFinalDeleteLote} 
+                            disabled={loading || !deleteLoteName.trim() || !deleteLoteReason.trim()}
+                            className="w-full sm:w-auto bg-red-600 hover:bg-red-700 text-white font-bold"
+                        >
+                            {loading ? 'Procesando...' : 'Confirmar Eliminación'}
                         </Button>
                     </DialogFooter>
                 </DialogContent>
