@@ -1,4 +1,3 @@
-
 'use client';
 import React, {useEffect, useRef, useState, useCallback, useMemo} from 'react';
 import Head from 'next/head';
@@ -1120,14 +1119,19 @@ const deleteRow = (codeToDelete: string) => {
     });
 
     const now = new Date();
-    // Hora estimada de entrega (+1 hora por defecto como en la imagen)
-    const deadline = new Date(now.getTime() + 60 * 60 * 1000);
+    // Calculate real deadline based on total estimated time (sequential)
+    let cumulativeTime = now;
+    scannedData.forEach(item => {
+      if (item.esti_time) {
+        cumulativeTime = new Date(cumulativeTime.getTime() + item.esti_time * 60000);
+      }
+    });
 
     return {
       ticketId: `TKT-${Date.now()}`,
       date: now.toLocaleDateString('es-MX', { day: 'numeric', month: 'numeric', year: '2-digit' }),
       time: now.toLocaleTimeString('es-MX', { hour: 'numeric', minute: '2-digit', second: '2-digit' }),
-      deadline: deadline.toLocaleTimeString('es-MX', { hour: 'numeric', minute: '2-digit' }),
+      deadline: cumulativeTime.toLocaleTimeString('es-MX', { hour: 'numeric', minute: '2-digit' }),
       encargado: encargado || 'No especificado',
       area: selectedArea || (skipAreaSelection ? 'QUINTA' : 'No especificada'),
       packer: selectedPersonal || 'No seleccionado',
@@ -1468,7 +1472,7 @@ const deleteRow = (codeToDelete: string) => {
     } finally {
         setLoading(false);
     }
-  };
+};
 
  const handleVerifyCode = async () => {
     if (!encargado.trim()) {
@@ -2245,7 +2249,7 @@ const deleteRow = (codeToDelete: string) => {
                     <DialogHeader className="p-4 bg-white border-b flex flex-row items-center justify-between space-y-0">
                         <DialogTitle className="text-starbucks-green">Vista Previa de Ticket</DialogTitle>
                     </DialogHeader>
-                    <div className="max-h-[70vh] overflow-y-auto p-4 flex justify-center bg-gray-200">
+                    <div className="max-h-[80vh] overflow-y-auto p-4 flex justify-center bg-gray-200">
                         <TicketPreview ref={printRef} data={ticketData} />
                     </div>
                     <DialogFooter className="p-4 bg-white border-t sm:justify-center flex flex-row gap-3">
