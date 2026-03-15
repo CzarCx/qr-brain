@@ -1,4 +1,3 @@
-
 'use client';
 import React, {useEffect, useRef, useState, useCallback, useMemo} from 'react';
 import Head from 'next/head';
@@ -107,14 +106,6 @@ type DbStatus = {
 type VerificationResult = {
     status: 'verified' | 'not-found' | 'error' | 'pending';
     message: string;
-};
-
-
-// Helper function to check if a string is likely a name
-const isLikelyName = (text: string): boolean => {
-  const trimmed = text.trim();
-  // Not a number, has spaces, and more than 5 chars.
-  return isNaN(Number(trimmed)) && trimmed.includes(' ') && trimmed.length > 5;
 };
 
 
@@ -1107,21 +1098,44 @@ const deleteRow = (codeToDelete: string) => {
   };
 
   const ticketData = useMemo(() => {
-    const aggregation: Record<string, number> = {};
+    // 1. Resumen: Agrupar por subcategoría para sumar piezas y contar etiquetas/pedidos
+    const resumenMap: Record<string, { pieces: number, orders: number }> = {};
+    
+    // 2. Desglose: Agrupar por subcategoría Y cantidad específica
+    const desgloseMap: Record<string, number> = {};
+
     scannedData.forEach(item => {
       const cat = item.subcategoria || item.sku || 'SIN CATEGORÍA';
       const qty = item.cantidad || 0;
-      aggregation[cat] = (aggregation[cat] || 0) + qty;
+      
+      // Lógica Resumen
+      if (!resumenMap[cat]) resumenMap[cat] = { pieces: 0, orders: 0 };
+      resumenMap[cat].pieces += qty;
+      resumenMap[cat].orders += 1;
+
+      // Lógica Desglose
+      const key = `${qty}|${cat}`;
+      desgloseMap[key] = (desgloseMap[key] || 0) + 1;
     });
+
+    const now = new Date();
+    // Hora estimada de entrega (+1 hora por defecto como en la imagen)
+    const deadline = new Date(now.getTime() + 60 * 60 * 1000);
 
     return {
       ticketId: `TKT-${Date.now()}`,
-      date: new Date().toLocaleString('es-MX'),
+      date: now.toLocaleDateString('es-MX', { day: 'numeric', month: 'numeric', year: '2-digit' }),
+      time: now.toLocaleTimeString('es-MX', { hour: 'numeric', minute: '2-digit', second: '2-digit' }),
+      deadline: deadline.toLocaleTimeString('es-MX', { hour: 'numeric', minute: '2-digit' }),
       encargado: encargado || 'No especificado',
-      area: selectedArea || (skipAreaSelection ? 'Sin área' : 'No especificada'),
+      area: selectedArea || (skipAreaSelection ? 'QUINTA' : 'No especificada'),
       packer: selectedPersonal || 'No seleccionado',
-      items: Object.entries(aggregation).map(([sub_cat, quantity]) => ({ sub_cat, quantity })),
-      totalPieces: Object.values(aggregation).reduce((a, b) => a + b, 0),
+      resumen: Object.entries(resumenMap).map(([sub_cat, data]) => ({ sub_cat, ...data })),
+      desglose: Object.entries(desgloseMap).map(([key, packages]) => {
+        const [units, sub_cat] = key.split('|');
+        return { units: Number(units), sub_cat, packages };
+      }),
+      totalPaquetes: scannedData.length,
     };
   }, [scannedData, encargado, selectedArea, skipAreaSelection, selectedPersonal]);
 
@@ -1136,7 +1150,7 @@ const deleteRow = (codeToDelete: string) => {
     
     doc.setFontSize(10);
     doc.setTextColor(100);
-    doc.text(ticketData.date, pageWidth / 2, 28, { align: "center" });
+    doc.text(`${ticketData.date} ${ticketData.time}`, pageWidth / 2, 28, { align: "center" });
 
     // Header Info
     doc.setFontSize(12);
@@ -1149,8 +1163,8 @@ const deleteRow = (codeToDelete: string) => {
     // Table
     autoTable(doc, {
       startY: 75,
-      head: [['SUBCATEGORÍA', 'CANTIDAD']],
-      body: ticketData.items.map(item => [item.sub_cat, item.quantity]),
+      head: [['PIEZAS', 'SUBCATEGORÍA', 'PEDIDOS']],
+      body: ticketData.resumen.map(item => [item.pieces, item.sub_cat, item.orders]),
       theme: 'striped',
       headStyles: { fillColor: [0, 98, 65] }, // Starbucks Green
       styles: { cellPadding: 3, fontSize: 10 },
@@ -1160,7 +1174,7 @@ const deleteRow = (codeToDelete: string) => {
     const finalY = (doc as any).lastAutoTable.finalY || 80;
     doc.setFontSize(14);
     doc.setTextColor(0, 98, 65);
-    doc.text(`TOTAL PIEZAS: ${ticketData.totalPieces}`, 14, finalY + 15);
+    doc.text(`TOTAL PAQUETES: ${ticketData.totalPaquetes}`, 14, finalY + 15);
 
     doc.setFontSize(9);
     doc.setTextColor(150);
