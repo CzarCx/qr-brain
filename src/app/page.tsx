@@ -1,3 +1,4 @@
+
 'use client';
 import React, {useEffect, useRef, useState, useCallback, useMemo} from 'react';
 import Head from 'next/head';
@@ -2240,7 +2241,7 @@ const deleteRow = (codeToDelete: string) => {
             </div>}
 
             <Dialog open={isPrintDialogOpen} onOpenChange={setIsPrintDialogOpen}>
-                <DialogContent className="max-w-[400px] bg-gray-100 p-0 overflow-hidden sm:rounded-xl border-none">
+                <DialogContent className="max-w-[500px] bg-gray-100 p-0 overflow-hidden sm:rounded-xl border-none">
                     <DialogHeader className="p-4 bg-white border-b flex flex-row items-center justify-between space-y-0">
                         <DialogTitle className="text-starbucks-green">Vista Previa de Ticket</DialogTitle>
                     </DialogHeader>
