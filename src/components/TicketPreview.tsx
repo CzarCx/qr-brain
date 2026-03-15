@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { forwardRef } from 'react';
@@ -20,148 +21,103 @@ const TicketPreview = forwardRef<HTMLDivElement, { data: TicketData }>(({ data }
   return (
     <div 
       ref={ref} 
-      className="p-4 bg-white text-black font-sans mx-auto shadow-sm print:shadow-none"
+      className="p-6 bg-white text-black font-mono mx-auto shadow-sm print:shadow-none"
       style={{ 
         width: '80mm',
-        minHeight: '120mm',
-        fontSize: '11px',
-        lineHeight: '1.2'
+        fontSize: '12px',
+        lineHeight: '1.4',
+        color: 'black'
       }}
     >
-      {/* Header Grid */}
-      <div className="border-[1.5px] border-black">
-        {/* TICKET PICKER */}
-        <div className="text-center font-bold border-b border-black py-1 uppercase text-sm">
-          TICKET PICKER
+      {/* Centered Header */}
+      <div className="text-center space-y-1 mb-4">
+        <h1 className="text-lg font-bold uppercase tracking-tighter">Ticket de Requerimientos</h1>
+        <p className="text-[10px] uppercase font-bold">Bodega de Producción</p>
+        <p className="text-[10px]">{data.date} - {data.time}</p>
+      </div>
+
+      <div className="border-t border-dashed border-black my-2"></div>
+
+      {/* Info Section */}
+      <div className="space-y-1 text-[11px] uppercase">
+        <div className="flex justify-between gap-2">
+          <span className="flex-shrink-0">ENCARGADO:</span>
+          <span className="font-bold truncate text-right">{data.encargado}</span>
         </div>
-
-        {/* Date and Time Row */}
-        <div className="grid grid-cols-2 border-b border-black">
-          <div className="border-r border-black px-2 py-1 text-center font-bold">{data.date}</div>
-          <div className="px-2 py-1 text-center font-bold">{data.time}</div>
+        <div className="flex justify-between gap-2">
+          <span className="flex-shrink-0">AREA:</span>
+          <span className="font-bold text-right">{data.area}</span>
         </div>
-
-        {/* Deadline Row */}
-        <div className="grid grid-cols-2 border-b border-black">
-          <div className="border-r border-black px-2 py-1 text-center font-bold text-red-600">{data.deadline}</div>
-          <div className="px-2 py-1"></div>
+        <div className="flex justify-between gap-2 border-b border-black pb-1">
+          <span className="flex-shrink-0">EMPACADOR:</span>
+          <span className="font-bold text-right">{data.packer}</span>
         </div>
-
-        {/* Total Highlight Row */}
-        <div className="grid grid-cols-2 border-b border-black">
-          <div className="bg-[#ffff00] border-r border-black px-2 py-1 text-center font-bold">{data.totalPaquetes}</div>
-          <div className="px-2 py-1"></div>
+        <div className="flex justify-between pt-1 font-bold">
+          <span>HORA LÍMITE:</span>
+          <span className="text-sm">{data.deadline}</span>
         </div>
+      </div>
 
-        {/* Encargado Name */}
-        <div className="text-center border-b border-black py-1 px-1 font-bold uppercase text-[10px]">
-          {data.encargado}
+      <div className="border-t border-dashed border-black my-2"></div>
+
+      {/* Resumen Section */}
+      <div className="space-y-1">
+        <div className="flex justify-between font-bold text-[10px] border-b border-black mb-1">
+          <span>SUBCATEGORIA</span>
+          <span>PIEZAS</span>
         </div>
-
-        {/* Area Name */}
-        <div className="grid grid-cols-2 border-b border-black">
-          <div className="border-r border-black px-2 py-1 font-bold uppercase">{data.area}</div>
-          <div className="px-2 py-1"></div>
-        </div>
-
-        {/* Packer Name */}
-        <div className="text-center border-b border-black py-1 px-1 font-bold uppercase text-[10px]">
-          {data.packer}
-        </div>
-
-        <div className="py-1"></div>
-
-        {/* Resumen Table Headers */}
-        <div className="grid grid-cols-[60px_1fr_60px] border-t border-b border-black font-bold text-center uppercase text-[9px]">
-          <div className="border-r border-black py-1">PIEZAS</div>
-          <div className="border-r border-black py-1">SUBCATEGORIA</div>
-          <div className="py-1 text-red-600">PEDIDOS</div>
-        </div>
-
-        {/* Resumen Rows */}
         {data.resumen.map((item, index) => (
-          <div key={index} className="grid grid-cols-[60px_1fr_60px] border-b border-black text-center text-[10px]">
-            <div className="border-r border-black py-1 font-bold">{item.pieces}</div>
-            <div className="bg-[#d9ead3] border-r border-black py-1 px-1 text-left font-bold uppercase text-[9px] leading-tight flex items-center">
-              {item.sub_cat}
-            </div>
-            <div className="py-1 font-bold text-red-600">{item.orders}</div>
+          <div key={index} className="flex justify-between items-start gap-2 text-[11px]">
+            <span className="uppercase text-left flex-1 break-words">{item.sub_cat}</span>
+            <span className="font-bold flex-shrink-0">{item.pieces}</span>
           </div>
         ))}
+      </div>
 
-        <div className="py-1 bg-white"></div>
+      <div className="border-t border-dashed border-black my-2"></div>
 
-        {/* Barcode Section Header */}
-        <div className="border-t border-b border-black px-2 py-1 font-bold text-red-600 text-[9px]">
-          CODIGO DE BARRA
+      {/* Desglose Section */}
+      <div className="text-center font-bold text-[10px] uppercase mb-2 underline decoration-dotted underline-offset-4">Desglose de Pedidos</div>
+      <div className="space-y-1">
+        <div className="flex justify-between font-bold text-[9px] border-b border-black mb-1">
+          <span>UNIDADES X PAQUETE</span>
+          <span>BULTOS</span>
         </div>
-
-        {/* DESGLOSE HEADER */}
-        <div className="text-center border-b border-black py-1 font-bold uppercase text-[10px]">
-          DESGLOSE DE PEDIDOS
-        </div>
-
-        {/* Desglose Table Headers */}
-        <div className="grid grid-cols-[70px_1fr_60px] border-b border-black font-bold text-center uppercase text-[8px]">
-          <div className="border-r border-black flex flex-col justify-center items-center py-1 leading-tight">
-            <span>UNIDADES</span>
-            <span>DENTRO</span>
-            <span>DEL</span>
-            <span>PAQUETE</span>
-          </div>
-          <div className="border-r border-black flex items-end justify-center py-1">
-            SUBCATEGORIA
-          </div>
-          <div className="flex flex-col justify-center items-center py-1 leading-tight">
-            <span># DE</span>
-            <span>PAQUETES</span>
-          </div>
-        </div>
-
-        {/* Desglose Rows */}
         {data.desglose.map((item, index) => (
-          <div key={index} className="grid grid-cols-[70px_1fr_60px] border-b border-black text-center text-[10px]">
-            <div className="border-r border-black py-1 font-bold flex items-center justify-center">{item.units}</div>
-            <div className="bg-[#d9ead3] border-r border-black py-1 px-1 text-left font-bold uppercase text-[9px] leading-tight flex items-center">
-              {item.sub_cat}
-            </div>
-            <div className="py-1 font-bold flex items-center justify-center">{item.packages}</div>
+          <div key={index} className="flex justify-between text-[10px] leading-tight mb-1">
+            <span className="uppercase flex-1 pr-2">{item.units} UND - {item.sub_cat}</span>
+            <span className="font-bold flex-shrink-0">x{item.packages}</span>
           </div>
         ))}
+      </div>
 
-        <div className="py-1 bg-white"></div>
+      <div className="border-t-2 border-black my-3"></div>
 
-        {/* Total Footer */}
-        <div className="grid grid-cols-[1fr_60px] border-t border-black">
-          <div className="border-r border-black px-2 py-1 text-right font-bold text-[9px] flex items-center justify-end">
-            TOTAL DE PAQUETES
-          </div>
-          <div className="bg-[#ffff00] py-1 font-bold text-center flex items-center justify-center">
-            {data.totalPaquetes}
-          </div>
-        </div>
-
-        {/* Barcode Footer Header */}
-        <div className="border-t border-black px-2 py-1 font-bold text-red-600 text-[9px]">
-          CODIGO DE BARRAS
-        </div>
+      {/* Totals */}
+      <div className="flex justify-between items-center font-bold text-sm py-1">
+        <span>TOTAL PAQUETES:</span>
+        <span className="text-xl border-2 border-black px-2">{data.totalPaquetes}</span>
       </div>
 
       {/* Barcode Render */}
-      <div className="flex justify-center mt-4">
+      <div className="flex flex-col items-center justify-center mt-6 space-y-1">
         <Barcode 
           value={data.ticketId} 
           width={1.2} 
-          height={30} 
-          fontSize={8}
+          height={35} 
+          fontSize={10}
           background="transparent"
           margin={0}
         />
+        <p className="text-[9px] font-bold tracking-widest">{data.ticketId}</p>
       </div>
       
-      <div className="mt-4 text-center text-[8px] space-y-1">
-        <p className="font-bold">SISTEMA DE CONTROL DE CALIDAD - PRODUCCIÓN EFICIENTE</p>
-        <p className="font-bold">*** FIN DE TICKET ***</p>
+      <div className="border-t border-dashed border-black mt-4 mb-2"></div>
+
+      <div className="text-center text-[9px] font-bold space-y-1">
+        <p>SISTEMA DE CONTROL DE CALIDAD</p>
+        <p>PRODUCCIÓN EFICIENTE</p>
+        <p className="pt-2">*** FIN DE TICKET ***</p>
       </div>
     </div>
   );
