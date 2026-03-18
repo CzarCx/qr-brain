@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { forwardRef } from 'react';
@@ -21,12 +20,13 @@ const TicketPreview = forwardRef<HTMLDivElement, { data: TicketData }>(({ data }
   return (
     <div 
       ref={ref} 
-      className="p-8 bg-white text-black font-mono mx-auto shadow-sm print:shadow-none"
+      className="p-8 bg-white text-black font-mono mx-auto shadow-sm print:shadow-none flex flex-col min-h-max h-auto"
       style={{ 
         width: '90mm',
         fontSize: '14px',
         lineHeight: '1.5',
-        color: 'black'
+        color: 'black',
+        backgroundColor: 'white'
       }}
     >
       {/* Centered Header */}
@@ -74,12 +74,12 @@ const TicketPreview = forwardRef<HTMLDivElement, { data: TicketData }>(({ data }
         ))}
       </div>
 
-      {/* Desglose Section - Rediseñado según la imagen */}
+      {/* Desglose Section */}
       <div className="text-center font-bold text-sm uppercase mb-3 underline decoration-dotted underline-offset-4">
         Desglose de Pedidos
       </div>
       
-      <div className="space-y-1">
+      <div className="space-y-1 mb-4">
         <div className="flex justify-between font-bold text-[11px] border-b border-black mb-2">
           <span>UNIDADES X PAQUETE</span>
           <span>BULTOS</span>
@@ -97,7 +97,7 @@ const TicketPreview = forwardRef<HTMLDivElement, { data: TicketData }>(({ data }
       <div className="border-t-2 border-black my-6"></div>
 
       {/* Totals Section with Box */}
-      <div className="flex justify-between items-center py-2">
+      <div className="flex justify-between items-center py-2 mb-6">
         <span className="text-lg font-bold uppercase">Total Paquetes:</span>
         <div className="border-4 border-black px-4 py-1 flex items-center justify-center">
           <span className="text-3xl font-bold">{data.totalPaquetes}</span>
@@ -105,7 +105,8 @@ const TicketPreview = forwardRef<HTMLDivElement, { data: TicketData }>(({ data }
       </div>
 
       {/* Barcode Render */}
-      <div className="flex flex-col items-center justify-center mt-10 space-y-1">
+      <div className="flex flex-col items-center justify-center mt-4 space-y-1">
+        <div className="font-bold text-sm uppercase mb-1">Código de Barra</div>
         <Barcode 
           value={data.ticketId} 
           width={1.5} 
@@ -117,13 +118,12 @@ const TicketPreview = forwardRef<HTMLDivElement, { data: TicketData }>(({ data }
         />
         <div className="text-center font-bold text-xs space-y-0.5 mt-2">
           <p>{data.ticketId}</p>
-          <p>{data.ticketId}</p>
         </div>
       </div>
       
       <div className="border-t border-dashed border-black mt-8 mb-4"></div>
 
-      <div className="text-center text-[10px] font-bold space-y-1 uppercase">
+      <div className="text-center text-[10px] font-bold space-y-1 uppercase mt-auto">
         <p>Sistema de Control de Calidad</p>
         <p>Producción Eficiente</p>
         <p className="pt-4">*** Fin de Ticket ***</p>

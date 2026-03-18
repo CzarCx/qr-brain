@@ -600,7 +600,7 @@ export default function Home() {
                 place: skipAreaSelection ? null : selectedArea,
                 product: item.producto,
                 quantity: item.cantidad,
-                organization: item.empresa,
+                organization: item.organization,
                 sales_num: item.venta ? Number(item.venta) : null,
                 date: associationTimestamp.toISOString(),
                 status: 'ASIGNADO',
@@ -856,7 +856,7 @@ export default function Home() {
             .eq('code', finalCode)
             .single();
         
-        if (fullEtiquetaError && fullEtiquetaError.code !== 'PGRST116') {
+        if (fullEtiquetaDataError && fullEtiquetaError.code !== 'PGRST116') {
             throw new Error(`Error al buscar detalles en 'etiquetas_i': ${fullEtiquetaError.message}`);
         }
 
@@ -2249,8 +2249,10 @@ const deleteRow = (codeToDelete: string) => {
                     <DialogHeader className="p-4 bg-white border-b flex flex-row items-center justify-between space-y-0">
                         <DialogTitle className="text-starbucks-green">Vista Previa de Ticket</DialogTitle>
                     </DialogHeader>
-                    <div className="max-h-[80vh] overflow-y-auto p-4 flex justify-center bg-gray-200">
-                        <TicketPreview ref={printRef} data={ticketData} />
+                    <div className="max-h-[80vh] overflow-y-auto p-4 bg-gray-200">
+                        <div className="flex justify-center w-full min-h-full">
+                            <TicketPreview ref={printRef} data={ticketData} />
+                        </div>
                     </div>
                     <DialogFooter className="p-4 bg-white border-t sm:justify-center flex flex-row gap-3">
                         <Button variant="outline" onClick={() => setIsPrintDialogOpen(false)} className="flex-1 border-gray-300">
