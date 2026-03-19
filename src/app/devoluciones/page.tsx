@@ -46,6 +46,7 @@ type Encargado = {
 
 type ReturnItem = {
   code: string;
+  sales_num: string | number;
   scannedAt: string;
 };
 
@@ -184,26 +185,47 @@ export default function DevolucionesPage() {
     }
 
     try {
-        const { data: devolucionData, error: findError } = await supabaseEtiquetas
-            .from('devoluciones_ml')
-            .select('code, entregado')
+        // PASO 1: Buscar en tabla personal para obtener el sales_num
+        const { data: personalData, error: personalError } = await supabase
+            .from('personal')
+            .select('sales_num')
             .eq('code', finalCode)
             .single();
 
+        if (personalError && personalError.code !== 'PGRST116') {
+            throw new Error(`Error al buscar en producción: ${personalError.message}`);
+        }
+
+        if (!personalData || !personalData.sales_num) {
+            playWarningSound();
+            showModalNotification('No Asignado', `El paquete con código ${finalCode} no tiene un registro de venta en el sistema de producción.`, 'destructive');
+            setLoading(false);
+            return;
+        }
+
+        const salesNum = personalData.sales_num;
+
+        // PASO 2: Buscar en devoluciones_ml por numero de venta (sales_num)
+        const { data: devolucionData, error: findError } = await supabaseEtiquetas
+            .from('devoluciones_ml')
+            .select('entregado')
+            .eq('sales_num', salesNum)
+            .single();
+
         if (findError && findError.code !== 'PGRST116') {
-            throw new Error(`Error al buscar: ${findError.message}`);
+            throw new Error(`Error al buscar en devoluciones: ${findError.message}`);
         }
         
         if (!devolucionData) {
             playWarningSound();
-            showModalNotification('No Encontrado', `La devolución con código ${finalCode} no existe en el sistema.`, 'destructive');
+            showModalNotification('No Encontrado', `La venta ${salesNum} (del paquete ${finalCode}) no existe en el sistema de devoluciones Mercado Libre.`, 'destructive');
             setLoading(false);
             return;
         }
 
         if (devolucionData.entregado) {
             playWarningSound();
-            showModalNotification('Ya Procesado', `Esta devolución ya fue marcada como entregada anteriormente.`, 'warning');
+            showModalNotification('Ya Procesado', `Esta venta (${salesNum}) ya fue marcada como entregada anteriormente.`, 'warning');
             setLoading(false);
             return;
         }
@@ -212,11 +234,12 @@ export default function DevolucionesPage() {
         playBeep();
         const newItem: ReturnItem = {
             code: finalCode,
+            sales_num: salesNum,
             scannedAt: new Date().toLocaleTimeString()
         };
         setReturnsList(prev => [newItem, ...prev]);
         scannedCodesSetRef.current.add(finalCode);
-        showAppMessage(`Añadido: ${finalCode}`, 'success');
+        showAppMessage(`Añadido: ${finalCode} (Venta: ${salesNum})`, 'success');
 
     } catch (e: any) {
         playWarningSound();
@@ -248,9 +271,10 @@ export default function DevolucionesPage() {
 
       setLoading(true);
       const codes = returnsList.map(item => item.code);
+      const salesNums = returnsList.map(item => item.sales_num);
 
       try {
-          // 1. Actualizar tabla de devoluciones (labels DB)
+          // 1. Actualizar tabla de devoluciones (labels DB) por numero de venta
           const { error: errorDevoluciones } = await supabaseEtiquetas
               .from('devoluciones_ml')
               .update({ 
@@ -260,7 +284,7 @@ export default function DevolucionesPage() {
                   driver_plate: driverPlate,
                   date_entregado: new Date().toISOString()
               })
-              .in('code', codes);
+              .in('sales_num', salesNums);
 
           if (errorDevoluciones) throw errorDevoluciones;
 
@@ -434,7 +458,7 @@ export default function DevolucionesPage() {
         <title>Módulo de Devoluciones</title>
       </Head>
       <main className="text-starbucks-dark flex items-center justify-center p-4">
-        <div className="w-full max-w-2xl mx-auto bg-starbucks-white rounded-xl shadow-2xl p-4 md:p-6 space-y-4">
+        <div className="w-full max-w-3xl mx-auto bg-starbucks-white rounded-xl shadow-2xl p-4 md:p-6 space-y-4">
           <header className="text-center">
             <div className="inline-block p-3 bg-starbucks-cream rounded-full mb-2">
                 <Undo2 className="h-8 w-8 text-starbucks-green" />
@@ -571,7 +595,8 @@ export default function DevolucionesPage() {
                       <TableHeader className="sticky top-0 bg-gray-50 z-10">
                           <TableRow>
                               <TableHead className="w-16 text-center">#</TableHead>
-                              <TableHead>Código de Devolución</TableHead>
+                              <TableHead>Código Paquete</TableHead>
+                              <TableHead>No. Venta</TableHead>
                               <TableHead>Hora Escaneo</TableHead>
                               <TableHead className="text-right">Acción</TableHead>
                           </TableRow>
@@ -581,6 +606,7 @@ export default function DevolucionesPage() {
                               <TableRow key={item.code}>
                                   <TableCell className="text-center font-bold text-gray-400">{index + 1}</TableCell>
                                   <TableCell className="font-mono text-sm">{item.code}</TableCell>
+                                  <TableCell className="font-mono text-sm">{item.sales_num}</TableCell>
                                   <TableCell className="text-xs text-gray-500">{item.scannedAt}</TableCell>
                                   <TableCell className="text-right">
                                       <Button 
@@ -595,7 +621,7 @@ export default function DevolucionesPage() {
                               </TableRow>
                           )) : (
                               <TableRow>
-                                  <TableCell colSpan={4} className="text-center text-gray-500 py-12">
+                                  <TableCell colSpan={5} className="text-center text-gray-500 py-12">
                                       No has escaneado ninguna devolución todavía.
                                   </TableCell>
                               </TableRow>
