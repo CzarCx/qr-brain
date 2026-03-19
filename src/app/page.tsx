@@ -856,7 +856,7 @@ export default function Home() {
             .eq('code', finalCode)
             .single();
         
-        if (fullEtiquetaDataError && fullEtiquetaError.code !== 'PGRST116') {
+        if (fullEtiquetaError && fullEtiquetaError.code !== 'PGRST116') {
             throw new Error(`Error al buscar detalles en 'etiquetas_i': ${fullEtiquetaError.message}`);
         }
 
@@ -993,7 +993,7 @@ export default function Home() {
               onScanSuccess(bufferRef.current, null);
               bufferRef.current = '';
             }
-          } else if (e.key.length === 1) {
+          } else if (event.key.length === 1) {
             bufferRef.current += e.key;
           }
         };
