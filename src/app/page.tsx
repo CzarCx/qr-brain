@@ -1,3 +1,4 @@
+
 'use client';
 import React, {useEffect, useRef, useState, useCallback, useMemo} from 'react';
 import Head from 'next/head';
@@ -1129,6 +1130,7 @@ const deleteRow = (codeToDelete: string) => {
 
     return {
       ticketId: `TKT-${Date.now()}`,
+      secondaryBarcodeId: `REF-${Date.now().toString().slice(-6)}${Math.floor(Math.random() * 1000)}`,
       date: now.toLocaleDateString('es-MX', { day: 'numeric', month: 'numeric', year: '2-digit' }),
       time: now.toLocaleTimeString('es-MX', { hour: 'numeric', minute: '2-digit', second: '2-digit' }),
       deadline: cumulativeTime.toLocaleTimeString('es-MX', { hour: 'numeric', minute: '2-digit' }),

@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { forwardRef } from 'react';
@@ -5,6 +6,7 @@ import Barcode from 'react-barcode';
 
 type TicketData = {
   ticketId: string;
+  secondaryBarcodeId: string;
   date: string;
   time: string;
   deadline: string;
@@ -104,20 +106,37 @@ const TicketPreview = forwardRef<HTMLDivElement, { data: TicketData }>(({ data }
         </div>
       </div>
 
-      {/* Barcode Render */}
-      <div className="flex flex-col items-center justify-center mt-4 space-y-1">
-        <div className="font-bold text-sm uppercase mb-1">Código de Barra</div>
-        <Barcode 
-          value={data.ticketId} 
-          width={1.5} 
-          height={50} 
-          fontSize={12}
-          background="transparent"
-          margin={0}
-          displayValue={false}
-        />
-        <div className="text-center font-bold text-xs space-y-0.5 mt-2">
-          <p>{data.ticketId}</p>
+      {/* Barcodes Section */}
+      <div className="space-y-6 mt-4">
+        {/* Secondary Barcode */}
+        <div className="flex flex-col items-center justify-center space-y-1">
+          <div className="font-bold text-[10px] uppercase mb-1">Código de Control</div>
+          <Barcode 
+            value={data.secondaryBarcodeId} 
+            width={1.2} 
+            height={30} 
+            fontSize={10}
+            background="transparent"
+            margin={0}
+            displayValue={true}
+          />
+        </div>
+
+        {/* Primary Barcode */}
+        <div className="flex flex-col items-center justify-center space-y-1">
+          <div className="font-bold text-sm uppercase mb-1">Código de Barra</div>
+          <Barcode 
+            value={data.ticketId} 
+            width={1.5} 
+            height={50} 
+            fontSize={12}
+            background="transparent"
+            margin={0}
+            displayValue={false}
+          />
+          <div className="text-center font-bold text-xs space-y-0.5 mt-2">
+            <p>{data.ticketId}</p>
+          </div>
         </div>
       </div>
       
