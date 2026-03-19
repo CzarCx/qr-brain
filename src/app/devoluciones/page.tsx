@@ -205,11 +205,11 @@ export default function DevolucionesPage() {
 
         const salesNum = personalData.sales_num;
 
-        // PASO 2: Buscar en devoluciones_ml por numero de venta (sales_num)
+        // PASO 2: Buscar en devoluciones_ml por numero de venta (num_venta)
         const { data: devolucionData, error: findError } = await supabaseEtiquetas
             .from('devoluciones_ml')
             .select('entregado')
-            .eq('sales_num', salesNum)
+            .eq('num_venta', salesNum)
             .single();
 
         if (findError && findError.code !== 'PGRST116') {
@@ -274,7 +274,7 @@ export default function DevolucionesPage() {
       const salesNums = returnsList.map(item => item.sales_num);
 
       try {
-          // 1. Actualizar tabla de devoluciones (labels DB) por numero de venta
+          // 1. Actualizar tabla de devoluciones (labels DB) por numero de venta (num_venta)
           const { error: errorDevoluciones } = await supabaseEtiquetas
               .from('devoluciones_ml')
               .update({ 
@@ -284,7 +284,7 @@ export default function DevolucionesPage() {
                   driver_plate: driverPlate,
                   date_entregado: new Date().toISOString()
               })
-              .in('sales_num', salesNums);
+              .in('num_venta', salesNums);
 
           if (errorDevoluciones) throw errorDevoluciones;
 
