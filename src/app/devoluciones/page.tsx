@@ -224,7 +224,7 @@ export default function DevolucionesPage() {
     } finally {
         setLoading(false);
     }
-  }, [loading]);
+  }, []);
   
   const removeFromList = (code: string) => {
       setReturnsList(prev => prev.filter(item => item.code !== code));
@@ -250,7 +250,8 @@ export default function DevolucionesPage() {
       const codes = returnsList.map(item => item.code);
 
       try {
-          const { error } = await supabaseEtiquetas
+          // 1. Actualizar tabla de devoluciones (labels DB)
+          const { error: errorDevoluciones } = await supabaseEtiquetas
               .from('devoluciones_ml')
               .update({ 
                   entregado: true, 
@@ -261,7 +262,17 @@ export default function DevolucionesPage() {
               })
               .in('code', codes);
 
-          if (error) throw error;
+          if (errorDevoluciones) throw errorDevoluciones;
+
+          // 2. Actualizar estado en tabla personal (main DB) a 'DEVUELTO'
+          const { error: errorPersonal } = await supabase
+              .from('personal')
+              .update({ status: 'DEVUELTO' })
+              .in('code', codes);
+
+          if (errorPersonal) {
+              console.warn("No se pudo actualizar el estado en la tabla personal:", errorPersonal.message);
+          }
 
           playBeep();
           showModalNotification('¡Éxito!', `Se procesaron ${codes.length} devoluciones correctamente.`, 'success');
@@ -598,14 +609,14 @@ export default function DevolucionesPage() {
 
       {/* Modal Finalizar Devoluciones */}
       <Dialog open={isFinalizeModalOpen} onOpenChange={setIsFinalizeModalOpen}>
-          <DialogContent className="sm:max-w-md">
+          <DialogContent className="sm:max-w-[425px]">
               <DialogHeader>
                   <DialogTitle className="flex items-center gap-2 text-starbucks-green">
                       <Truck className="h-6 w-6" />
                       Confirmar Transporte de Devolución
                   </DialogTitle>
                   <DialogDescription>
-                      Ingresa los datos del transporte que trae las {returnsList.length} devoluciones.
+                      Ingresa los datos del transporte que trae las {returnsList.length} devoluciones. Los paquetes se marcarán como "DEVUELTO" en el sistema.
                   </DialogDescription>
               </DialogHeader>
               <div className="grid gap-4 py-4">
