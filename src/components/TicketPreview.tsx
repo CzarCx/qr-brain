@@ -107,15 +107,15 @@ const TicketPreview = forwardRef<HTMLDivElement, { data: TicketData }>(({ data }
       </div>
 
       {/* Barcodes Section */}
-      <div className="space-y-10 mt-4 mb-8">
+      <div className="space-y-12 mt-4 mb-8">
         {/* Secondary Barcode */}
         <div className="flex flex-col items-center justify-center">
-          <div className="font-bold text-sm uppercase mb-2">CÓDIGO DE CONTROL</div>
+          <div className="font-bold text-base uppercase mb-3">CÓDIGO DE CONTROL</div>
           <Barcode 
             value={data.secondaryBarcodeId} 
-            width={2.0} 
-            height={60} 
-            fontSize={14}
+            width={2.2} 
+            height={80} 
+            fontSize={16}
             background="transparent"
             margin={0}
             displayValue={true}
@@ -124,12 +124,12 @@ const TicketPreview = forwardRef<HTMLDivElement, { data: TicketData }>(({ data }
 
         {/* Primary Barcode */}
         <div className="flex flex-col items-center justify-center">
-          <div className="font-bold text-sm uppercase mb-2">CÓDIGO DE BARRA</div>
+          <div className="font-bold text-base uppercase mb-3">CÓDIGO DE BARRA</div>
           <Barcode 
             value={data.ticketId} 
-            width={2.0} 
-            height={60} 
-            fontSize={14}
+            width={2.2} 
+            height={80} 
+            fontSize={16}
             background="transparent"
             margin={0}
             displayValue={true}
