@@ -59,8 +59,8 @@ export default function AlmacenPage() {
   const [scannerActive, setScannerActive] = useState(false);
   const [loading, setLoading] = useState(false);
   const [selectedScannerMode, setSelectedScannerMode] = useState('camara');
-  const [encargado, setEncargado] = useState('');
-  const [encargadosList, setEncargadosList] = useState<Encargado[]>([]);
+  const [encargado, setEncargado] = useState('Almacenista');
+  const [encargadosList, setEncargadosList] = useState<Encargado[]>([{ name: 'Almacenista', rol: 'almacenista', organization: 'Almacén' }]);
   const [scanMode, setScanMode] = useState('individual');
   const [massScannedCodes, setMassScannedCodes] = useState<ScanResult[]>([]);
   const [cameraCapabilities, setCameraCapabilities] = useState<any>(null);
@@ -97,12 +97,17 @@ export default function AlmacenPage() {
             .eq('rol', 'almacenista');
 
         if (error) {
-            setDbError('Error al cargar encargados de almacén.');
+            console.error('Error fetching data:', error);
         } else if (data && data.length > 0) {
              const uniqueEncargados = Array.from(new Map(data.map(item => [item.name, item])).values());
+             // Ensure 'Almacenista' is always present
+             if (!uniqueEncargados.some(e => e.name === 'Almacenista')) {
+                uniqueEncargados.unshift({ name: 'Almacenista', rol: 'almacenista', organization: 'Almacén' });
+             }
              setEncargadosList(uniqueEncargados as Encargado[]);
         } else {
-             setDbError('No se encontraron encargados con el rol "almacenista".');
+             // Fallback to static default if nothing in DB
+             setEncargadosList([{ name: 'Almacenista', rol: 'almacenista', organization: 'Almacén' }]);
         }
     };
     fetchEncargados();
