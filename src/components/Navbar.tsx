@@ -1,24 +1,22 @@
+
 'use client';
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
-import { ScanLine, PackageCheck, UserCheck, UserPlus, Home, ClipboardList, Undo2 } from 'lucide-react';
+import { ScanLine, PackageCheck, UserCheck, UserPlus, Home, ClipboardList, Undo2, Boxes } from 'lucide-react';
 import Image from 'next/image';
 import { useEffect } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 
 const mainNavLinks = [
   { href: '/', label: 'Asignar', icon: <UserCheck className="h-5 w-5" /> },
+  { href: '/almacen', label: 'Almacén', icon: <Boxes className="h-5 w-5" /> },
   { href: '/ppc', label: 'PPC', icon: <ClipboardList className="h-5 w-5" /> },
   { href: '/calificar', label: 'Calificar', icon: <ScanLine className="h-5 w-5" /> },
   { href: '/entrega', label: 'Entrega', icon: <PackageCheck className="h-5 w-5" /> },
   { href: '/devoluciones', label: 'Devolución', icon: <Undo2 className="h-5 w-5" /> },
 ];
-
-const secondaryNavLinks = [
-    { href: '/registro-personal', label: 'Registrar Personal', icon: <UserPlus className="h-5 w-5" /> },
-]
 
 export default function Navbar() {
   const pathname = usePathname();

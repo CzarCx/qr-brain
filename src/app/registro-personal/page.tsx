@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
@@ -216,6 +217,7 @@ export default function RegistroPersonal() {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="barra">Barra</SelectItem>
+                        <SelectItem value="almacenista">Almacenista</SelectItem>
                         <SelectItem value="entrega">Entrega</SelectItem>
                         <SelectItem value="operativo">Operativo</SelectItem>
                         <SelectItem value="Control de calidad">Control de calidad</SelectItem>
@@ -342,6 +344,7 @@ export default function RegistroPersonal() {
                     <SelectTrigger id="edit-rol"><SelectValue /></SelectTrigger>
                     <SelectContent>
                         <SelectItem value="barra">Barra</SelectItem>
+                        <SelectItem value="almacenista">Almacenista</SelectItem>
                         <SelectItem value="entrega">Entrega</SelectItem>
                         <SelectItem value="operativo">Operativo</SelectItem>
                         <SelectItem value="Control de calidad">Control de calidad</SelectItem>

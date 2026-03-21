@@ -1,10 +1,11 @@
+
 'use client';
 
 import Link from 'next/link';
 import Head from 'next/head';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { UserCog, UserCheck, ClipboardList, ScanLine, PackageCheck, UserPlus, Undo2 } from 'lucide-react';
+import { UserCog, UserCheck, ClipboardList, ScanLine, PackageCheck, UserPlus, Undo2, Boxes } from 'lucide-react';
 
 const navItems = [
   {
@@ -13,6 +14,13 @@ const navItems = [
     description: 'Asigna etiquetas de productos a los operarios.',
     icon: <UserCheck className="h-8 w-8 text-starbucks-green" />,
     cta: 'Ir a Asignar',
+  },
+  {
+    href: '/almacen',
+    title: 'Módulo de Almacén',
+    description: 'Valida y marca bultos como surtidos para producción.',
+    icon: <Boxes className="h-8 w-8 text-starbucks-green" />,
+    cta: 'Ir a Almacén',
   },
   {
     href: '/ppc',
