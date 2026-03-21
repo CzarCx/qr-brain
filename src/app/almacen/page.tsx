@@ -59,7 +59,7 @@ export default function AlmacenPage() {
   const [scannerActive, setScannerActive] = useState(false);
   const [loading, setLoading] = useState(false);
   const [selectedScannerMode, setSelectedScannerMode] = useState('camara');
-  const [encargado, setEncargado] = useState('Almacenista');
+  const [encargado, setEncargado] = useState(''); // Fixed: Initialize empty to prevent hydration mismatch
   const [encargadosList, setEncargadosList] = useState<Encargado[]>([{ name: 'Almacenista', rol: 'almacenista', organization: 'Almacén' }]);
   const [scanMode, setScanMode] = useState('individual');
   const [massScannedCodes, setMassScannedCodes] = useState<ScanResult[]>([]);
@@ -90,6 +90,8 @@ export default function AlmacenPage() {
 
    useEffect(() => {
     setIsMounted(true);
+    setEncargado('Almacenista'); // Fixed: Set default on client side to prevent hydration error
+    
     const fetchEncargados = async () => {
         const { data, error } = await supabase
             .from('personal_name')
