@@ -1,4 +1,3 @@
-
 'use client';
 import {useEffect, useRef, useState, useCallback, useMemo} from 'react';
 import Head from 'next/head';
@@ -59,7 +58,7 @@ export default function AlmacenPage() {
   const [scannerActive, setScannerActive] = useState(false);
   const [loading, setLoading] = useState(false);
   const [selectedScannerMode, setSelectedScannerMode] = useState('camara');
-  const [encargado, setEncargado] = useState(''); // Fixed: Initialize empty to prevent hydration mismatch
+  const [encargado, setEncargado] = useState(''); 
   const [encargadosList, setEncargadosList] = useState<Encargado[]>([{ name: 'Almacenista', rol: 'almacenista', organization: 'Almacén' }]);
   const [scanMode, setScanMode] = useState('individual');
   const [massScannedCodes, setMassScannedCodes] = useState<ScanResult[]>([]);
@@ -90,7 +89,7 @@ export default function AlmacenPage() {
 
    useEffect(() => {
     setIsMounted(true);
-    setEncargado('Almacenista'); // Fixed: Set default on client side to prevent hydration error
+    setEncargado('Almacenista');
     
     const fetchEncargados = async () => {
         const { data, error } = await supabase
@@ -102,13 +101,11 @@ export default function AlmacenPage() {
             console.error('Error fetching data:', error);
         } else if (data && data.length > 0) {
              const uniqueEncargados = Array.from(new Map(data.map(item => [item.name, item])).values());
-             // Ensure 'Almacenista' is always present
              if (!uniqueEncargados.some(e => e.name === 'Almacenista')) {
                 uniqueEncargados.unshift({ name: 'Almacenista', rol: 'almacenista', organization: 'Almacén' });
              }
              setEncargadosList(uniqueEncargados as Encargado[]);
         } else {
-             // Fallback to static default if nothing in DB
              setEncargadosList([{ name: 'Almacenista', rol: 'almacenista', organization: 'Almacén' }]);
         }
     };
@@ -282,7 +279,7 @@ export default function AlmacenPage() {
                   <Label className="font-bold">Encargado de Almacén:</Label>
                    <Combobox
                       groupedOptions={groupedEncargadoOptions}
-                      value={encargado}
+                      value={isMounted ? encargado : ''}
                       onValueChange={setEncargado}
                       placeholder="Selecciona almacenista..."
                       emptyMessage="No se encontró."
@@ -312,6 +309,31 @@ export default function AlmacenPage() {
                 <Button onClick={() => setScannerActive(false)} variant="destructive" disabled={!scannerActive}>Detener</Button>
             </div>
           </div>
+
+          {isMounted && isMobile && scannerActive && selectedScannerMode === 'camara' && cameraCapabilities && (
+                <div id="camera-controls" className="flex items-center gap-4 mt-4 p-2 rounded-lg bg-gray-200">
+                    {cameraCapabilities.torch && (
+                        <Button variant="ghost" size="icon" onClick={() => setIsFlashOn(prev => !prev)} className={isFlashOn ? 'bg-yellow-400' : ''}>
+                            <Zap className="h-5 w-5" />
+                        </Button>
+                    )}
+                    {cameraCapabilities.zoom && (
+                         <div className="flex-1 flex items-center gap-2">
+                            <ZoomIn className="h-5 w-5" />
+                            <input
+                                id="zoom-slider"
+                                type="range"
+                                min={cameraCapabilities.zoom.min}
+                                max={cameraCapabilities.zoom.max}
+                                step={cameraCapabilities.zoom.step}
+                                value={zoom}
+                                onChange={(e) => setZoom(parseFloat(e.target.value))}
+                                className="w-full"
+                            />
+                        </div>
+                    )}
+                </div>
+            )}
 
           {lastScannedResult && scanMode === 'individual' && (
               <div className="p-4 border rounded-lg bg-white shadow-sm space-y-3">

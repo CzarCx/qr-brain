@@ -1,4 +1,3 @@
-
 'use client';
 import React, {useEffect, useRef, useState, useCallback, useMemo} from 'react';
 import Head from 'next/head';
@@ -994,7 +993,7 @@ export default function Home() {
               onScanSuccess(bufferRef.current, null);
               bufferRef.current = '';
             }
-          } else if (event.key.length === 1) {
+          } else if (e.key.length === 1) {
             bufferRef.current += e.key;
           }
         };
@@ -1795,7 +1794,7 @@ const deleteRow = (codeToDelete: string) => {
                   <Label>Reasignar producción a:</Label>
                    <Combobox
                       groupedOptions={groupedPersonalOptions}
-                      value={personToAssign}
+                      value={isMounted ? personToAssign : ''}
                       onValueChange={setPersonToAssign}
                       placeholder="Selecciona para reasignar..."
                       emptyMessage="No se encontró personal."
@@ -1893,7 +1892,7 @@ const deleteRow = (codeToDelete: string) => {
             <div className="flex-grow">
                 <Combobox
                     groupedOptions={groupedPersonalOptions}
-                    value={selectedPersonal}
+                    value={isMounted ? selectedPersonal : ''}
                     onValueChange={setSelectedPersonal}
                     placeholder="Selecciona o busca personal..."
                     emptyMessage="No se encontró personal."
@@ -2034,7 +2033,7 @@ const deleteRow = (codeToDelete: string) => {
                     <label htmlFor="encargado" className="block text-sm font-bold text-starbucks-dark mb-1">Nombre del Encargado:</label>
                     <Combobox
                         groupedOptions={groupedEncargadoOptions}
-                        value={encargado}
+                        value={isMounted ? encargado : ''}
                         onValueChange={setEncargado}
                         placeholder="Selecciona un encargado..."
                         emptyMessage="No se encontró encargado."
@@ -2119,7 +2118,7 @@ const deleteRow = (codeToDelete: string) => {
                             )}
                         </div>
                         
-                        {isMobile && scannerActive && selectedScannerMode === 'camara' && cameraCapabilities && (
+                        {isMounted && isMobile && scannerActive && selectedScannerMode === 'camara' && cameraCapabilities && (
                             <div id="camera-controls" className="flex items-center gap-4 mt-4 p-2 rounded-lg bg-gray-200">
                                 {cameraCapabilities.torch && (
                                     <Button variant="ghost" size="icon" onClick={() => setIsFlashOn(prev => !prev)} className={isFlashOn ? 'bg-yellow-400' : ''}>

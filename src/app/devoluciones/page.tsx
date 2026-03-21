@@ -481,7 +481,7 @@ export default function DevolucionesPage() {
                       <label htmlFor="encargado" className="block text-sm font-bold text-starbucks-dark mb-1">Nombre del Encargado:</label>
                        <Combobox
                           groupedOptions={groupedEncargadoOptions}
-                          value={encargado}
+                          value={isMounted ? encargado : ''}
                           onValueChange={setEncargado}
                           placeholder="Selecciona un encargado..."
                           emptyMessage="No se encontró encargado."
@@ -538,7 +538,7 @@ export default function DevolucionesPage() {
                         )}
                     </div>
 
-                    {isMobile && scannerActive && selectedScannerMode === 'camara' && cameraCapabilities && (
+                    {isMounted && isMobile && scannerActive && selectedScannerMode === 'camara' && cameraCapabilities && (
                         <div id="camera-controls" className="flex items-center gap-4 mt-4 p-2 rounded-lg bg-gray-200">
                             {cameraCapabilities.torch && (
                                 <Button variant="ghost" size="icon" onClick={() => setIsFlashOn(prev => !prev)} className={isFlashOn ? 'bg-yellow-400' : ''}>
