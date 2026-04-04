@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
@@ -9,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { UserPlus, CheckCircle, AlertTriangle, Edit, Trash2 } from 'lucide-react';
+import { UserPlus, CheckCircle, AlertTriangle, Edit, Trash2, Clock } from 'lucide-react';
 import {
   Table,
   TableBody,
@@ -45,6 +44,10 @@ type Personal = {
   name: string;
   rol: string;
   organization: string;
+  checkin_time: string | null;
+  checkout_time: string | null;
+  break_time_i: string | null;
+  break_time_f: string | null;
 };
 
 export default function RegistroPersonal() {
@@ -53,6 +56,11 @@ export default function RegistroPersonal() {
   const [lastName2, setLastName2] = useState('');
   const [rol, setRol] = useState('');
   const [organization, setOrganization] = useState('');
+  const [checkinTime, setCheckinTime] = useState('');
+  const [checkoutTime, setCheckoutTime] = useState('');
+  const [breakTimeI, setBreakTimeI] = useState('');
+  const [breakTimeF, setBreakTimeF] = useState('');
+  
   const [loading, setLoading] = useState(false);
   const [notification, setNotification] = useState<{
     type: 'success' | 'error' | null,
@@ -69,6 +77,10 @@ export default function RegistroPersonal() {
   const [editLastName2, setEditLastName2] = useState('');
   const [editRol, setEditRol] = useState('');
   const [editOrganization, setEditOrganization] = useState('');
+  const [editCheckinTime, setEditCheckinTime] = useState('');
+  const [editCheckoutTime, setEditCheckoutTime] = useState('');
+  const [editBreakTimeI, setEditBreakTimeI] = useState('');
+  const [editBreakTimeF, setEditBreakTimeF] = useState('');
 
   const fetchPersonal = useCallback(async () => {
     setLoading(true);
@@ -104,7 +116,15 @@ export default function RegistroPersonal() {
     try {
       const { error } = await supabase
         .from('personal_name')
-        .insert([{ name: fullName, rol, organization }]);
+        .insert([{ 
+            name: fullName, 
+            rol, 
+            organization,
+            checkin_time: checkinTime || null,
+            checkout_time: checkoutTime || null,
+            break_time_i: breakTimeI || null,
+            break_time_f: breakTimeF || null
+        }]);
 
       if (error) {
         throw error;
@@ -116,6 +136,10 @@ export default function RegistroPersonal() {
       setLastName2('');
       setRol('');
       setOrganization('');
+      setCheckinTime('');
+      setCheckoutTime('');
+      setBreakTimeI('');
+      setBreakTimeF('');
       fetchPersonal(); // Refresh list
 
     } catch (e: any) {
@@ -130,15 +154,20 @@ export default function RegistroPersonal() {
   const handleEditClick = (personal: Personal) => {
     setEditingPersonal(personal);
     const nameParts = personal.name.split(' ');
-    const lastName2 = nameParts.length > 2 ? nameParts.pop() || '' : '';
-    const lastName1 = nameParts.length > 1 ? nameParts.pop() || '' : '';
-    const firstName = nameParts.join(' ');
+    // Intentar reconstruir apellidos (esto es aproximado debido a que guardamos full name)
+    const ln2 = nameParts.length > 2 ? nameParts.pop() || '' : '';
+    const ln1 = nameParts.length > 1 ? nameParts.pop() || '' : '';
+    const fn = nameParts.join(' ');
     
-    setEditFirstName(firstName);
-    setEditLastName1(lastName1);
-    setEditLastName2(lastName2);
+    setEditFirstName(fn);
+    setEditLastName1(ln1);
+    setEditLastName2(ln2);
     setEditRol(personal.rol);
     setEditOrganization(personal.organization);
+    setEditCheckinTime(personal.checkin_time || '');
+    setEditCheckoutTime(personal.checkout_time || '');
+    setEditBreakTimeI(personal.break_time_i || '');
+    setEditBreakTimeF(personal.break_time_f || '');
     setIsEditDialogOpen(true);
   };
 
@@ -148,7 +177,15 @@ export default function RegistroPersonal() {
     const fullName = [editFirstName.trim(), editLastName1.trim(), editLastName2.trim()].filter(Boolean).join(' ');
     const { error } = await supabase
       .from('personal_name')
-      .update({ name: fullName, rol: editRol, organization: editOrganization })
+      .update({ 
+          name: fullName, 
+          rol: editRol, 
+          organization: editOrganization,
+          checkin_time: editCheckinTime || null,
+          checkout_time: editCheckoutTime || null,
+          break_time_i: editBreakTimeI || null,
+          break_time_f: editBreakTimeF || null
+      })
       .eq('id', editingPersonal.id);
     
     if (error) {
@@ -209,34 +246,64 @@ export default function RegistroPersonal() {
                         <Input id="lastName2" type="text" value={lastName2} onChange={(e) => setLastName2(e.target.value)} placeholder="Ej. García (Opcional)" className="form-input" disabled={loading}/>
                       </div>
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="rol" className="text-sm font-bold text-starbucks-dark">Rol:</Label>
-                    <Select onValueChange={setRol} value={rol} disabled={loading}>
-                      <SelectTrigger id="rol" className="bg-transparent hover:bg-gray-50">
-                        <SelectValue placeholder="Selecciona un rol" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="barra">Barra</SelectItem>
-                        <SelectItem value="almacenista">Almacenista</SelectItem>
-                        <SelectItem value="entrega">Entrega</SelectItem>
-                        <SelectItem value="operativo">Operativo</SelectItem>
-                        <SelectItem value="Control de calidad">Control de calidad</SelectItem>
-                      </SelectContent>
-                    </Select>
+                  <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="rol" className="text-sm font-bold text-starbucks-dark">Rol:</Label>
+                        <Select onValueChange={setRol} value={rol} disabled={loading}>
+                          <SelectTrigger id="rol" className="bg-transparent hover:bg-gray-50">
+                            <SelectValue placeholder="Rol" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="barra">Barra</SelectItem>
+                            <SelectItem value="almacenista">Almacenista</SelectItem>
+                            <SelectItem value="entrega">Entrega</SelectItem>
+                            <SelectItem value="operativo">Operativo</SelectItem>
+                            <SelectItem value="Control de calidad">Control de calidad</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="organization" className="text-sm font-bold text-starbucks-dark">Empresa:</Label>
+                        <Select onValueChange={setOrganization} value={organization} disabled={loading}>
+                          <SelectTrigger id="organization" className="bg-transparent hover:bg-gray-50">
+                            <SelectValue placeholder="Empresa" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="INMATMEX">INMATMEX</SelectItem>
+                            <SelectItem value="PALO DE ROSA">PALO DE ROSA</SelectItem>
+                            <SelectItem value="TOLEXAL">TOLEXAL</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="organization" className="text-sm font-bold text-starbucks-dark">Empresa:</Label>
-                    <Select onValueChange={setOrganization} value={organization} disabled={loading}>
-                      <SelectTrigger id="organization" className="bg-transparent hover:bg-gray-50">
-                        <SelectValue placeholder="Selecciona una empresa" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="INMATMEX">INMATMEX</SelectItem>
-                        <SelectItem value="PALO DE ROSA">PALO DE ROSA</SelectItem>
-                        <SelectItem value="TOLEXAL">TOLEXAL</SelectItem>
-                      </SelectContent>
-                    </Select>
+
+                  <div className="p-4 bg-starbucks-cream rounded-lg space-y-4">
+                      <div className="flex items-center gap-2 text-starbucks-green font-bold text-sm">
+                          <Clock className="h-4 w-4" />
+                          Horario Laboral
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                          <div className="space-y-1.5">
+                              <Label htmlFor="checkin" className="text-xs font-semibold">Entrada:</Label>
+                              <Input id="checkin" type="time" value={checkinTime} onChange={(e) => setCheckinTime(e.target.value)} className="bg-white" disabled={loading} />
+                          </div>
+                          <div className="space-y-1.5">
+                              <Label htmlFor="checkout" className="text-xs font-semibold">Salida:</Label>
+                              <Input id="checkout" type="time" value={checkoutTime} onChange={(e) => setCheckoutTime(e.target.value)} className="bg-white" disabled={loading} />
+                          </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4 border-t border-gray-200 pt-3">
+                          <div className="space-y-1.5">
+                              <Label htmlFor="break-i" className="text-xs font-semibold">Comida Inicio:</Label>
+                              <Input id="break-i" type="time" value={breakTimeI} onChange={(e) => setBreakTimeI(e.target.value)} className="bg-white" disabled={loading} />
+                          </div>
+                          <div className="space-y-1.5">
+                              <Label htmlFor="break-f" className="text-xs font-semibold">Comida Fin:</Label>
+                              <Input id="break-f" type="time" value={breakTimeF} onChange={(e) => setBreakTimeF(e.target.value)} className="bg-white" disabled={loading} />
+                          </div>
+                      </div>
                   </div>
+
                   <Button type="submit" disabled={loading} className="w-full bg-starbucks-accent hover:bg-starbucks-green text-white font-bold py-3">
                     {loading ? 'Guardando...' : 'Registrar Personal'}
                   </Button>
@@ -249,7 +316,7 @@ export default function RegistroPersonal() {
             <Card>
               <CardHeader>
                 <CardTitle>Personal Registrado</CardTitle>
-                <CardDescription>Lista del personal actual. Desde aquí puedes editar o eliminar registros.</CardDescription>
+                <CardDescription>Lista del personal actual y sus horarios.</CardDescription>
               </CardHeader>
               <CardContent>
                 {notification && (
@@ -261,24 +328,33 @@ export default function RegistroPersonal() {
                     </AlertDescription>
                   </Alert>
                 )}
-                <div className="border rounded-lg max-h-[60vh] overflow-auto">
+                <div className="border rounded-lg max-h-[70vh] overflow-auto">
                     <Table>
                       <TableHeader className="sticky top-0 bg-starbucks-cream z-10">
                         <TableRow>
                           <TableHead>Nombre</TableHead>
-                          <TableHead>Rol</TableHead>
-                          <TableHead>Empresa</TableHead>
+                          <TableHead>Rol / Empresa</TableHead>
+                          <TableHead>Entrada/Salida</TableHead>
+                          <TableHead>Comida</TableHead>
                           <TableHead className="text-right">Acciones</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {loading && personalList.length === 0 ? (
-                            <TableRow><TableCell colSpan={4} className="text-center py-8">Cargando...</TableCell></TableRow>
+                            <TableRow><TableCell colSpan={5} className="text-center py-8">Cargando...</TableCell></TableRow>
                         ) : personalList.length > 0 ? personalList.map((p) => (
                           <TableRow key={p.id}>
-                            <TableCell className="font-medium">{p.name}</TableCell>
-                            <TableCell>{p.rol}</TableCell>
-                            <TableCell>{p.organization}</TableCell>
+                            <TableCell className="font-medium text-xs md:text-sm">{p.name}</TableCell>
+                            <TableCell className="text-xs">
+                                <div className="font-semibold uppercase text-starbucks-green">{p.rol}</div>
+                                <div className="text-gray-500">{p.organization}</div>
+                            </TableCell>
+                            <TableCell className="text-xs">
+                                {p.checkin_time ? p.checkin_time.substring(0, 5) : '--:--'} a {p.checkout_time ? p.checkout_time.substring(0, 5) : '--:--'}
+                            </TableCell>
+                            <TableCell className="text-xs">
+                                {p.break_time_i ? p.break_time_i.substring(0, 5) : '--:--'} - {p.break_time_f ? p.break_time_f.substring(0, 5) : '--:--'}
+                            </TableCell>
                             <TableCell className="text-right space-x-1">
                               <Button variant="ghost" size="icon" onClick={() => handleEditClick(p)}>
                                 <Edit className="h-4 w-4" />
@@ -305,7 +381,7 @@ export default function RegistroPersonal() {
                             </TableCell>
                           </TableRow>
                         )) : (
-                           <TableRow><TableCell colSpan={4} className="text-center py-8">No hay personal registrado.</TableCell></TableRow>
+                           <TableRow><TableCell colSpan={5} className="text-center py-8">No hay personal registrado.</TableCell></TableRow>
                         )}
                       </TableBody>
                     </Table>
@@ -316,14 +392,14 @@ export default function RegistroPersonal() {
         </div>
 
         <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-          <DialogContent>
+          <DialogContent className="sm:max-w-md">
             <DialogHeader>
               <DialogTitle>Editar Personal</DialogTitle>
               <DialogDescription>
-                Modifica los datos del registro. Haz clic en guardar cuando termines.
+                Modifica los datos y horarios del registro.
               </DialogDescription>
             </DialogHeader>
-            <div className="grid gap-4 py-4">
+            <div className="grid gap-4 py-4 max-h-[60vh] overflow-y-auto px-1">
               <div className="space-y-2">
                 <Label htmlFor="edit-firstName">Nombre(s)</Label>
                 <Input id="edit-firstName" value={editFirstName} onChange={(e) => setEditFirstName(e.target.value)} disabled={loading} />
@@ -338,29 +414,55 @@ export default function RegistroPersonal() {
                     <Input id="edit-lastName2" value={editLastName2} onChange={(e) => setEditLastName2(e.target.value)} disabled={loading} />
                   </div>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="edit-rol">Rol</Label>
-                 <Select onValueChange={setEditRol} value={editRol} disabled={loading}>
-                    <SelectTrigger id="edit-rol"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value="barra">Barra</SelectItem>
-                        <SelectItem value="almacenista">Almacenista</SelectItem>
-                        <SelectItem value="entrega">Entrega</SelectItem>
-                        <SelectItem value="operativo">Operativo</SelectItem>
-                        <SelectItem value="Control de calidad">Control de calidad</SelectItem>
-                    </SelectContent>
-                </Select>
+              <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-rol">Rol</Label>
+                     <Select onValueChange={setEditRol} value={editRol} disabled={loading}>
+                        <SelectTrigger id="edit-rol"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="barra">Barra</SelectItem>
+                            <SelectItem value="almacenista">Almacenista</SelectItem>
+                            <SelectItem value="entrega">Entrega</SelectItem>
+                            <SelectItem value="operativo">Operativo</SelectItem>
+                            <SelectItem value="Control de calidad">Control de calidad</SelectItem>
+                        </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-organization">Empresa</Label>
+                    <Select onValueChange={setEditOrganization} value={editOrganization} disabled={loading}>
+                        <SelectTrigger id="edit-organization"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="INMATMEX">INMATMEX</SelectItem>
+                            <SelectItem value="PALO DE ROSA">PALO DE ROSA</SelectItem>
+                            <SelectItem value="TOLEXAL">TOLEXAL</SelectItem>
+                        </SelectContent>
+                    </Select>
+                  </div>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="edit-organization">Empresa</Label>
-                <Select onValueChange={setEditOrganization} value={editOrganization} disabled={loading}>
-                    <SelectTrigger id="edit-organization"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value="INMATMEX">INMATMEX</SelectItem>
-                        <SelectItem value="PALO DE ROSA">PALO DE ROSA</SelectItem>
-                        <SelectItem value="TOLEXAL">TOLEXAL</SelectItem>
-                    </SelectContent>
-                </Select>
+              
+              <div className="p-3 bg-gray-50 rounded-lg space-y-3 border">
+                  <Label className="text-starbucks-green font-bold">Horarios</Label>
+                  <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1">
+                          <Label className="text-[10px] uppercase text-gray-500">Entrada</Label>
+                          <Input type="time" value={editCheckinTime} onChange={(e) => setEditCheckinTime(e.target.value)} disabled={loading} />
+                      </div>
+                      <div className="space-y-1">
+                          <Label className="text-[10px] uppercase text-gray-500">Salida</Label>
+                          <Input type="time" value={editCheckoutTime} onChange={(e) => setEditCheckoutTime(e.target.value)} disabled={loading} />
+                      </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1">
+                          <Label className="text-[10px] uppercase text-gray-500">Comida Inicio</Label>
+                          <Input type="time" value={editBreakTimeI} onChange={(e) => setEditBreakTimeI(e.target.value)} disabled={loading} />
+                      </div>
+                      <div className="space-y-1">
+                          <Label className="text-[10px] uppercase text-gray-500">Comida Fin</Label>
+                          <Input type="time" value={editBreakTimeF} onChange={(e) => setEditBreakTimeF(e.target.value)} disabled={loading} />
+                      </div>
+                  </div>
               </div>
             </div>
             <DialogFooter>
