@@ -7,6 +7,8 @@ import { useToast } from '@/hooks/use-toast';
 
 /**
  * Hook personalizado para gestionar la lógica de negocio de los tickets de costura.
+ * Asegúrate de haber ejecutado el SQL de creación de la tabla 'sewing_tickets' 
+ * en el proyecto de Supabase configurado en tu .env.
  */
 export function useSewingTickets() {
   const [tickets, setTickets] = useState<SewingTicket[]>([]);
@@ -16,6 +18,7 @@ export function useSewingTickets() {
   const fetchTickets = useCallback(async () => {
     setLoading(true);
     try {
+      // Intentamos cargar los últimos 50 tickets
       const { data, error } = await supabase
         .from('sewing_tickets')
         .select('*')
@@ -23,8 +26,12 @@ export function useSewingTickets() {
         .limit(50);
 
       if (error) {
-        // Mejoramos el log del error para identificar si es RLS, tabla inexistente, etc.
-        console.error('Error de Supabase al cargar tickets:', error.message, error.details, error.hint);
+        // Log detallado para diagnosticar si el problema es de tabla inexistente o permisos
+        console.error('Error de Supabase (fetchTickets):', error.message, error.details, error.hint);
+        
+        if (error.message.includes('Could not find the table')) {
+            throw new Error('La tabla "sewing_tickets" no existe en el proyecto. Por favor, ejecuta el script SQL en el panel de Supabase.');
+        }
         throw error;
       }
       setTickets(data || []);
@@ -32,8 +39,8 @@ export function useSewingTickets() {
       console.error('Excepción al cargar tickets:', error?.message || error);
       toast({
         variant: 'destructive',
-        title: 'Error al cargar tickets',
-        description: error.message || 'No se pudo conectar con la base de datos.',
+        title: 'Error de Conexión',
+        description: error.message || 'No se pudo encontrar la tabla sewing_tickets.',
       });
     } finally {
       setLoading(false);
@@ -45,24 +52,20 @@ export function useSewingTickets() {
 
     setLoading(true);
     try {
-      // Solo llenamos codigo_barra. El resto se inicializa en NULL por defecto en la DB.
-      const newTicket = {
-        codigo_barra: barcode.trim()
-      };
-
+      // Según el esquema, enviamos solo codigo_barra. El ID y created_at son automáticos.
       const { error } = await supabase
         .from('sewing_tickets')
-        .insert([newTicket]);
+        .insert([{ codigo_barra: barcode.trim() }]);
 
       if (error) {
-          console.error('Error de Supabase al crear ticket:', error.message, error.details);
+          console.error('Error de Supabase (createTicket):', error.message, error.details);
           throw error;
       }
 
       toast({
         variant: 'success',
         title: 'Ticket registrado',
-        description: `Código ${barcode} guardado automáticamente.`,
+        description: `Código ${barcode} guardado correctamente.`,
       });
 
       // Refrescar lista para ver el nuevo registro
@@ -72,8 +75,8 @@ export function useSewingTickets() {
       console.error('Excepción al crear ticket:', error?.message || error);
       toast({
         variant: 'destructive',
-        title: 'Error al registrar ticket',
-        description: error.message || 'Error de conexión con el servidor.',
+        title: 'Error al registrar',
+        description: error.message || 'La tabla no existe o no tienes permisos.',
       });
       return false;
     } finally {
