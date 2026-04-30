@@ -5,6 +5,7 @@ import { Html5Qrcode, Html5QrcodeScannerState } from 'html5-qrcode';
 import { Button } from '@/components/ui/button';
 import { Zap, ZoomIn, Camera, Keyboard } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { cn } from '@/lib/utils';
 
 interface SewingScannerProps {
   onScan: (barcode: string) => Promise<boolean | undefined>;
@@ -13,15 +14,18 @@ interface SewingScannerProps {
 
 export function SewingScanner({ onScan, disabled }: SewingScannerProps) {
   const [scannerActive, setScannerActive] = useState(false);
-  const [mode, setMode] = useState<'camara' | 'fisico'>('camara');
+  const [selectedScannerMode, setSelectedScannerMode] = useState<'camara' | 'fisico'>('camara');
   const [isFlashOn, setIsFlashOn] = useState(false);
   const [zoom, setZoom] = useState(1);
   const [cameraCapabilities, setCameraCapabilities] = useState<any>(null);
   const [isMounted, setIsMounted] = useState(false);
+  const [message, setMessage] = useState({ text: '', show: false });
   
   const readerRef = useRef<HTMLDivElement>(null);
   const html5QrCodeRef = useRef<Html5Qrcode | null>(null);
   const lastScanTimeRef = useRef(0);
+  const physicalScannerInputRef = useRef<HTMLInputElement | null>(null);
+  const bufferRef = useRef('');
   const isMobile = useIsMobile();
 
   useEffect(() => {
@@ -34,38 +38,57 @@ export function SewingScanner({ onScan, disabled }: SewingScannerProps) {
     };
   }, []);
 
+  const showAppMessage = (text: string) => {
+    setMessage({ text, show: true });
+    setTimeout(() => setMessage({ text: '', show: false }), 2000);
+  };
+
   const handleScan = useCallback(async (text: string) => {
+    if (disabled) return;
     const now = Date.now();
-    if (now - lastScanTimeRef.current < 2000) return; // Debounce de 2 segundos
+    if (now - lastScanTimeRef.current < 2000) return;
     lastScanTimeRef.current = now;
 
     if ('vibrate' in navigator) navigator.vibrate(100);
-    await onScan(text.trim());
-  }, [onScan]);
+    
+    // Laser flash animation
+    const laserLine = document.getElementById('laser-line-sewing');
+    if (laserLine) {
+        laserLine.classList.add('laser-flash');
+        laserLine.addEventListener('animationend', () => laserLine.classList.remove('laser-flash'), { once: true });
+    }
+
+    const success = await onScan(text.trim());
+    if (success) {
+        showAppMessage(`Éxito: ${text}`);
+    }
+  }, [onScan, disabled]);
 
   // Lógica para escáner físico (USB/HID)
   useEffect(() => {
-    let buffer = '';
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (mode !== 'fisico' || !scannerActive) return;
+      if (selectedScannerMode !== 'fisico' || !scannerActive) return;
       
       if (e.key === 'Enter') {
-        if (buffer) {
-          handleScan(buffer);
-          buffer = '';
+        e.preventDefault();
+        if (bufferRef.current) {
+          handleScan(bufferRef.current);
+          bufferRef.current = '';
         }
       } else if (e.key.length === 1) {
-        buffer += e.key;
+        bufferRef.current += e.key;
       }
     };
 
-    window.addEventListener('keydown', handleKeyDown);
+    if (selectedScannerMode === 'fisico' && scannerActive) {
+        window.addEventListener('keydown', handleKeyDown);
+    }
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [mode, scannerActive, handleScan]);
+  }, [selectedScannerMode, scannerActive, handleScan]);
 
-  // Lógica robusta para inicializar la cámara
+  // Inicialización de cámara
   useEffect(() => {
-    if (!isMounted || !readerRef.current || mode !== 'camara' || !scannerActive) {
+    if (!isMounted || !readerRef.current || selectedScannerMode !== 'camara' || !scannerActive) {
       if (html5QrCodeRef.current?.isScanning) {
         html5QrCodeRef.current.stop().catch(() => {});
       }
@@ -80,7 +103,6 @@ export function SewingScanner({ onScan, disabled }: SewingScannerProps) {
     const qrCode = html5QrCodeRef.current;
 
     const startCamera = async () => {
-      // Evitar llamadas si ya está escaneando o en transición
       if (qrCode.getState() !== Html5QrcodeScannerState.IDLE && 
           qrCode.getState() !== Html5QrcodeScannerState.UNKNOWN) {
         return;
@@ -91,7 +113,7 @@ export function SewingScanner({ onScan, disabled }: SewingScannerProps) {
           { facingMode: 'environment' },
           { fps: 10, qrbox: 250 },
           (text) => handleScan(text),
-          () => {} // Ignorar errores de frame
+          () => {}
         );
 
         if (isMounted) {
@@ -104,7 +126,6 @@ export function SewingScanner({ onScan, disabled }: SewingScannerProps) {
           }
         }
       } catch (err) {
-        // Solo loguear si no es el error esperado de concurrencia
         if (!String(err).includes("is ongoing")) {
            console.error('Error starting camera:', err);
         }
@@ -119,11 +140,11 @@ export function SewingScanner({ onScan, disabled }: SewingScannerProps) {
         qrCode.stop().catch(() => {});
       }
     };
-  }, [mode, scannerActive, handleScan, isMounted]);
+  }, [selectedScannerMode, scannerActive, handleScan, isMounted]);
 
-  // Aplicar Zoom y Flash dinámicamente
+  // Zoom y Flash
   useEffect(() => {
-    if (mode === 'camara' && scannerActive && html5QrCodeRef.current?.isScanning) {
+    if (selectedScannerMode === 'camara' && scannerActive && html5QrCodeRef.current?.isScanning) {
         const videoElement = readerRef.current?.querySelector('video');
         if (videoElement && videoElement.srcObject) {
             const track = (videoElement.srcObject as MediaStream).getVideoTracks()[0];
@@ -134,50 +155,79 @@ export function SewingScanner({ onScan, disabled }: SewingScannerProps) {
             }
         }
     }
-  }, [zoom, isFlashOn, mode, scannerActive]);
+  }, [zoom, isFlashOn, selectedScannerMode, scannerActive]);
 
   if (!isMounted) return null;
 
   return (
     <div className="space-y-4">
-      <div className="flex grid grid-cols-2 gap-2">
-        <Button 
-          variant={mode === 'camara' ? 'default' : 'outline'} 
-          onClick={() => setMode('camara')}
-          className="flex gap-2"
-          disabled={disabled}
-        >
-          <Camera className="h-4 w-4" /> Cámara
-        </Button>
-        <Button 
-          variant={mode === 'fisico' ? 'default' : 'outline'} 
-          onClick={() => setMode('fisico')}
-          className="flex gap-2"
-          disabled={disabled}
-        >
-          <Keyboard className="h-4 w-4" /> USB / Láser
-        </Button>
+      <div>
+        <label className="block text-sm font-bold text-starbucks-dark mb-2">Método de Escaneo:</label>
+        <div className="grid grid-cols-2 gap-2">
+            <button 
+                onClick={() => setSelectedScannerMode('camara')} 
+                className={cn(
+                    "area-btn w-full px-4 py-3 text-sm rounded-md shadow-sm focus:outline-none",
+                    selectedScannerMode === 'camara' && "scanner-mode-selected"
+                )} 
+                disabled={scannerActive}
+            >
+                CÁMARA
+            </button>
+            <button 
+                onClick={() => setSelectedScannerMode('fisico')} 
+                className={cn(
+                    "area-btn w-full px-4 py-3 text-sm rounded-md shadow-sm focus:outline-none",
+                    selectedScannerMode === 'fisico' && "scanner-mode-selected"
+                )} 
+                disabled={scannerActive}
+            >
+                ESCÁNER FÍSICO
+            </button>
+        </div>
       </div>
 
       <div className="bg-starbucks-cream rounded-xl p-4 border-2 border-dashed border-gray-300 relative min-h-[250px] flex flex-col items-center justify-center overflow-hidden">
-        {mode === 'camara' ? (
-          <>
-            <div id="sewing-reader" ref={readerRef} className="w-full max-w-sm rounded-lg overflow-hidden border-2 border-starbucks-green" />
-            {!scannerActive && <p className="text-gray-500 mt-4">Cámara apagada</p>}
-          </>
-        ) : (
-          <div className="text-center space-y-2">
-            <div className={`p-4 rounded-full ${scannerActive ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-400'}`}>
-                <Keyboard className="h-12 w-12" />
-            </div>
-            <p className="font-bold text-starbucks-dark">
-                {scannerActive ? 'Modo Teclado Listo' : 'Escáner Inactivo'}
-            </p>
-            <p className="text-xs text-gray-500">Los códigos escaneados por USB entrarán automáticamente</p>
-          </div>
-        )}
+        <div className="scanner-container relative w-full h-full flex items-center justify-center">
+            <div 
+                id="sewing-reader" 
+                ref={readerRef} 
+                className="w-full max-w-sm rounded-lg overflow-hidden border-2 border-starbucks-green" 
+                style={{ display: selectedScannerMode === 'camara' && scannerActive ? 'block' : 'none' }}
+            />
+            
+            {message.show && (
+                <div className="scanner-message bg-starbucks-green/80 text-white z-20">
+                    {message.text}
+                </div>
+            )}
 
-        {mode === 'camara' && scannerActive && isMounted && isMobile && cameraCapabilities && (
+            {scannerActive && selectedScannerMode === 'camara' && <div id="laser-line-sewing" className="absolute top-1/2 left-0 w-full h-[3px] bg-red-600 shadow-[0_0_10px_1px_red] opacity-75 z-10 -translate-y-1/2" />}
+            
+            {selectedScannerMode === 'camara' && !scannerActive && (
+                <div className="text-center p-8 text-gray-500">
+                    <Camera className="h-12 w-12 mx-auto mb-2 opacity-20" />
+                    <p>La cámara está desactivada.</p>
+                </div>
+            )}
+
+            {selectedScannerMode === 'fisico' && (
+                <div className="text-center space-y-2">
+                    <div className={cn(
+                        "p-4 rounded-full inline-block",
+                        scannerActive ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-400'
+                    )}>
+                        <Keyboard className="h-12 w-12" />
+                    </div>
+                    <p className="font-bold text-starbucks-dark">
+                        {scannerActive ? 'Modo Teclado Listo' : 'Escáner Inactivo'}
+                    </p>
+                    <p className="text-xs text-gray-500">Los códigos escaneados por USB entrarán automáticamente</p>
+                </div>
+            )}
+        </div>
+
+        {selectedScannerMode === 'camara' && scannerActive && isMounted && isMobile && cameraCapabilities && (
             <div className="absolute bottom-4 left-4 right-4 bg-black/60 p-3 rounded-lg flex items-center gap-4 text-white z-10">
                 {cameraCapabilities.torch && (
                     <Button variant="ghost" size="icon" onClick={() => setIsFlashOn(!isFlashOn)} className={isFlashOn ? 'text-yellow-400' : 'text-white'}>
@@ -188,13 +238,14 @@ export function SewingScanner({ onScan, disabled }: SewingScannerProps) {
                     <div className="flex-1 flex items-center gap-2">
                         <ZoomIn className="h-4 w-4" />
                         <input 
+                            id="zoom-slider"
                             type="range" 
                             min={cameraCapabilities.zoom.min} 
                             max={cameraCapabilities.zoom.max} 
                             step={0.1} 
                             value={zoom} 
                             onChange={(e) => setZoom(parseFloat(e.target.value))}
-                            className="w-full h-1 bg-gray-400 rounded-lg appearance-none cursor-pointer accent-starbucks-green"
+                            className="w-full"
                         />
                     </div>
                 )}
@@ -204,14 +255,18 @@ export function SewingScanner({ onScan, disabled }: SewingScannerProps) {
 
       <div className="flex justify-center gap-4">
         {!scannerActive ? (
-          <Button onClick={() => setScannerActive(true)} disabled={disabled} className="bg-starbucks-green hover:bg-starbucks-dark px-10">
-            Encender Escáner
+          <Button onClick={() => setScannerActive(true)} disabled={disabled} className="bg-blue-600 hover:bg-blue-700 px-10 text-white font-bold">
+            Iniciar Escaneo
           </Button>
         ) : (
-          <Button variant="destructive" onClick={() => setScannerActive(false)} className="px-10">
-            Apagar Escáner
+          <Button variant="destructive" onClick={() => setScannerActive(false)} className="px-10 font-bold">
+            Detener Escaneo
           </Button>
         )}
+      </div>
+
+      <div id="physical-scanner-status" className="mt-4 text-center p-2 rounded-md bg-starbucks-accent text-white text-sm" style={{ display: scannerActive && selectedScannerMode === 'fisico' ? 'block' : 'none' }}>
+          Escáner físico listo para recibir datos.
       </div>
     </div>
   );

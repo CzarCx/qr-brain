@@ -41,29 +41,11 @@ export function useSewingTickets() {
 
     setLoading(true);
     try {
-      // Estructura requerida: Solo llenar codigo_barra, el resto null.
-      // El ID y los timestamps son manejados por la DB (Identity / Defaults).
+      // Estructura requerida por el esquema sewing_tickets: Solo llenar codigo_barra.
+      // El resto se inicializa en NULL por defecto según el requerimiento.
       const newTicket = {
         codigo_barra: barcode.trim(),
-        fecha_impresion: null,
-        hora_vaciado: null,
-        responsable_vaciado: null,
-        cuenta: null,
-        fecha_entrega_paquete: null,
-        id_venta: null,
-        nombre_producto: null,
-        cantidad: null,
-        tipo: null,
-        responsable_impresion: null,
-        impresa: null,
-        asignada_a: null,
-        cortada: null,
-        confeccion: null,
-        perforado: null,
-        ojillado: null,
-        empaquetado: null,
-        lista_para_recoleccion: null,
-        recolectada_por: null
+        // Los timestamps created_at y updated_at son automáticos (DB Default)
       };
 
       const { error } = await supabase
