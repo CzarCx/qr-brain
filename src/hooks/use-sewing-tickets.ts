@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useCallback } from 'react';
@@ -26,6 +25,7 @@ export function useSewingTickets() {
       if (error) throw error;
       setTickets(data || []);
     } catch (error: any) {
+      console.error('Error fetching tickets:', error);
       toast({
         variant: 'destructive',
         title: 'Error al cargar tickets',
@@ -37,13 +37,14 @@ export function useSewingTickets() {
   }, [toast]);
 
   const createTicket = async (barcode: string) => {
-    if (!barcode.trim()) return;
+    if (!barcode || !barcode.trim()) return false;
 
     setLoading(true);
     try {
       // Estructura requerida: Solo llenar codigo_barra, el resto null.
-      const newTicket: SewingTicket = {
-        codigo_barra: barcode,
+      // El ID y los timestamps son manejados por la DB (Identity / Defaults).
+      const newTicket = {
+        codigo_barra: barcode.trim(),
         fecha_impresion: null,
         hora_vaciado: null,
         responsable_vaciado: null,
@@ -77,10 +78,11 @@ export function useSewingTickets() {
         description: `Código ${barcode} guardado automáticamente.`,
       });
 
-      // Refrescar lista
+      // Refrescar lista para ver el nuevo registro
       await fetchTickets();
       return true;
     } catch (error: any) {
+      console.error('Error creating ticket:', error);
       toast({
         variant: 'destructive',
         title: 'Error al registrar ticket',

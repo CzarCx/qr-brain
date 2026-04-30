@@ -1,11 +1,10 @@
-
 /**
  * @fileOverview Definición de tipos para el módulo de tickets de costura.
+ * Refleja exactamente el esquema de la tabla public.sewing_tickets.
  */
 
 export interface SewingTicket {
   id?: number;
-  created_at?: string;
   codigo_barra: string;
   fecha_impresion: string | null;
   hora_vaciado: string | null;
@@ -26,4 +25,6 @@ export interface SewingTicket {
   empaquetado: boolean | null;
   lista_para_recoleccion: boolean | null;
   recolectada_por: string | null;
+  created_at?: string;
+  updated_at?: string;
 }
