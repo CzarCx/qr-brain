@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -7,16 +6,38 @@ import { useSewingTickets } from '@/hooks/use-sewing-tickets';
 import { SewingScanner } from '@/components/SewingScanner';
 import { SewingTicketsTable } from '@/components/SewingTicketsTable';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
-import { Scissors, ClipboardList, Loader2 } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Scissors, ClipboardList, Loader2, UserCircle } from 'lucide-react';
 
 export default function SewingTicketsPage() {
   const { tickets, loading, fetchTickets, createTicket } = useSewingTickets();
+  const [responsable, setResponsable] = useState('');
   const [isMounted, setIsMounted] = useState(false);
 
   useEffect(() => {
     setIsMounted(true);
     fetchTickets();
+    
+    // Recuperar responsable guardado
+    const savedResponsable = localStorage.getItem('sewing_responsable');
+    if (savedResponsable) {
+      setResponsable(savedResponsable);
+    }
   }, [fetchTickets]);
+
+  const handleResponsableChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setResponsable(value);
+    localStorage.setItem('sewing_responsable', value);
+  };
+
+  const handleScan = async (barcode: string) => {
+    if (!responsable.trim()) {
+      return false;
+    }
+    return await createTicket(barcode, responsable.trim());
+  };
 
   if (!isMounted) return null;
 
@@ -43,6 +64,26 @@ export default function SewingTicketsPage() {
           )}
         </header>
 
+        <Card className="shadow-sm border-starbucks-green/20">
+          <CardContent className="pt-6">
+            <div className="flex flex-col md:flex-row gap-4 items-end">
+              <div className="flex-1 space-y-2">
+                <Label htmlFor="responsable" className="flex items-center gap-2 font-bold text-starbucks-dark">
+                  <UserCircle className="h-4 w-4" />
+                  Nombre del Responsable de Vaciado
+                </Label>
+                <Input
+                  id="responsable"
+                  placeholder="Escribe tu nombre completo..."
+                  value={responsable}
+                  onChange={handleResponsableChange}
+                  className="bg-white border-starbucks-green/30 focus-visible:ring-starbucks-green"
+                />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
           {/* Columna Escáner */}
           <div className="lg:col-span-5">
@@ -50,11 +91,13 @@ export default function SewingTicketsPage() {
               <CardHeader>
                 <CardTitle className="text-lg">Escáner de Tickets</CardTitle>
                 <CardDescription>
-                  Los códigos detectados se guardarán instantáneamente en la base de datos.
+                  {!responsable.trim() 
+                    ? "Debes ingresar tu nombre antes de comenzar a escanear." 
+                    : "Los códigos detectados se guardarán instantáneamente."}
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <SewingScanner onScan={createTicket} disabled={loading} />
+                <SewingScanner onScan={handleScan} disabled={loading || !responsable.trim()} />
               </CardContent>
             </Card>
           </div>

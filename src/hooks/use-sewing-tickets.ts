@@ -45,15 +45,31 @@ export function useSewingTickets() {
     }
   }, [toast]);
 
-  const createTicket = useCallback(async (barcode: string) => {
+  const createTicket = useCallback(async (barcode: string, responsable: string) => {
     if (!barcode || !barcode.trim()) return false;
+    
+    const finalBarcode = barcode.trim();
+
+    // VALIDACIÓN DE DUPLICADOS LOCAL (Últimos 50)
+    const isDuplicate = tickets.some(t => t.codigo_barra === finalBarcode);
+    if (isDuplicate) {
+      toast({
+        variant: 'destructive',
+        title: 'Código Duplicado',
+        description: `El ticket ${finalBarcode} ya ha sido escaneado recientemente.`,
+      });
+      return false;
+    }
 
     setLoading(true);
     try {
-      // Insertamos en la tabla de la DB de Etiquetas
+      // Insertamos en la tabla de la DB de Etiquetas con el responsable
       const { error } = await supabaseEtiquetas
         .from('sewing_tickets')
-        .insert([{ codigo_barra: barcode.trim() }]);
+        .insert([{ 
+          codigo_barra: finalBarcode,
+          responsable_vaciado: responsable 
+        }]);
 
       if (error) {
           console.error('Error de Supabase Etiquetas (createTicket):', error.message, error.details);
@@ -63,7 +79,7 @@ export function useSewingTickets() {
       toast({
         variant: 'success',
         title: 'Ticket registrado',
-        description: `Código ${barcode} guardado en DB Etiquetas.`,
+        description: `Código ${finalBarcode} guardado por ${responsable}.`,
       });
 
       // Refrescar lista para ver el nuevo registro
@@ -80,7 +96,7 @@ export function useSewingTickets() {
     } finally {
       setLoading(false);
     }
-  }, [fetchTickets, toast]);
+  }, [fetchTickets, toast, tickets]);
 
   return {
     tickets,
