@@ -24,7 +24,6 @@ export function SewingScanner({ onScan, disabled }: SewingScannerProps) {
   const readerRef = useRef<HTMLDivElement>(null);
   const html5QrCodeRef = useRef<Html5Qrcode | null>(null);
   const lastScanTimeRef = useRef(0);
-  const physicalScannerInputRef = useRef<HTMLInputElement | null>(null);
   const bufferRef = useRef('');
   const isMobile = useIsMobile();
 
@@ -32,9 +31,6 @@ export function SewingScanner({ onScan, disabled }: SewingScannerProps) {
     setIsMounted(true);
     return () => {
       setIsMounted(false);
-      if (html5QrCodeRef.current?.isScanning) {
-        html5QrCodeRef.current.stop().catch(() => {});
-      }
     };
   }, []);
 
@@ -51,7 +47,6 @@ export function SewingScanner({ onScan, disabled }: SewingScannerProps) {
 
     if ('vibrate' in navigator) navigator.vibrate(100);
     
-    // Laser flash animation
     const laserLine = document.getElementById('laser-line-sewing');
     if (laserLine) {
         laserLine.classList.add('laser-flash');
@@ -64,7 +59,6 @@ export function SewingScanner({ onScan, disabled }: SewingScannerProps) {
     }
   }, [onScan, disabled]);
 
-  // Lógica para escáner físico (USB/HID)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (selectedScannerMode !== 'fisico' || !scannerActive) return;
@@ -86,63 +80,62 @@ export function SewingScanner({ onScan, disabled }: SewingScannerProps) {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [selectedScannerMode, scannerActive, handleScan]);
 
-  // Inicialización de cámara
   useEffect(() => {
-    if (!isMounted || !readerRef.current || selectedScannerMode !== 'camara' || !scannerActive) {
-      if (html5QrCodeRef.current?.isScanning) {
-        html5QrCodeRef.current.stop().catch(() => {});
-      }
-      return;
-    }
+    if (!isMounted || !readerRef.current) return;
 
-    const scannerId = readerRef.current.id;
     if (!html5QrCodeRef.current) {
-      html5QrCodeRef.current = new Html5Qrcode(scannerId, false);
+        html5QrCodeRef.current = new Html5Qrcode(readerRef.current.id, false);
     }
-
     const qrCode = html5QrCodeRef.current;
 
-    const startCamera = async () => {
-      if (qrCode.getState() !== Html5QrcodeScannerState.IDLE && 
-          qrCode.getState() !== Html5QrcodeScannerState.UNKNOWN) {
-        return;
-      }
-
-      try {
-        await qrCode.start(
-          { facingMode: 'environment' },
-          { fps: 10, qrbox: 250 },
-          (text) => handleScan(text),
-          () => {}
-        );
-
-        if (isMounted) {
-          const videoElement = document.getElementById(scannerId)?.querySelector('video');
-          if (videoElement && videoElement.srcObject) {
-            const track = (videoElement.srcObject as MediaStream).getVideoTracks()[0];
-            if (track) {
-              setCameraCapabilities(track.getCapabilities?.() || null);
-            }
-          }
+    const cleanup = () => {
+        if (qrCode && qrCode.isScanning) {
+            return qrCode.stop().catch(err => {
+                if (!String(err).includes('not started')) {
+                    console.error("Fallo al detener el escáner:", err);
+                }
+            }).finally(() => {
+                setCameraCapabilities(null);
+                setIsFlashOn(false);
+                setZoom(1);
+            });
         }
-      } catch (err) {
-        if (!String(err).includes("is ongoing")) {
-           console.error('Error starting camera:', err);
-        }
-        setScannerActive(false);
-      }
+        return Promise.resolve();
     };
 
-    startCamera();
+    if (scannerActive && selectedScannerMode === 'camara') {
+      if (qrCode.getState() !== Html5QrcodeScannerState.SCANNING) {
+        const config = {
+          fps: 10,
+          qrbox: { width: 250, height: 250 },
+        };
+        qrCode.start({ facingMode: "environment" }, config, (text) => handleScan(text), () => {})
+        .then(() => {
+            const videoElement = readerRef.current?.querySelector('video');
+            if (videoElement && videoElement.srcObject) {
+              const stream = videoElement.srcObject as MediaStream;
+              const track = stream.getVideoTracks()[0];
+              if (track) {
+                setCameraCapabilities(track.getCapabilities?.() || null);
+              }
+            }
+        })
+        .catch(err => {
+            if (!String(err).includes("is ongoing")) {
+               console.error("Error al iniciar camara:", err);
+            }
+            setScannerActive(false);
+        });
+      }
+    } else {
+      cleanup();
+    }
 
     return () => {
-      if (qrCode.isScanning) {
-        qrCode.stop().catch(() => {});
-      }
+      cleanup();
     };
-  }, [selectedScannerMode, scannerActive, handleScan, isMounted]);
+  }, [scannerActive, selectedScannerMode, isMounted, handleScan]);
 
-  // Zoom y Flash
   useEffect(() => {
     if (selectedScannerMode === 'camara' && scannerActive && html5QrCodeRef.current?.isScanning) {
         const videoElement = readerRef.current?.querySelector('video');
