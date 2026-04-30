@@ -45,7 +45,7 @@ export function useSewingTickets() {
     }
   }, [toast]);
 
-  const createTicket = async (barcode: string) => {
+  const createTicket = useCallback(async (barcode: string) => {
     if (!barcode || !barcode.trim()) return false;
 
     setLoading(true);
@@ -80,7 +80,7 @@ export function useSewingTickets() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [fetchTickets, toast]);
 
   return {
     tickets,

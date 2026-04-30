@@ -26,6 +26,18 @@ export function SewingScanner({ onScan, disabled }: SewingScannerProps) {
   const lastScanTimeRef = useRef(0);
   const bufferRef = useRef('');
   const isMobile = useIsMobile();
+  
+  // Usamos una ref para la función onScan para que el escáner no se reinicie
+  // cuando cambie el estado de carga (disabled)
+  const onScanRef = useRef(onScan);
+  useEffect(() => {
+    onScanRef.current = onScan;
+  }, [onScan]);
+
+  const disabledRef = useRef(disabled);
+  useEffect(() => {
+    disabledRef.current = disabled;
+  }, [disabled]);
 
   useEffect(() => {
     setIsMounted(true);
@@ -40,7 +52,8 @@ export function SewingScanner({ onScan, disabled }: SewingScannerProps) {
   };
 
   const handleScan = useCallback(async (text: string) => {
-    if (disabled) return;
+    if (disabledRef.current) return;
+    
     const now = Date.now();
     if (now - lastScanTimeRef.current < 2000) return;
     lastScanTimeRef.current = now;
@@ -53,11 +66,11 @@ export function SewingScanner({ onScan, disabled }: SewingScannerProps) {
         laserLine.addEventListener('animationend', () => laserLine.classList.remove('laser-flash'), { once: true });
     }
 
-    const success = await onScan(text.trim());
+    const success = await onScanRef.current(text.trim());
     if (success) {
         showAppMessage(`Éxito: ${text}`);
     }
-  }, [onScan, disabled]);
+  }, []);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
