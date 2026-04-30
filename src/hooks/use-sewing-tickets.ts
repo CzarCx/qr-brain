@@ -7,7 +7,7 @@ import { useToast } from '@/hooks/use-toast';
 
 /**
  * Hook personalizado para gestionar la lógica de negocio de los tickets de costura.
- * Ahora utiliza las credenciales de Etiquetas DB (supabaseEtiquetas).
+ * Realiza una búsqueda en etiquetas_i para enriquecer los datos de sewing_tickets.
  */
 export function useSewingTickets() {
   const [tickets, setTickets] = useState<SewingTicket[]>([]);
@@ -17,7 +17,6 @@ export function useSewingTickets() {
   const fetchTickets = useCallback(async () => {
     setLoading(true);
     try {
-      // Intentamos cargar los últimos 50 tickets de la DB de Etiquetas
       const { data, error } = await supabaseEtiquetas
         .from('sewing_tickets')
         .select('*')
@@ -25,20 +24,15 @@ export function useSewingTickets() {
         .limit(50);
 
       if (error) {
-        console.error('Error de Supabase Etiquetas (fetchTickets):', error.message, error.details, error.hint);
-        
-        if (error.message.includes('Could not find the table')) {
-            throw new Error('La tabla "sewing_tickets" no existe en el proyecto de ETIQUETAS. Por favor, ejecuta el script SQL en ese panel.');
-        }
+        console.error('Error de Supabase Etiquetas (fetchTickets):', error.message);
         throw error;
       }
       setTickets(data || []);
     } catch (error: any) {
-      console.error('Excepción al cargar tickets (Etiquetas DB):', error?.message || error);
       toast({
         variant: 'destructive',
-        title: 'Error de Conexión (Etiquetas)',
-        description: error.message || 'No se pudo encontrar la tabla en la base de datos de etiquetas.',
+        title: 'Error de Conexión',
+        description: error.message || 'No se pudo cargar la lista de tickets.',
       });
     } finally {
       setLoading(false);
@@ -50,7 +44,7 @@ export function useSewingTickets() {
     
     const finalBarcode = barcode.trim();
 
-    // VALIDACIÓN DE DUPLICADOS LOCAL (Últimos 50)
+    // VALIDACIÓN DE DUPLICADOS LOCAL
     const isDuplicate = tickets.some(t => t.codigo_barra === finalBarcode);
     if (isDuplicate) {
       toast({
@@ -63,34 +57,68 @@ export function useSewingTickets() {
 
     setLoading(true);
     try {
-      // Insertamos en la tabla de la DB de Etiquetas con el responsable
-      const { error } = await supabaseEtiquetas
-        .from('sewing_tickets')
-        .insert([{ 
-          codigo_barra: finalBarcode,
-          responsable_vaciado: responsable 
-        }]);
+      // 1. Consultar en etiquetas_i
+      const { data: tagData, error: tagError } = await supabaseEtiquetas
+        .from('etiquetas_i')
+        .select('product, pack_id, sales_num, sku, personal_inc, organization')
+        .eq('code', finalBarcode)
+        .maybeSingle();
 
-      if (error) {
-          console.error('Error de Supabase Etiquetas (createTicket):', error.message, error.details);
-          throw error;
+      if (tagError) {
+        console.warn('Error al buscar en etiquetas_i:', tagError.message);
+      }
+
+      // 2. Preparar payload de inserción con mapeo de datos
+      const insertPayload = {
+        codigo_barra: finalBarcode,
+        responsable_vaciado: responsable,
+        // Si hay coincidencia, mapeamos. Si no, se quedan en null
+        nombre_producto: tagData?.product || null,
+        pack_id: tagData?.pack_id || null,
+        sales_num: tagData?.sales_num || null,
+        sku: tagData?.sku || null,
+        responsable_impresion: tagData?.personal_inc || null,
+        cuenta: tagData?.organization || null,
+        // Otros campos requeridos por el esquema inicializados en null
+        fecha_impresion: null,
+        hora_vaciado: null,
+        fecha_entrega_paquete: null,
+        cantidad: null,
+        tipo: null,
+        impresa: null,
+        asignada_a: null,
+        cortada: null,
+        confeccion: null,
+        perforado: null,
+        ojillado: null,
+        empaquetado: null,
+        lista_para_recoleccion: null,
+        recolectada_por: null
+      };
+
+      // 3. Insertar en sewing_tickets
+      const { error: insertError } = await supabaseEtiquetas
+        .from('sewing_tickets')
+        .insert([insertPayload]);
+
+      if (insertError) {
+          throw insertError;
       }
 
       toast({
         variant: 'success',
-        title: 'Ticket registrado',
+        title: tagData ? 'Ticket Encontrado y Registrado' : 'Ticket Registrado (Nuevo)',
         description: `Código ${finalBarcode} guardado por ${responsable}.`,
       });
 
-      // Refrescar lista para ver el nuevo registro
       await fetchTickets();
       return true;
     } catch (error: any) {
-      console.error('Excepción al crear ticket (Etiquetas DB):', error?.message || error);
+      console.error('Excepción al crear ticket:', error);
       toast({
         variant: 'destructive',
         title: 'Error al registrar',
-        description: error.message || 'Error al conectar con la base de datos de etiquetas.',
+        description: error.message || 'Error al conectar con la base de datos.',
       });
       return false;
     } finally {
