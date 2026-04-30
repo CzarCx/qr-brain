@@ -44,57 +44,84 @@ export function useSewingTickets() {
     
     const finalBarcode = barcode.trim();
 
-    // VALIDACIÓN DE DUPLICADOS LOCAL
+    // VALIDACIÓN DE DUPLICADOS LOCAL (Opcional, permitimos duplicados según req pero validamos para feedback)
     const isDuplicate = tickets.some(t => t.codigo_barra === finalBarcode);
     if (isDuplicate) {
-      toast({
-        variant: 'destructive',
-        title: 'Código Duplicado',
-        description: `El ticket ${finalBarcode} ya ha sido escaneado recientemente.`,
-      });
-      return false;
+        // Solo avisamos, pero el flujo permite continuar si se requiere registrar varias veces
+        console.log(`Aviso: El ticket ${finalBarcode} ya se encuentra en la lista reciente.`);
     }
 
     setLoading(true);
     try {
-      // 1. Consultar en etiquetas_i
+      // 1. Consultar en etiquetas_i para mapeo automático
       const { data: tagData, error: tagError } = await supabaseEtiquetas
         .from('etiquetas_i')
-        .select('product, pack_id, sales_num, sku, personal_inc, organization')
+        .select('product, pack_id, sales_num, sku, personal_inc, organization, created_at, quantity')
         .eq('code', finalBarcode)
         .maybeSingle();
 
       if (tagError) {
-        console.warn('Error al buscar en etiquetas_i:', tagError.message);
+        console.error('Error al consultar etiquetas_i:', tagError.message);
       }
 
-      // 2. Preparar payload de inserción con mapeo de datos
-      const insertPayload = {
-        codigo_barra: finalBarcode,
-        responsable_vaciado: responsable,
-        // Si hay coincidencia, mapeamos. Si no, se quedan en null
-        nombre_producto: tagData?.product || null,
-        pack_id: tagData?.pack_id || null,
-        sales_num: tagData?.sales_num || null,
-        sku: tagData?.sku || null,
-        responsable_impresion: tagData?.personal_inc || null,
-        cuenta: tagData?.organization || null,
-        // Otros campos requeridos por el esquema inicializados en null
-        fecha_impresion: null,
-        hora_vaciado: null,
-        fecha_entrega_paquete: null,
-        cantidad: null,
-        tipo: null,
-        impresa: null,
-        asignada_a: null,
-        cortada: null,
-        confeccion: null,
-        perforado: null,
-        ojillado: null,
-        empaquetado: null,
-        lista_para_recoleccion: null,
-        recolectada_por: null
-      };
+      // 2. Preparar payload según condiciones
+      let insertPayload: Partial<SewingTicket>;
+
+      if (tagData) {
+        // CASO B: Existe coincidencia -> Mapeo completo
+        insertPayload = {
+          codigo_barra: finalBarcode,
+          responsable_vaciado: responsable,
+          nombre_producto: tagData.product,
+          pack_id: tagData.pack_id,
+          sales_num: tagData.sales_num,
+          sku: tagData.sku,
+          responsable_impresion: tagData.personal_inc,
+          cuenta: tagData.organization,
+          fecha_impresion: tagData.created_at ? new Date(tagData.created_at).toISOString().split('T')[0] : null,
+          cantidad: tagData.quantity,
+          impresa: true,
+          // Resto inicializados en null
+          hora_vaciado: new Date().toLocaleTimeString('es-MX', { hour12: false }),
+          fecha_entrega_paquete: null,
+          tipo: null,
+          asignada_a: null,
+          cortada: null,
+          confeccion: null,
+          perforado: null,
+          ojillado: null,
+          empaquetado: null,
+          lista_para_recoleccion: null,
+          recolectada_por: null
+        };
+      } else {
+        // CASO A: No existe en etiquetas_i -> Registro básico
+        insertPayload = {
+          codigo_barra: finalBarcode,
+          responsable_vaciado: responsable,
+          impresa: false,
+          hora_vaciado: new Date().toLocaleTimeString('es-MX', { hour12: false }),
+          // Todo lo demás NULL
+          nombre_producto: null,
+          pack_id: null,
+          sales_num: null,
+          sku: null,
+          responsable_impresion: null,
+          cuenta: null,
+          fecha_impresion: null,
+          cantidad: null,
+          fecha_entrega_paquete: null,
+          tipo: null,
+          asignada_a: null,
+          cortada: null,
+          confeccion: null,
+          perforado: null,
+          ojillado: null,
+          empaquetado: null,
+          lista_para_recoleccion: null,
+          recolectada_por: null
+        };
+      }
 
       // 3. Insertar en sewing_tickets
       const { error: insertError } = await supabaseEtiquetas
@@ -107,18 +134,20 @@ export function useSewingTickets() {
 
       toast({
         variant: 'success',
-        title: tagData ? 'Ticket Encontrado y Registrado' : 'Ticket Registrado (Nuevo)',
-        description: `Código ${finalBarcode} guardado por ${responsable}.`,
+        title: tagData ? 'Ticket Mapeado con Éxito' : 'Ticket Registrado (No Encontrado)',
+        description: tagData 
+            ? `Se importaron datos de ${tagData.product} para el código ${finalBarcode}.`
+            : `El código ${finalBarcode} se guardó sin datos adicionales.`,
       });
 
       await fetchTickets();
       return true;
     } catch (error: any) {
-      console.error('Excepción al crear ticket:', error);
+      console.error('Excepción en módulo de costura:', error);
       toast({
         variant: 'destructive',
-        title: 'Error al registrar',
-        description: error.message || 'Error al conectar con la base de datos.',
+        title: 'Error de Registro',
+        description: error.message || 'No se pudo guardar el ticket en la base de datos.',
       });
       return false;
     } finally {

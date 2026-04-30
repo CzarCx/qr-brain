@@ -11,7 +11,7 @@ export interface SewingTicket {
   responsable_vaciado: string | null;
   cuenta: string | null;
   fecha_entrega_paquete: string | null;
-  id_venta?: string | null; // Mantenido para compatibilidad
+  id_venta?: string | null; 
   nombre_producto: string | null;
   cantidad: number | null;
   tipo: string | null;
@@ -27,7 +27,6 @@ export interface SewingTicket {
   recolectada_por: string | null;
   created_at?: string;
   updated_at?: string;
-  // Nuevas columnas del esquema
   pack_id: number | null;
   sales_num: number | null;
   sku: string | null;
