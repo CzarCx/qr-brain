@@ -8,12 +8,16 @@ import { SewingTicketsTable } from '@/components/SewingTicketsTable';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Scissors, ClipboardList, Loader2, UserCircle } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Scissors, ClipboardList, Loader2, UserCircle, PlusCircle, Keyboard } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
 
 export default function SewingTicketsPage() {
   const { tickets, loading, fetchTickets, createTicket } = useSewingTickets();
   const [responsable, setResponsable] = useState('');
+  const [manualBarcode, setManualBarcode] = useState('');
   const [isMounted, setIsMounted] = useState(false);
+  const { toast } = useToast();
 
   useEffect(() => {
     setIsMounted(true);
@@ -34,9 +38,33 @@ export default function SewingTicketsPage() {
 
   const handleScan = async (barcode: string) => {
     if (!responsable.trim()) {
+      toast({
+        variant: 'destructive',
+        title: 'Responsable Requerido',
+        description: 'Debes ingresar tu nombre antes de escanear.',
+      });
       return false;
     }
     return await createTicket(barcode, responsable.trim());
+  };
+
+  const handleManualAdd = async () => {
+    if (!responsable.trim()) {
+      toast({
+        variant: 'destructive',
+        title: 'Responsable Requerido',
+        description: 'Debes ingresar tu nombre antes de añadir códigos.',
+      });
+      return;
+    }
+
+    const code = manualBarcode.trim();
+    if (!code) return;
+
+    const success = await createTicket(code, responsable.trim());
+    if (success) {
+      setManualBarcode('');
+    }
   };
 
   if (!isMounted) return null;
@@ -64,10 +92,10 @@ export default function SewingTicketsPage() {
           )}
         </header>
 
-        <Card className="shadow-sm border-starbucks-green/20">
-          <CardContent className="pt-6">
-            <div className="flex flex-col md:flex-row gap-4 items-end">
-              <div className="flex-1 space-y-2">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <Card className="shadow-sm border-starbucks-green/20">
+            <CardContent className="pt-6">
+              <div className="space-y-2">
                 <Label htmlFor="responsable" className="flex items-center gap-2 font-bold text-starbucks-dark">
                   <UserCircle className="h-4 w-4" />
                   Nombre del Responsable de Vaciado
@@ -80,9 +108,38 @@ export default function SewingTicketsPage() {
                   className="bg-white border-starbucks-green/30 focus-visible:ring-starbucks-green"
                 />
               </div>
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+
+          <Card className="shadow-sm border-starbucks-green/20">
+            <CardContent className="pt-6">
+              <div className="space-y-2">
+                <Label htmlFor="manual-barcode" className="flex items-center gap-2 font-bold text-starbucks-dark">
+                  <Keyboard className="h-4 w-4" />
+                  Ingreso Manual (Pruebas)
+                </Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="manual-barcode"
+                    placeholder="Escribe el código de barras..."
+                    value={manualBarcode}
+                    onChange={(e) => setManualBarcode(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleManualAdd()}
+                    className="bg-white border-starbucks-green/30 focus-visible:ring-starbucks-green"
+                  />
+                  <Button 
+                    onClick={handleManualAdd} 
+                    disabled={loading || !manualBarcode.trim()}
+                    className="bg-starbucks-green hover:bg-starbucks-dark"
+                  >
+                    <PlusCircle className="h-4 w-4 mr-2" />
+                    Añadir
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
           {/* Columna Escáner */}
