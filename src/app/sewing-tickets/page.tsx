@@ -16,6 +16,7 @@ import { useReactToPrint } from 'react-to-print';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { SewingTicket } from '@/types/sewing';
+import { format } from 'date-fns';
 
 export default function SewingTicketsPage() {
   const { tickets, loading, fetchTickets, createTicket, updateTicket } = useSewingTickets();
@@ -77,40 +78,100 @@ export default function SewingTicketsPage() {
     }
   };
 
-  // 1. Exportar PDF
+  // 1. Exportar PDF Completo (Horizontal)
   const exportToPDF = () => {
     if (tickets.length === 0) return;
 
-    const doc = new jsPDF('landscape');
-    const title = `Bitácora de Costura - ${new Date().toLocaleDateString()}`;
-    
-    doc.setFontSize(18);
-    doc.text(title, 14, 15);
-    
-    autoTable(doc, {
-      startY: 20,
-      head: [['ID', 'Cód. Barra', 'Producto', 'Cant', 'SKU', 'Vaciado', 'Cuenta', 'Venta', 'Pack ID']],
-      body: tickets.map(t => [
-        t.id, 
-        t.codigo_barra, 
-        t.nombre_producto || '---', 
-        t.cantidad || 0, 
-        t.sku || '---',
-        t.responsable_vaciado || '---',
-        t.cuenta || '---',
-        t.sales_num || '---',
-        t.pack_id || '---'
-      ]),
-      theme: 'grid',
-      headStyles: { fillColor: [0, 98, 65] },
-      styles: { fontSize: 8 }
+    const doc = new jsPDF({
+      orientation: 'landscape',
+      unit: 'mm',
+      format: 'a4'
     });
 
-    doc.save(`bitacora_costura_${Date.now()}.pdf`);
+    const title = `Bitácora de Costura - ${new Date().toLocaleDateString('es-MX')}`;
+    
+    doc.setFontSize(16);
+    doc.setTextColor(0, 98, 65); // Starbucks Green
+    doc.text(title, 14, 15);
+    
+    const headers = [
+      'ID', 
+      'Código Barra', 
+      'Producto', 
+      'Cant', 
+      'SKU', 
+      'Vaciado Por', 
+      'H. Vaciado', 
+      'Cuenta', 
+      'Venta', 
+      'Pack ID', 
+      'Impresa', 
+      'Resp. Imp.', 
+      'F. Imp.', 
+      'Asignada', 
+      'Corte', 
+      'Confecc.', 
+      'Perfor.', 
+      'Ojill.', 
+      'Empaque', 
+      'Recol.', 
+      'Recolector', 
+      'F. Entrega'
+    ];
+
+    const body = tickets.map(t => [
+      t.id,
+      t.codigo_barra,
+      t.nombre_producto || '---',
+      t.cantidad || 0,
+      t.sku || '---',
+      t.responsable_vaciado || '---',
+      t.hora_vaciado || '---',
+      t.cuenta || '---',
+      t.sales_num || '---',
+      t.pack_id || '---',
+      t.impresa ? 'SÍ' : 'NO',
+      t.responsable_impresion || '---',
+      t.fecha_impresion ? format(new Date(t.fecha_impresion), "dd/MM/yy") : '---',
+      t.asignada_a || '---',
+      t.cortada ? 'SÍ' : 'NO',
+      t.confeccion === true ? 'SÍ' : t.confeccion === false ? 'NO' : 'N/A',
+      t.perforado === true ? 'SÍ' : t.perforado === false ? 'NO' : 'N/A',
+      t.ojillado === true ? 'SÍ' : t.ojillado === false ? 'NO' : 'N/A',
+      t.empaquetado ? 'SÍ' : 'NO',
+      t.lista_para_recoleccion ? 'SÍ' : 'NO',
+      t.recolectada_por || 'PENDIENTE',
+      t.fecha_entrega_paquete ? format(new Date(t.fecha_entrega_paquete), "dd/MM/yy") : '---'
+    ]);
+
+    autoTable(doc, {
+      startY: 22,
+      head: [headers],
+      body: body,
+      theme: 'grid',
+      headStyles: { 
+        fillColor: [0, 98, 65], 
+        fontSize: 5.5,
+        halign: 'center',
+        valign: 'middle'
+      },
+      styles: { 
+        fontSize: 5,
+        cellPadding: 1,
+        overflow: 'linebreak',
+        columnWidth: 'wrap'
+      },
+      columnStyles: {
+        2: { cellWidth: 25 }, // Producto un poco más ancho
+        1: { cellWidth: 20 }, // Codigo de barras
+      }
+    });
+
+    doc.save(`bitacora_costura_completa_${Date.now()}.pdf`);
     
     toast({
       title: "PDF Generado",
-      description: "La bitácora se ha descargado correctamente.",
+      description: "La bitácora completa se ha descargado en formato horizontal.",
     });
   };
 
