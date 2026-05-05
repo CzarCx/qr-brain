@@ -13,7 +13,7 @@ import { Scissors, ClipboardList, Loader2, UserCircle, PlusCircle, Keyboard } fr
 import { useToast } from '@/hooks/use-toast';
 
 export default function SewingTicketsPage() {
-  const { tickets, loading, fetchTickets, createTicket } = useSewingTickets();
+  const { tickets, loading, fetchTickets, createTicket, updateTicket } = useSewingTickets();
   const [responsable, setResponsable] = useState('');
   const [manualBarcode, setManualBarcode] = useState('');
   const [isMounted, setIsMounted] = useState(false);
@@ -75,7 +75,7 @@ export default function SewingTicketsPage() {
         <title>Bitácora de Costura | Sistema de Control</title>
       </Head>
       
-      <main className="container mx-auto p-4 md:p-8 space-y-6 animate-in fade-in duration-500">
+      <main className="max-w-[1600px] mx-auto p-4 md:p-8 space-y-6 animate-in fade-in duration-500">
         <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="space-y-1">
             <h1 className="text-2xl md:text-3xl font-bold text-starbucks-green flex items-center gap-2">
@@ -141,41 +141,40 @@ export default function SewingTicketsPage() {
           </Card>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-          {/* Columna Escáner */}
-          <div className="lg:col-span-5">
-            <Card className="shadow-lg border-t-4 border-t-starbucks-green">
-              <CardHeader>
-                <CardTitle className="text-lg">Escáner de Tickets</CardTitle>
-                <CardDescription>
-                  {!responsable.trim() 
-                    ? "Debes ingresar tu nombre antes de comenzar a escanear." 
-                    : "Los códigos detectados se guardarán instantáneamente."}
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <SewingScanner onScan={handleScan} disabled={loading || !responsable.trim()} />
-              </CardContent>
-            </Card>
-          </div>
+        <div className="grid grid-cols-1 gap-8">
+          {/* Sección Escáner */}
+          <Card className="shadow-lg border-t-4 border-t-starbucks-green max-w-2xl mx-auto w-full">
+            <CardHeader>
+              <CardTitle className="text-lg">Escáner de Tickets</CardTitle>
+              <CardDescription>
+                {!responsable.trim() 
+                  ? "Debes ingresar tu nombre antes de comenzar a escanear." 
+                  : "Los códigos detectados se guardarán instantáneamente."}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <SewingScanner onScan={handleScan} disabled={loading || !responsable.trim()} />
+            </CardContent>
+          </Card>
 
-          {/* Columna Lista Reciente */}
-          <div className="lg:col-span-7">
-            <Card className="shadow-lg h-full">
-              <CardHeader className="flex flex-row items-center justify-between">
-                <div>
-                  <CardTitle className="text-lg flex items-center gap-2">
-                    <ClipboardList className="h-5 w-5 text-starbucks-accent" />
-                    Registros de Hoy
-                  </CardTitle>
-                  <CardDescription>Últimos 50 tickets procesados.</CardDescription>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <SewingTicketsTable tickets={tickets} />
-              </CardContent>
-            </Card>
-          </div>
+          {/* Sección Lista Reciente - Ancho Completo */}
+          <Card className="shadow-lg">
+            <CardHeader className="flex flex-row items-center justify-between">
+              <div>
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <ClipboardList className="h-5 w-5 text-starbucks-accent" />
+                  Registros de Hoy
+                </CardTitle>
+                <CardDescription>Visualiza y actualiza los estados de producción rápidamente.</CardDescription>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <SewingTicketsTable 
+                tickets={tickets} 
+                onUpdateTicket={updateTicket}
+              />
+            </CardContent>
+          </Card>
         </div>
       </main>
     </>

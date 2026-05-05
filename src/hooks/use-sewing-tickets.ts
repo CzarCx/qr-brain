@@ -44,11 +44,15 @@ export function useSewingTickets() {
     
     const finalBarcode = barcode.trim();
 
-    // VALIDACIÓN DE DUPLICADOS LOCAL (Opcional, permitimos duplicados según req pero validamos para feedback)
+    // VALIDACIÓN DE DUPLICADOS LOCAL
     const isDuplicate = tickets.some(t => t.codigo_barra === finalBarcode);
     if (isDuplicate) {
-        // Solo avisamos, pero el flujo permite continuar si se requiere registrar varias veces
-        console.log(`Aviso: El ticket ${finalBarcode} ya se encuentra en la lista reciente.`);
+        toast({
+            variant: 'warning',
+            title: 'Código Duplicado',
+            description: `El ticket ${finalBarcode} ya se encuentra registrado en la lista actual.`,
+        });
+        return false;
     }
 
     setLoading(true);
@@ -81,17 +85,16 @@ export function useSewingTickets() {
           fecha_impresion: tagData.created_at ? new Date(tagData.created_at).toISOString().split('T')[0] : null,
           cantidad: tagData.quantity,
           impresa: true,
-          // Resto inicializados en null
           hora_vaciado: new Date().toLocaleTimeString('es-MX', { hour12: false }),
           fecha_entrega_paquete: null,
           tipo: null,
           asignada_a: null,
-          cortada: null,
-          confeccion: null,
-          perforado: null,
-          ojillado: null,
-          empaquetado: null,
-          lista_para_recoleccion: null,
+          cortada: false, // Inicializado en falso por defecto
+          confeccion: false,
+          perforado: false,
+          ojillado: false,
+          empaquetado: false,
+          lista_para_recoleccion: false,
           recolectada_por: null
         };
       } else {
@@ -101,7 +104,6 @@ export function useSewingTickets() {
           responsable_vaciado: responsable,
           impresa: false,
           hora_vaciado: new Date().toLocaleTimeString('es-MX', { hour12: false }),
-          // Todo lo demás NULL
           nombre_producto: null,
           pack_id: null,
           sales_num: null,
@@ -113,12 +115,12 @@ export function useSewingTickets() {
           fecha_entrega_paquete: null,
           tipo: null,
           asignada_a: null,
-          cortada: null,
-          confeccion: null,
-          perforado: null,
-          ojillado: null,
-          empaquetado: null,
-          lista_para_recoleccion: null,
+          cortada: false,
+          confeccion: false,
+          perforado: false,
+          ojillado: false,
+          empaquetado: false,
+          lista_para_recoleccion: false,
           recolectada_por: null
         };
       }
@@ -155,10 +157,35 @@ export function useSewingTickets() {
     }
   }, [fetchTickets, toast, tickets]);
 
+  const updateTicket = useCallback(async (id: number, updates: Partial<SewingTicket>) => {
+    try {
+      // Actualización optimista en el estado local
+      setTickets(prev => prev.map(t => t.id === id ? { ...t, ...updates } : t));
+
+      const { error } = await supabaseEtiquetas
+        .from('sewing_tickets')
+        .update(updates)
+        .eq('id', id);
+
+      if (error) throw error;
+
+    } catch (error: any) {
+      console.error('Error al actualizar ticket:', error.message);
+      toast({
+        variant: 'destructive',
+        title: 'Error de Actualización',
+        description: 'No se pudo sincronizar el cambio con la base de datos.',
+      });
+      // Revertir en caso de error (opcionalmente podrías recargar la lista)
+      await fetchTickets();
+    }
+  }, [toast, fetchTickets]);
+
   return {
     tickets,
     loading,
     fetchTickets,
     createTicket,
+    updateTicket,
   };
 }

@@ -9,20 +9,51 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Badge } from '@/components/ui/badge';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { Check, X, Clock, User, Package, Hash, Tag, Building2, Calendar } from 'lucide-react';
+import { Check, X, Clock, User, Package, Building2 } from 'lucide-react';
 
 interface SewingTicketsTableProps {
   tickets: SewingTicket[];
+  onUpdateTicket?: (id: number, updates: Partial<SewingTicket>) => Promise<void>;
 }
 
-export function SewingTicketsTable({ tickets }: SewingTicketsTableProps) {
+export function SewingTicketsTable({ tickets, onUpdateTicket }: SewingTicketsTableProps) {
   const renderBoolean = (val: boolean | null) => {
     if (val === true) return <Badge className="bg-green-100 text-green-700 hover:bg-green-100 border-green-200"><Check className="h-3 w-3 mr-1" /> SÍ</Badge>;
     if (val === false) return <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200"><X className="h-3 w-3 mr-1" /> NO</Badge>;
     return <span className="text-gray-300 text-xs">---</span>;
+  };
+
+  const BooleanSelect = ({ 
+    value, 
+    onValueChange 
+  }: { 
+    value: boolean | null, 
+    onValueChange: (val: boolean) => void 
+  }) => {
+    return (
+      <Select 
+        value={value === true ? "si" : "no"} 
+        onValueChange={(val) => onValueChange(val === "si")}
+      >
+        <SelectTrigger className="h-8 w-20 text-xs font-bold border-gray-200 bg-white">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="si" className="text-xs font-bold text-green-700">SÍ</SelectItem>
+          <SelectItem value="no" className="text-xs font-bold text-red-700">NO</SelectItem>
+        </SelectContent>
+      </Select>
+    );
   };
 
   return (
@@ -45,12 +76,12 @@ export function SewingTicketsTable({ tickets }: SewingTicketsTableProps) {
               <TableHead className="w-[150px]">Resp. Impresión</TableHead>
               <TableHead className="w-[120px]">Fecha Impresión</TableHead>
               <TableHead className="w-[150px]">Asignada A</TableHead>
-              <TableHead className="w-[100px] text-center">Cortada</TableHead>
+              <TableHead className="w-[120px] text-center">Cortada</TableHead>
               <TableHead className="w-[100px] text-center">Confección</TableHead>
               <TableHead className="w-[100px] text-center">Perforado</TableHead>
               <TableHead className="w-[100px] text-center">Ojillado</TableHead>
-              <TableHead className="w-[100px] text-center">Empaquetado</TableHead>
-              <TableHead className="w-[100px] text-center">Lista Recolecc.</TableHead>
+              <TableHead className="w-[120px] text-center">Empaquetado</TableHead>
+              <TableHead className="w-[120px] text-center">Lista Recolecc.</TableHead>
               <TableHead className="w-[150px]">Recolectada Por</TableHead>
               <TableHead className="w-[150px]">Fecha Entrega</TableHead>
               <TableHead className="w-[150px]">Registro Sistema</TableHead>
@@ -59,7 +90,7 @@ export function SewingTicketsTable({ tickets }: SewingTicketsTableProps) {
           <TableBody>
             {tickets.length > 0 ? (
               tickets.map((ticket) => (
-                <TableRow key={ticket.id} className="hover:bg-gray-50 transition-colors">
+                <TableRow key={ticket.id} className="hover:bg-gray-50 transition-colors h-12">
                   <TableCell className="text-center font-bold text-gray-400 text-xs">#{ticket.id}</TableCell>
                   <TableCell className="font-mono font-bold text-starbucks-green border-r">
                     {ticket.codigo_barra}
@@ -110,7 +141,10 @@ export function SewingTicketsTable({ tickets }: SewingTicketsTableProps) {
                     {ticket.asignada_a || '---'}
                   </TableCell>
                   <TableCell className="text-center">
-                    {renderBoolean(ticket.cortada)}
+                    <BooleanSelect 
+                      value={ticket.cortada} 
+                      onValueChange={(val) => ticket.id && onUpdateTicket?.(ticket.id, { cortada: val })} 
+                    />
                   </TableCell>
                   <TableCell className="text-center">
                     {renderBoolean(ticket.confeccion)}
@@ -122,10 +156,16 @@ export function SewingTicketsTable({ tickets }: SewingTicketsTableProps) {
                     {renderBoolean(ticket.ojillado)}
                   </TableCell>
                   <TableCell className="text-center">
-                    {renderBoolean(ticket.empaquetado)}
+                    <BooleanSelect 
+                      value={ticket.empaquetado} 
+                      onValueChange={(val) => ticket.id && onUpdateTicket?.(ticket.id, { empaquetado: val })} 
+                    />
                   </TableCell>
                   <TableCell className="text-center">
-                    {renderBoolean(ticket.lista_para_recoleccion)}
+                    <BooleanSelect 
+                      value={ticket.lista_para_recoleccion} 
+                      onValueChange={(val) => ticket.id && onUpdateTicket?.(ticket.id, { lista_para_recoleccion: val })} 
+                    />
                   </TableCell>
                   <TableCell className="text-xs">
                     {ticket.recolectada_por || '---'}
