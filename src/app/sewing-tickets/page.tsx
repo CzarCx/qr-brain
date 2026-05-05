@@ -9,7 +9,20 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
-import { Scissors, ClipboardList, Loader2, UserCircle, PlusCircle, Keyboard, FileDown, Tag, Printer, Download } from 'lucide-react';
+import { 
+  Scissors, 
+  ClipboardList, 
+  Loader2, 
+  UserCircle, 
+  PlusCircle, 
+  Keyboard, 
+  FileDown, 
+  Tag, 
+  Printer, 
+  Download,
+  Check,
+  ChevronsUpDown
+} from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { useReactToPrint } from 'react-to-print';
@@ -17,12 +30,31 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { SewingTicket } from '@/types/sewing';
 import { format } from 'date-fns';
+import {
+  Command,
+  CommandGroup,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
+
+const PREDEFINED_RESPONSABLES = [
+  "GENARO VÁZQUEZ",
+  "MARIANA VÁZQUEZ",
+  "LESLY ROA"
+];
 
 export default function SewingTicketsPage() {
   const { tickets, loading, fetchTickets, createTicket, updateTicket } = useSewingTickets();
   const [responsable, setResponsable] = useState('');
   const [manualBarcode, setManualBarcode] = useState('');
   const [isMounted, setIsMounted] = useState(false);
+  const [isResponsableListOpen, setIsResponsableListOpen] = useState(false);
   const { toast } = useToast();
 
   // Estados para generación de etiquetas
@@ -42,9 +74,15 @@ export default function SewingTicketsPage() {
   }, [fetchTickets]);
 
   const handleResponsableChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
+    const value = e.target.value.toUpperCase();
     setResponsable(value);
     localStorage.setItem('sewing_responsable', value);
+  };
+
+  const handleSelectResponsable = (name: string) => {
+    setResponsable(name);
+    localStorage.setItem('sewing_responsable', name);
+    setIsResponsableListOpen(false);
   };
 
   const handleScan = async (barcode: string) => {
@@ -234,13 +272,53 @@ export default function SewingTicketsPage() {
                   <UserCircle className="h-4 w-4" />
                   Nombre del Responsable de Vaciado
                 </Label>
-                <Input
-                  id="responsable"
-                  placeholder="Escribe tu nombre completo..."
-                  value={responsable}
-                  onChange={handleResponsableChange}
-                  className="bg-white border-starbucks-green/30 focus-visible:ring-starbucks-green"
-                />
+                <div className="relative group">
+                  <Input
+                    id="responsable"
+                    placeholder="Escribe o selecciona responsable..."
+                    value={responsable}
+                    onChange={handleResponsableChange}
+                    className="bg-white border-starbucks-green/30 focus-visible:ring-starbucks-green pr-10 uppercase font-bold"
+                  />
+                  <Popover open={isResponsableListOpen} onOpenChange={setIsResponsableListOpen}>
+                    <PopoverTrigger asChild>
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent text-gray-400 hover:text-starbucks-green"
+                      >
+                        <ChevronsUpDown className="h-4 w-4" />
+                        <span className="sr-only">Ver opciones</span>
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[300px] p-0" align="end">
+                      <Command>
+                        <CommandList>
+                          <CommandGroup heading="Responsables Frecuentes">
+                            {PREDEFINED_RESPONSABLES.map((name) => (
+                              <CommandItem
+                                key={name}
+                                value={name}
+                                onSelect={() => handleSelectResponsable(name)}
+                                className="flex items-center justify-between cursor-pointer"
+                              >
+                                <div className="flex items-center">
+                                  <Check
+                                    className={cn(
+                                      "mr-2 h-4 w-4 text-starbucks-green",
+                                      responsable === name ? "opacity-100" : "opacity-0"
+                                    )}
+                                  />
+                                  <span className="font-bold">{name}</span>
+                                </div>
+                              </CommandItem>
+                            ))}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
+                </div>
               </div>
             </CardContent>
           </Card>
