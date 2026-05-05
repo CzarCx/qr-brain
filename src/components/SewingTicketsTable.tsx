@@ -19,7 +19,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { Check, X, Clock, User, Package, Building2 } from 'lucide-react';
+import { Check, X, Clock, User, Package, Building2, Minus } from 'lucide-react';
 
 interface SewingTicketsTableProps {
   tickets: SewingTicket[];
@@ -30,7 +30,7 @@ export function SewingTicketsTable({ tickets, onUpdateTicket }: SewingTicketsTab
   const renderBoolean = (val: boolean | null) => {
     if (val === true) return <Badge className="bg-green-100 text-green-700 hover:bg-green-100 border-green-200"><Check className="h-3 w-3 mr-1" /> SÍ</Badge>;
     if (val === false) return <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200"><X className="h-3 w-3 mr-1" /> NO</Badge>;
-    return <span className="text-gray-300 text-xs">---</span>;
+    return <Badge variant="outline" className="bg-gray-100 text-gray-500 border-gray-200"><Minus className="h-3 w-3 mr-1" /> N/A</Badge>;
   };
 
   const BooleanSelect = ({ 
@@ -51,6 +51,36 @@ export function SewingTicketsTable({ tickets, onUpdateTicket }: SewingTicketsTab
         <SelectContent>
           <SelectItem value="si" className="text-xs font-bold text-green-700">SÍ</SelectItem>
           <SelectItem value="no" className="text-xs font-bold text-red-700">NO</SelectItem>
+        </SelectContent>
+      </Select>
+    );
+  };
+
+  const TriStateSelect = ({ 
+    value, 
+    onValueChange 
+  }: { 
+    value: boolean | null, 
+    onValueChange: (val: boolean | null) => void 
+  }) => {
+    const stringValue = value === true ? "si" : value === false ? "no" : "na";
+    
+    return (
+      <Select 
+        value={stringValue} 
+        onValueChange={(val) => {
+          if (val === "si") onValueChange(true);
+          else if (val === "no") onValueChange(false);
+          else onValueChange(null);
+        }}
+      >
+        <SelectTrigger className="h-8 w-20 text-xs font-bold border-gray-200 bg-white">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="si" className="text-xs font-bold text-green-700">SÍ</SelectItem>
+          <SelectItem value="no" className="text-xs font-bold text-red-700">NO</SelectItem>
+          <SelectItem value="na" className="text-xs font-bold text-gray-500">N/A</SelectItem>
         </SelectContent>
       </Select>
     );
@@ -77,9 +107,9 @@ export function SewingTicketsTable({ tickets, onUpdateTicket }: SewingTicketsTab
               <TableHead className="w-[120px]">Fecha Impresión</TableHead>
               <TableHead className="w-[150px]">Asignada A</TableHead>
               <TableHead className="w-[120px] text-center">Cortada</TableHead>
-              <TableHead className="w-[100px] text-center">Confección</TableHead>
-              <TableHead className="w-[100px] text-center">Perforado</TableHead>
-              <TableHead className="w-[100px] text-center">Ojillado</TableHead>
+              <TableHead className="w-[120px] text-center">Confección</TableHead>
+              <TableHead className="w-[120px] text-center">Perforado</TableHead>
+              <TableHead className="w-[120px] text-center">Ojillado</TableHead>
               <TableHead className="w-[120px] text-center">Empaquetado</TableHead>
               <TableHead className="w-[120px] text-center">Lista Recolecc.</TableHead>
               <TableHead className="w-[150px]">Recolectada Por</TableHead>
@@ -147,13 +177,22 @@ export function SewingTicketsTable({ tickets, onUpdateTicket }: SewingTicketsTab
                     />
                   </TableCell>
                   <TableCell className="text-center">
-                    {renderBoolean(ticket.confeccion)}
+                    <TriStateSelect 
+                      value={ticket.confeccion} 
+                      onValueChange={(val) => ticket.id && onUpdateTicket?.(ticket.id, { confeccion: val })} 
+                    />
                   </TableCell>
                   <TableCell className="text-center">
-                    {renderBoolean(ticket.perforado)}
+                    <TriStateSelect 
+                      value={ticket.perforado} 
+                      onValueChange={(val) => ticket.id && onUpdateTicket?.(ticket.id, { perforado: val })} 
+                    />
                   </TableCell>
                   <TableCell className="text-center">
-                    {renderBoolean(ticket.ojillado)}
+                    <TriStateSelect 
+                      value={ticket.ojillado} 
+                      onValueChange={(val) => ticket.id && onUpdateTicket?.(ticket.id, { ojillado: val })} 
+                    />
                   </TableCell>
                   <TableCell className="text-center">
                     <BooleanSelect 
