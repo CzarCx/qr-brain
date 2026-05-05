@@ -391,65 +391,85 @@ export default function SewingTicketsPage() {
         </div>
       </main>
 
-      {/* Modal Vista Previa de Etiquetas */}
+      {/* Modal Vista Previa de Etiquetas - Optimizado para 8 por página (2x4) */}
       <Dialog open={isLabelModalOpen} onOpenChange={setIsLabelModalOpen}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Vista Previa de Etiquetas Logísticas</DialogTitle>
+        <DialogContent className="max-w-5xl max-h-[95vh] overflow-y-auto p-0">
+          <DialogHeader className="p-6 bg-white border-b sticky top-0 z-20">
+            <DialogTitle>Vista Previa de Etiquetas Logísticas (8 por página)</DialogTitle>
             <DialogDescription>
-              Se generarán {selectedLabels.length} etiquetas listas para imprimir.
+              Se generarán {selectedLabels.length} etiquetas organizadas en cuadrículas de 2x4 para optimizar papel.
             </DialogDescription>
           </DialogHeader>
           
-          <div className="bg-gray-100 p-8 flex justify-center">
-            <div ref={labelsPrintRef} className="flex flex-wrap gap-4 justify-center bg-white p-4">
+          <div className="bg-gray-200 p-4 md:p-8 flex justify-center">
+            {/* Contenedor de impresión con dimensiones de hoja A4/Carta aproximada */}
+            <div 
+              ref={labelsPrintRef} 
+              className="bg-white p-[10mm] w-[210mm] min-h-[297mm] shadow-xl grid grid-cols-2 gap-x-4 gap-y-4 content-start"
+              style={{ 
+                fontFamily: 'monospace',
+                pageBreakAfter: 'always'
+              }}
+            >
               {selectedLabels.map((ticket, idx) => (
                 <div 
                   key={`${ticket.id}-${idx}`}
-                  className="w-[90mm] h-[60mm] border-2 border-black p-4 flex flex-col justify-between font-mono bg-white text-black page-break-after-always"
-                  style={{ pageBreakAfter: 'always' }}
+                  className="w-[92mm] h-[66mm] border-[1.5px] border-black p-3 flex flex-col justify-between bg-white text-black overflow-hidden"
+                  style={{ 
+                    breakInside: 'avoid',
+                    pageBreakInside: 'avoid'
+                  }}
                 >
-                  <div className="space-y-1">
-                    <div className="flex justify-between items-start border-b border-black pb-1">
-                      <span className="text-[10px] font-bold">ETIQUETA LOGÍSTICA</span>
-                      <span className="text-[10px]">#{ticket.id}</span>
+                  {/* Encabezado Compacto */}
+                  <div className="space-y-0.5">
+                    <div className="flex justify-between items-center border-b border-black pb-0.5 mb-1">
+                      <span className="text-[9px] font-black tracking-tighter uppercase">INMATMEX LOGÍSTICA</span>
+                      <span className="text-[10px] font-bold">#{ticket.id}</span>
                     </div>
-                    <div className="pt-2">
-                      <div className="text-[8px] uppercase text-gray-500">SKU / PRODUCTO</div>
-                      <div className="text-sm font-black truncate">{ticket.sku || 'N/A'}</div>
-                      <div className="text-[10px] truncate leading-tight">{ticket.nombre_producto || 'PRODUCTO NO MAPEADO'}</div>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2 border-y border-black py-2 my-1">
-                    <div>
-                      <div className="text-[8px] uppercase text-gray-500">CANTIDAD</div>
-                      <div className="text-xl font-black">{ticket.cantidad || 0} <span className="text-xs font-normal">UNDS</span></div>
-                    </div>
-                    <div>
-                      <div className="text-[8px] uppercase text-gray-500">VENTA / PACK</div>
-                      <div className="text-[10px] font-bold">V: {ticket.sales_num || '---'}</div>
-                      <div className="text-[10px] font-bold">P: {ticket.pack_id || '---'}</div>
+                    
+                    <div className="leading-tight">
+                      <div className="text-[7px] uppercase font-bold text-gray-600">PRODUCTO / SKU</div>
+                      <div className="text-[12px] font-black truncate uppercase">{ticket.sku || 'N/A'}</div>
+                      <div className="text-[9px] truncate uppercase font-medium">{ticket.nombre_producto || 'NO MAPEADO'}</div>
                     </div>
                   </div>
 
+                  {/* Bloque Central de Datos */}
+                  <div className="grid grid-cols-5 gap-1 border-y border-black py-1.5 my-1 items-center">
+                    <div className="col-span-2 border-r border-black/20 pr-1">
+                      <div className="text-[7px] uppercase font-bold text-gray-500">CANTIDAD</div>
+                      <div className="text-xl font-black leading-none">{ticket.cantidad || 0} <span className="text-[9px] font-normal">PZS</span></div>
+                    </div>
+                    <div className="col-span-3 pl-1">
+                      <div className="text-[7px] uppercase font-bold text-gray-500">VENTA / PACK</div>
+                      <div className="flex flex-col text-[10px] font-black leading-tight">
+                        <span>V: {ticket.sales_num || '---'}</span>
+                        <span>P: {ticket.pack_id || '---'}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Footer de Responsables y Entrega */}
                   <div className="space-y-1">
-                    <div className="grid grid-cols-2 text-[8px] gap-2">
+                    <div className="grid grid-cols-2 text-[7px] font-bold gap-x-2">
                       <div className="flex flex-col">
                         <span className="text-gray-500">DESPACHÓ:</span>
-                        <span className="font-bold truncate uppercase">{ticket.responsable_vaciado || '---'}</span>
+                        <span className="truncate uppercase text-[8px]">{ticket.responsable_vaciado || '---'}</span>
                       </div>
                       <div className="flex flex-col">
                         <span className="text-gray-500">IMPRIMIÓ:</span>
-                        <span className="font-bold truncate uppercase">{ticket.responsable_impresion || '---'}</span>
+                        <span className="truncate uppercase text-[8px]">{ticket.responsable_impresion || '---'}</span>
                       </div>
                     </div>
-                    <div className="flex justify-between items-end pt-1">
+                    
+                    <div className="flex justify-between items-end pt-0.5 mt-1 border-t border-dotted border-black/30">
                       <div className="flex flex-col">
-                        <span className="text-[8px] text-gray-500">FECHA ENTREGA:</span>
-                        <span className="text-[10px] font-bold">{ticket.fecha_entrega_paquete ? format(new Date(ticket.fecha_entrega_paquete), "dd/MM/yyyy") : 'PENDIENTE'}</span>
+                        <span className="text-[7px] font-bold text-gray-500 uppercase">FECHA ENTREGA:</span>
+                        <span className="text-[11px] font-black">
+                          {ticket.fecha_entrega_paquete ? format(new Date(ticket.fecha_entrega_paquete), "dd/MM/yyyy") : 'PENDIENTE'}
+                        </span>
                       </div>
-                      <div className="text-[10px] font-black border-2 border-black px-2 py-0.5">
+                      <div className="text-[9px] font-black border border-black px-1.5 py-0.5 bg-gray-50 uppercase tracking-tighter">
                         {ticket.cuenta || 'COSTURA'}
                       </div>
                     </div>
@@ -459,11 +479,11 @@ export default function SewingTicketsPage() {
             </div>
           </div>
 
-          <DialogFooter>
+          <DialogFooter className="p-6 bg-white border-t sticky bottom-0">
             <Button variant="outline" onClick={() => setIsLabelModalOpen(false)}>Cerrar</Button>
             <Button onClick={handlePrintLabels} className="bg-starbucks-green hover:bg-starbucks-dark">
               <Printer className="h-4 w-4 mr-2" />
-              Imprimir Etiquetas
+              Imprimir en Hojas A4/Carta
             </Button>
           </DialogFooter>
         </DialogContent>
