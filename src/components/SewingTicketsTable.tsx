@@ -16,12 +16,26 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { Badge } from '@/components/ui/badge';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { Check, X, Clock, User, Package, Building2, Minus, Tag } from 'lucide-react';
-import { useMemo } from 'react';
+import { Check, X, Clock, User, Package, Building2, Minus, Tag, ChevronsUpDown } from 'lucide-react';
+import { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 
 interface SewingTicketsTableProps {
   tickets: SewingTicket[];
@@ -117,6 +131,62 @@ export function SewingTicketsTable({ tickets, onUpdateTicket, onGenerateLabel }:
     );
   };
 
+  // Componente interno para el Combobox de Recolectores
+  const RecolectorSelector = ({ 
+    value, 
+    onChange 
+  }: { 
+    value: string | null, 
+    onChange: (val: string) => void 
+  }) => {
+    const [open, setOpen] = useState(false);
+
+    return (
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <Button
+            variant="outline"
+            role="combobox"
+            aria-expanded={open}
+            className="h-8 w-full justify-between text-[10px] font-bold border-gray-200 bg-white uppercase px-2 overflow-hidden"
+          >
+            <span className="truncate">{value || "PENDIENTE"}</span>
+            <ChevronsUpDown className="ml-2 h-3 w-3 shrink-0 opacity-50" />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-[220px] p-0 z-50">
+          <Command>
+            <CommandInput placeholder="Buscar recolector..." className="h-8 text-xs" />
+            <CommandList className="max-h-[300px]">
+              <CommandEmpty className="py-2 text-[10px] text-center">No se encontró.</CommandEmpty>
+              <CommandGroup>
+                {RECOLECTORES_OPTIONS.map((opt) => (
+                  <CommandItem
+                    key={opt}
+                    value={opt}
+                    onSelect={(currentValue) => {
+                      onChange(currentValue.toUpperCase());
+                      setOpen(false);
+                    }}
+                    className="text-[10px] font-bold uppercase"
+                  >
+                    <Check
+                      className={cn(
+                        "mr-2 h-3 w-3",
+                        value === opt ? "opacity-100" : "opacity-0"
+                      )}
+                    />
+                    {opt}
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            </CommandList>
+          </Command>
+        </PopoverContent>
+      </Popover>
+    );
+  };
+
   return (
     <div className="border rounded-lg overflow-hidden bg-white shadow-sm">
       <div className="max-h-[600px] overflow-auto">
@@ -144,7 +214,7 @@ export function SewingTicketsTable({ tickets, onUpdateTicket, onGenerateLabel }:
               <TableHead className="w-[120px] text-center">Ojillado</TableHead>
               <TableHead className="w-[120px] text-center">Empaquetado</TableHead>
               <TableHead className="w-[120px] text-center">Lista Recolecc.</TableHead>
-              <TableHead className="w-[200px]">Recolectada Por</TableHead>
+              <TableHead className="w-[220px]">Recolectada Por</TableHead>
               <TableHead className="w-[150px]">Fecha Entrega</TableHead>
               <TableHead className="w-[150px]">Registro Sistema</TableHead>
             </TableRow>
@@ -254,21 +324,10 @@ export function SewingTicketsTable({ tickets, onUpdateTicket, onGenerateLabel }:
                     />
                   </TableCell>
                   <TableCell className="text-xs">
-                    <Select 
-                      value={ticket.recolectada_por || "PENDIENTE"} 
-                      onValueChange={(val) => ticket.id && onUpdateTicket?.(ticket.id, { recolectada_por: val })}
-                    >
-                      <SelectTrigger className="h-8 w-full text-[10px] font-bold border-gray-200 bg-white uppercase">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent className="max-h-[300px]">
-                        {RECOLECTORES_OPTIONS.map((opt) => (
-                          <SelectItem key={opt} value={opt} className="text-[10px] font-bold uppercase">
-                            {opt}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <RecolectorSelector 
+                      value={ticket.recolectada_por} 
+                      onChange={(val) => ticket.id && onUpdateTicket?.(ticket.id, { recolectada_por: val })}
+                    />
                   </TableCell>
                   <TableCell className="text-xs text-gray-500">
                     {ticket.fecha_entrega_paquete ? format(new Date(ticket.fecha_entrega_paquete), "dd/MM/yyyy", { locale: es }) : '---'}
