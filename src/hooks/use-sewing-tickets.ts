@@ -58,9 +58,10 @@ export function useSewingTickets() {
     setLoading(true);
     try {
       // 1. Consultar en etiquetas_i para mapeo automático
+      // CORRECCIÓN: Se añade deli_date al select
       const { data: tagData, error: tagError } = await supabaseEtiquetas
         .from('etiquetas_i')
-        .select('product, pack_id, sales_num, sku, personal_inc, organization, created_at, quantity')
+        .select('product, pack_id, sales_num, sku, personal_inc, organization, created_at, quantity, deli_date')
         .eq('code', finalBarcode)
         .maybeSingle();
 
@@ -86,10 +87,11 @@ export function useSewingTickets() {
           cantidad: tagData.quantity,
           impresa: true,
           hora_vaciado: new Date().toLocaleTimeString('es-MX', { hour12: false }),
-          fecha_entrega_paquete: null,
+          // CORRECCIÓN: Se mapea deli_date a fecha_entrega_paquete
+          fecha_entrega_paquete: tagData.deli_date,
           tipo: null,
           asignada_a: null,
-          cortada: false, // Inicializado en falso por defecto
+          cortada: false,
           confeccion: false,
           perforado: false,
           ojillado: false,
