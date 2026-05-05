@@ -29,6 +29,23 @@ interface SewingTicketsTableProps {
   onGenerateLabel?: (ticket: SewingTicket) => void;
 }
 
+const RECOLECTORES_OPTIONS = [
+  "JIMBO",
+  "ESTEBAN",
+  "ALFONSO",
+  "RAFA",
+  "MARVIN",
+  "CORY",
+  "SEBAS PERÚ",
+  "GENA",
+  "NORMAN",
+  "COLECTA EN LAVADO",
+  "COLECTA VIRGINIA FÁBREGAS",
+  "PENDIENTE",
+  "DUPLICADOS NO SE DESPACHAN",
+  "N/A"
+];
+
 export function SewingTicketsTable({ tickets, onUpdateTicket, onGenerateLabel }: SewingTicketsTableProps) {
   
   // Lógica para contar SKUs repetidos
@@ -127,7 +144,7 @@ export function SewingTicketsTable({ tickets, onUpdateTicket, onGenerateLabel }:
               <TableHead className="w-[120px] text-center">Ojillado</TableHead>
               <TableHead className="w-[120px] text-center">Empaquetado</TableHead>
               <TableHead className="w-[120px] text-center">Lista Recolecc.</TableHead>
-              <TableHead className="w-[150px]">Recolectada Por</TableHead>
+              <TableHead className="w-[200px]">Recolectada Por</TableHead>
               <TableHead className="w-[150px]">Fecha Entrega</TableHead>
               <TableHead className="w-[150px]">Registro Sistema</TableHead>
             </TableRow>
@@ -237,7 +254,21 @@ export function SewingTicketsTable({ tickets, onUpdateTicket, onGenerateLabel }:
                     />
                   </TableCell>
                   <TableCell className="text-xs">
-                    {ticket.recolectada_por || '---'}
+                    <Select 
+                      value={ticket.recolectada_por || "PENDIENTE"} 
+                      onValueChange={(val) => ticket.id && onUpdateTicket?.(ticket.id, { recolectada_por: val })}
+                    >
+                      <SelectTrigger className="h-8 w-full text-[10px] font-bold border-gray-200 bg-white uppercase">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className="max-h-[300px]">
+                        {RECOLECTORES_OPTIONS.map((opt) => (
+                          <SelectItem key={opt} value={opt} className="text-[10px] font-bold uppercase">
+                            {opt}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </TableCell>
                   <TableCell className="text-xs text-gray-500">
                     {ticket.fecha_entrega_paquete ? format(new Date(ticket.fecha_entrega_paquete), "dd/MM/yyyy", { locale: es }) : '---'}
