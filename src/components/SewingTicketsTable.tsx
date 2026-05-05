@@ -19,14 +19,28 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { Check, X, Clock, User, Package, Building2, Minus } from 'lucide-react';
+import { Check, X, Clock, User, Package, Building2, Minus, Tag } from 'lucide-react';
+import { useMemo } from 'react';
+import { Button } from '@/components/ui/button';
 
 interface SewingTicketsTableProps {
   tickets: SewingTicket[];
   onUpdateTicket?: (id: number, updates: Partial<SewingTicket>) => Promise<void>;
+  onGenerateLabel?: (ticket: SewingTicket) => void;
 }
 
-export function SewingTicketsTable({ tickets, onUpdateTicket }: SewingTicketsTableProps) {
+export function SewingTicketsTable({ tickets, onUpdateTicket, onGenerateLabel }: SewingTicketsTableProps) {
+  
+  // Lógica para contar SKUs repetidos
+  const skuCounts = useMemo(() => {
+    return tickets.reduce((acc, ticket) => {
+      if (ticket.sku) {
+        acc[ticket.sku] = (acc[ticket.sku] || 0) + 1;
+      }
+      return acc;
+    }, {} as Record<string, number>);
+  }, [tickets]);
+
   const renderBoolean = (val: boolean | null) => {
     if (val === true) return <Badge className="bg-green-100 text-green-700 hover:bg-green-100 border-green-200"><Check className="h-3 w-3 mr-1" /> SÍ</Badge>;
     if (val === false) return <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200"><X className="h-3 w-3 mr-1" /> NO</Badge>;
@@ -92,11 +106,12 @@ export function SewingTicketsTable({ tickets, onUpdateTicket }: SewingTicketsTab
         <Table className="min-w-[2000px]">
           <TableHeader className="bg-gray-50 sticky top-0 z-10">
             <TableRow>
-              <TableHead className="w-[80px] text-center bg-gray-50">ID</TableHead>
+              <TableHead className="w-[60px] text-center bg-gray-50">Label</TableHead>
+              <TableHead className="w-[80px] text-center">ID</TableHead>
               <TableHead className="w-[180px] bg-gray-50">Código de Barra</TableHead>
               <TableHead className="w-[150px]">Producto</TableHead>
               <TableHead className="w-[100px] text-center">Cant.</TableHead>
-              <TableHead className="w-[150px]">SKU</TableHead>
+              <TableHead className="w-[180px]">SKU (Repetidos)</TableHead>
               <TableHead className="w-[150px]">Responsable Vaciado</TableHead>
               <TableHead className="w-[120px]">Hora Vaciado</TableHead>
               <TableHead className="w-[150px]">Cuenta / Org.</TableHead>
@@ -121,6 +136,16 @@ export function SewingTicketsTable({ tickets, onUpdateTicket }: SewingTicketsTab
             {tickets.length > 0 ? (
               tickets.map((ticket) => (
                 <TableRow key={ticket.id} className="hover:bg-gray-50 transition-colors h-12">
+                  <TableCell className="text-center">
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      className="h-8 w-8 text-starbucks-green hover:bg-green-50"
+                      onClick={() => onGenerateLabel?.(ticket)}
+                    >
+                      <Tag className="h-4 w-4" />
+                    </Button>
+                  </TableCell>
                   <TableCell className="text-center font-bold text-gray-400 text-xs">#{ticket.id}</TableCell>
                   <TableCell className="font-mono font-bold text-starbucks-green border-r">
                     {ticket.codigo_barra}
@@ -131,8 +156,13 @@ export function SewingTicketsTable({ tickets, onUpdateTicket }: SewingTicketsTab
                   <TableCell className="text-center font-bold text-blue-600">
                     {ticket.cantidad !== null ? ticket.cantidad : '---'}
                   </TableCell>
-                  <TableCell className="text-xs font-mono text-gray-600">
-                    {ticket.sku || '---'}
+                  <TableCell className="text-xs font-mono">
+                    <span className="text-gray-600">{ticket.sku || '---'}</span>
+                    {ticket.sku && skuCounts[ticket.sku] > 1 && (
+                      <span className="ml-2 px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700 font-bold text-[10px]">
+                        (x{skuCounts[ticket.sku]})
+                      </span>
+                    )}
                   </TableCell>
                   <TableCell className="text-xs">
                     <div className="flex items-center gap-1">
@@ -219,7 +249,7 @@ export function SewingTicketsTable({ tickets, onUpdateTicket }: SewingTicketsTab
               ))
             ) : (
               <TableRow>
-                <TableCell colSpan={23} className="text-center py-20 text-gray-400 bg-gray-50">
+                <TableCell colSpan={24} className="text-center py-20 text-gray-400 bg-gray-50">
                   <div className="flex flex-col items-center gap-2">
                     <Package className="h-12 w-12 opacity-10" />
                     <p className="text-lg">No hay tickets registrados hoy.</p>
