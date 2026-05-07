@@ -198,7 +198,7 @@ export function SewingTicketsTable({ tickets, onUpdateTicket, onDeleteTicket, on
   };
 
   return (
-    <div className="border rounded-lg overflow-hidden bg-white shadow-sm">
+    <div className="border rounded-b-lg overflow-hidden bg-white shadow-sm">
       <div className="max-h-[600px] overflow-auto">
         <Table className="min-w-[2100px]">
           <TableHeader className="bg-gray-50 sticky top-0 z-30">
@@ -383,8 +383,7 @@ export function SewingTicketsTable({ tickets, onUpdateTicket, onDeleteTicket, on
                 <TableCell colSpan={25} className="text-center py-20 text-gray-400 bg-gray-50">
                   <div className="flex flex-col items-center gap-2">
                     <Package className="h-12 w-12 opacity-10" />
-                    <p className="text-lg">No hay tickets registrados hoy.</p>
-                    <p className="text-sm">Comienza a escanear o ingresa códigos manualmente.</p>
+                    <p className="text-lg">No hay tickets en este bloque.</p>
                   </div>
                 </TableCell>
               </TableRow>

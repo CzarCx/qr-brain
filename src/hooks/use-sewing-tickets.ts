@@ -8,31 +8,29 @@ import { useToast } from '@/hooks/use-toast';
 /**
  * Hook personalizado para gestionar la lógica de negocio de los tickets de costura.
  * Utiliza 'supabaseEtiquetas' para todas las operaciones de la tabla sewing_tickets
- * ya que reside en la base de datos de etiquetas.
  */
 export function useSewingTickets() {
   const [tickets, setTickets] = useState<SewingTicket[]>([]);
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
 
-  const fetchTickets = useCallback(async (isPrinted: boolean = false) => {
+  const fetchTickets = useCallback(async (isHistory: boolean = false) => {
     setLoading(true);
     try {
-      // USAR CLIENTE DE ETIQUETAS para la tabla sewing_tickets
       let query = supabaseEtiquetas
         .from('sewing_tickets')
         .select('*')
         .order('created_at', { ascending: false });
 
-      if (isPrinted) {
-        // Registros impresos
+      if (isHistory) {
+        // Registros procesados (impreso = true)
         query = query.eq('impreso', true);
       } else {
-        // Registros pendientes (false o null)
+        // Registros pendientes (impreso = false o null)
         query = query.or('impreso.eq.false,impreso.is.null');
       }
 
-      const { data, error } = await query.limit(150);
+      const { data, error } = await query.limit(500);
 
       if (error) {
         console.error('Error de Supabase (fetchTickets):', error.message);
@@ -176,7 +174,8 @@ export function useSewingTickets() {
         .from('sewing_tickets')
         .update({ 
           impreso: true,
-          impresa: true 
+          impresa: true,
+          responsable_impresion: localStorage.getItem('sewing_responsable') || 'SISTEMA'
         })
         .in('id', ids);
 
