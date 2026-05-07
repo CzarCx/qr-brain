@@ -1,8 +1,6 @@
-
 'use client';
-import type {Metadata} from 'next';
 import './globals.css';
-import Navbar from '@/components/Navbar'; // Import the new Navbar component
+import Navbar from '@/components/Navbar';
 import { useEffect, useState, useRef }from 'react';
 import { Cog, Send, AlertTriangle } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -23,12 +21,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-
-
-// export const metadata: Metadata = {
-//   title: 'Escáner de Códigos',
-//   description: 'Escáner de Códigos de Barra y QR',
-// };
 
 type UnassignedLabel = {
   code: string;
@@ -53,7 +45,6 @@ export default function RootLayout({
   const [unassignedLabels, setUnassignedLabels] = useState<UnassignedLabel[]>([]);
   const [reportTime, setReportTime] = useState('02:20');
 
-
   const notifiedCheckins = useRef(new Set<string>());
   const dailyReportRun = useRef(new Set<string>());
 
@@ -63,15 +54,14 @@ export default function RootLayout({
     const oscillator = context.createOscillator();
     const gainNode = context.createGain();
     oscillator.type = 'sine';
-    oscillator.frequency.setValueAtTime(440, context.currentTime); // A4 note
-    gainNode.gain.setValueAtTime(3.6, context.currentTime); // Increased volume
+    oscillator.frequency.setValueAtTime(440, context.currentTime);
+    gainNode.gain.setValueAtTime(3.6, context.currentTime);
     gainNode.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.5);
     oscillator.connect(gainNode);
     gainNode.connect(context.destination);
     oscillator.start();
     oscillator.stop(context.currentTime + 0.5);
   };
-
 
   useEffect(() => {
     const savedTime = localStorage.getItem('unassignedReportTime');
@@ -83,7 +73,6 @@ export default function RootLayout({
       const now = new Date();
       const todayStr = now.toDateString(); 
 
-      // Check for upcoming check-ins
       try {
         const { data, error } = await supabase
           .from('personal_name')
@@ -95,14 +84,10 @@ export default function RootLayout({
         } else if (data) {
             data.forEach(person => {
               if (!person.checkin_time) return;
-
               const [hours, minutes] = person.checkin_time.split(':').map(Number);
-              
               const checkinDate = new Date();
               checkinDate.setHours(hours, minutes, 0, 0);
-
               const diffMinutes = (checkinDate.getTime() - now.getTime()) / 1000 / 60;
-              
               const notificationKey = `${person.name}-${todayStr}`;
 
               if (diffMinutes > 14 && diffMinutes <= 15 && !notifiedCheckins.current.has(notificationKey)) {
@@ -121,7 +106,6 @@ export default function RootLayout({
         console.error("Failed to process check-in alerts:", e);
       }
       
-      // Check for unassigned labels at user-defined time
       const reportKey = `unassigned-${todayStr}`;
       const [reportHour, reportMinute] = reportTime.split(':').map(Number);
 
@@ -136,8 +120,6 @@ export default function RootLayout({
 
               if (etiquetasError) throw etiquetasError;
               
-              if (!etiquetasData) throw new Error("No se recibieron datos de etiquetas.");
-
               const { data: personalData, error: personalError } = await supabase
                   .from('personal')
                   .select('code');
@@ -158,22 +140,13 @@ export default function RootLayout({
               }
 
           } catch (err: any) {
-              const errorMessage = err.message || 'No se pudieron obtener las etiquetas no asignadas.';
-              console.error("Error fetching unassigned codes:", errorMessage, err);
-              toast({
-                  variant: "destructive",
-                  title: "Error al generar reporte",
-                  description: errorMessage,
-              });
+              console.error("Error fetching unassigned codes:", err);
           }
       }
     };
     
     const intervalId = setInterval(runTimedTasks, 60000);
-
-    return () => {
-      clearInterval(intervalId);
-    };
+    return () => clearInterval(intervalId);
   }, [toast, reportTime]);
 
   const handleFeedbackSubmit = async () => {
@@ -181,7 +154,7 @@ export default function RootLayout({
         toast({
             variant: "destructive",
             title: "Campos incompletos",
-            description: "Por favor, completa todos los campos para enviar tu ticket.",
+            description: "Por favor, completa todos los campos.",
         });
         return;
     }
@@ -190,30 +163,13 @@ export default function RootLayout({
     try {
         const { error } = await supabaseEtiquetas
             .from('feedback')
-            .insert([{ 
-                title: feedbackTitle, 
-                cat: feedbackCategory, 
-                description: feedbackDescription 
-            }]);
-
+            .insert([{ title: feedbackTitle, cat: feedbackCategory, description: feedbackDescription }]);
         if (error) throw error;
-
-        toast({
-            title: "¡Gracias por tu ayuda!",
-            description: "Tu ticket ha sido enviado correctamente.",
-        });
-
+        toast({ title: "¡Gracias!", description: "Ticket enviado correctamente." });
         setIsFeedbackDialogOpen(false);
-        setFeedbackTitle('');
-        setFeedbackCategory('');
-        setFeedbackDescription('');
-
+        setFeedbackTitle(''); setFeedbackCategory(''); setFeedbackDescription('');
     } catch (error: any) {
-        toast({
-            variant: "destructive",
-            title: "Error al enviar",
-            description: `No se pudo enviar tu ticket. Error: ${error.message}`,
-        });
+        toast({ variant: "destructive", title: "Error", description: error.message });
     } finally {
         setIsSubmitting(false);
     }
@@ -223,154 +179,102 @@ export default function RootLayout({
     const newTime = e.target.value;
     setReportTime(newTime);
     localStorage.setItem('unassignedReportTime', newTime);
-    toast({
-        title: "Hora de reporte actualizada",
-        description: `El reporte diario se generará a las ${newTime}.`,
-        variant: 'success'
-    });
   };
 
   return (
     <html lang="es">
       <head>
-        <title>Escáner de Códigos</title>
-        <meta name="description" content="Escáner de Códigos de Barra y QR" />
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
-        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+        <title>Sistema de Control</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0" />
       </head>
       <body className="font-body antialiased bg-starbucks-light-gray">
         <TooltipProvider>
            <Dialog open={isFeedbackDialogOpen} onOpenChange={setIsFeedbackDialogOpen}>
             <DialogTrigger asChild>
-                <div className="fixed top-20 right-4 z-[100] cursor-pointer">
+                <div className="fixed bottom-6 right-4 z-[100] cursor-pointer md:top-20 md:bottom-auto">
                     <Tooltip>
                         <TooltipTrigger asChild>
-                            <div className="p-2 bg-yellow-400 text-yellow-900 rounded-full shadow-lg transition-transform hover:scale-110">
-                                <Cog className="h-6 w-6" />
+                            <div className="p-3 bg-yellow-400 text-yellow-900 rounded-full shadow-xl transition-transform hover:scale-110 active:scale-95">
+                                <Cog className="h-6 w-6 md:h-5 md:w-5" />
                             </div>
                         </TooltipTrigger>
-                        <TooltipContent>
-                            <p>Ajustes y Retroalimentación</p>
+                        <TooltipContent side="left">
+                            <p>Ajustes</p>
                         </TooltipContent>
                     </Tooltip>
                 </div>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-md">
+            <DialogContent className="max-w-[90vw] sm:max-w-md rounded-xl">
                 <DialogHeader>
-                    <DialogTitle>Ajustes y Retroalimentación</DialogTitle>
-                    <DialogDescription>
-                        Configura las notificaciones o reporta un problema.
-                    </DialogDescription>
+                    <DialogTitle>Ajustes</DialogTitle>
                 </DialogHeader>
-                <div className="space-y-6 pt-4 pb-2">
+                <div className="space-y-6 pt-4">
                     <div>
-                        <Label htmlFor="report-time" className="font-semibold">Hora del Reporte Diario</Label>
-                        <p className="text-sm text-muted-foreground mt-1 mb-2">Elige a qué hora recibir el pop-up con las etiquetas no asignadas.</p>
-                        <Input
-                            id="report-time"
-                            type="time"
-                            value={reportTime}
-                            onChange={handleTimeChange}
-                            className="bg-transparent"
-                        />
+                        <Label htmlFor="report-time">Hora del Reporte Diario</Label>
+                        <Input id="report-time" type="time" value={reportTime} onChange={handleTimeChange} className="mt-2" />
                     </div>
-                    
-                    <div className="relative">
-                        <div className="absolute inset-0 flex items-center">
-                            <span className="w-full border-t" />
-                        </div>
-                        <div className="relative flex justify-center text-xs uppercase">
-                            <span className="bg-background px-2 text-muted-foreground">Enviar Ticket</span>
-                        </div>
-                    </div>
-                    
-                    <div className="space-y-4">
-                        <div className="space-y-1.5">
-                            <Label htmlFor="title">
-                                Título
-                            </Label>
-                            <Input id="title" value={feedbackTitle} onChange={(e) => setFeedbackTitle(e.target.value)} placeholder="Un resumen corto del problema/idea" />
-                        </div>
-                         <div className="space-y-1.5">
-                            <Label htmlFor="category">
-                                Categoría
-                            </Label>
-                            <Select onValueChange={setFeedbackCategory} value={feedbackCategory}>
-                                <SelectTrigger id="category">
-                                    <SelectValue placeholder="Selecciona una categoría" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="Observacion">Observación</SelectItem>
-                                    <SelectItem value="Reporte de error">Reporte de error</SelectItem>
-                                    <SelectItem value="Sugerencia">Sugerencia</SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </div>
-                        <div className="space-y-1.5">
-                            <Label htmlFor="description">
-                                Descripción
-                            </Label>
-                            <Textarea id="description" value={feedbackDescription} onChange={(e) => setFeedbackDescription(e.target.value)} placeholder="Describe el problema o tu sugerencia con más detalle." />
-                        </div>
+                    <div className="space-y-4 pt-4 border-t">
+                        <Label>Enviar Ticket de Retroalimentación</Label>
+                        <Input id="title" value={feedbackTitle} onChange={(e) => setFeedbackTitle(e.target.value)} placeholder="Título" />
+                        <Select onValueChange={setFeedbackCategory} value={feedbackCategory}>
+                            <SelectTrigger>
+                                <SelectValue placeholder="Categoría" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="Observacion">Observación</SelectItem>
+                                <SelectItem value="Reporte de error">Error</SelectItem>
+                                <SelectItem value="Sugerencia">Sugerencia</SelectItem>
+                            </SelectContent>
+                        </Select>
+                        <Textarea id="description" value={feedbackDescription} onChange={(e) => setFeedbackDescription(e.target.value)} placeholder="Descripción" />
                     </div>
                 </div>
                 <DialogFooter>
-                    <Button onClick={handleFeedbackSubmit} disabled={isSubmitting}>
-                        {isSubmitting ? 'Enviando...' : <><Send className="mr-2 h-4 w-4" /> Enviar Ticket</>}
+                    <Button onClick={handleFeedbackSubmit} disabled={isSubmitting} className="w-full">
+                        {isSubmitting ? 'Enviando...' : <><Send className="mr-2 h-4 w-4" /> Enviar</>}
                     </Button>
                 </DialogFooter>
             </DialogContent>
             </Dialog>
 
             <Dialog open={isUnassignedDialogOpen} onOpenChange={setIsUnassignedDialogOpen}>
-              <DialogContent className="sm:max-w-2xl">
+              <DialogContent className="max-w-[95vw] sm:max-w-2xl rounded-xl">
                   <DialogHeader>
-                      <DialogTitle>
-                        <div className="flex items-center gap-2 text-destructive">
-                           <AlertTriangle className="h-6 w-6" />
-                           Reporte de Etiquetas No Asignadas
-                        </div>
+                      <DialogTitle className="text-destructive flex items-center gap-2">
+                         <AlertTriangle className="h-6 w-6" />
+                         Etiquetas No Asignadas
                       </DialogTitle>
-                      <DialogDescription>
-                          Las siguientes etiquetas existen en el sistema pero aún no han sido asignadas a ningún operario.
-                          Este reporte se generó a las {reportTime}.
-                      </DialogDescription>
                   </DialogHeader>
-                  <div className="max-h-[60vh] overflow-y-auto p-1 border rounded-md bg-gray-50">
+                  <div className="max-h-[60vh] overflow-auto border rounded-md">
                       {unassignedLabels.length > 0 ? (
                           <Table>
-                            <TableHeader>
+                            <TableHeader className="bg-gray-100">
                                 <TableRow>
                                     <TableHead>Código</TableHead>
-                                    <TableHead>Imprimió</TableHead>
                                     <TableHead>Lote</TableHead>
-                                    <TableHead>Fecha Entrega</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
                                {unassignedLabels.map(label => (
                                   <TableRow key={label.code}>
-                                      <TableCell className="font-mono text-sm">{label.code}</TableCell>
-                                      <TableCell>{label.personal_inc || 'N/A'}</TableCell>
-                                      <TableCell>{label.code_i || 'N/A'}</TableCell>
-                                      <TableCell>{label.deli_date ? new Date(label.deli_date).toLocaleDateString('es-MX') : 'N/A'}</TableCell>
+                                      <TableCell className="font-mono text-xs">{label.code}</TableCell>
+                                      <TableCell className="text-xs">{label.code_i || 'N/A'}</TableCell>
                                   </TableRow>
                               ))}
                             </TableBody>
                           </Table>
                       ) : (
-                          <p className="text-sm text-gray-500 text-center py-4">No se encontraron etiquetas no asignadas.</p>
+                          <p className="text-sm text-gray-500 text-center py-4">Todo asignado.</p>
                       )}
                   </div>
                   <DialogFooter>
-                      <Button variant="outline" onClick={() => setIsUnassignedDialogOpen(false)}>Cerrar</Button>
+                      <Button variant="outline" onClick={() => setIsUnassignedDialogOpen(false)} className="w-full">Cerrar</Button>
                   </DialogFooter>
               </DialogContent>
           </Dialog>
 
             <Navbar />
-            <main className="pt-16">
+            <main className="pt-20 pb-20 md:pb-0">
                 {children}
             </main>
             <Toaster />

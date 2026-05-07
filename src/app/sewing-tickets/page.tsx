@@ -260,48 +260,48 @@ export default function SewingTicketsPage() {
         <title>Bitácora de Costura | Sistema de Control</title>
       </Head>
       
-      <main className="max-w-[1600px] mx-auto p-4 md:p-8 space-y-6 animate-in fade-in duration-500">
-        <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <main className="w-full max-w-[1600px] mx-auto p-2 md:p-8 space-y-4 md:space-y-6 animate-in fade-in duration-500 overflow-x-hidden">
+        <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 px-2">
           <div className="space-y-1">
-            <h1 className="text-2xl md:text-3xl font-bold text-starbucks-green flex items-center gap-2">
-              <Scissors className="h-8 w-8" />
-              Bitácora de Tickets de Costura
+            <h1 className="text-xl md:text-3xl font-bold text-starbucks-green flex items-center gap-2">
+              <Scissors className="h-6 w-6 md:h-8 md:w-8" />
+              Bitácora de Costura
             </h1>
-            <p className="text-gray-500">Gestión de producción, exportación y etiquetado logístico.</p>
+            <p className="text-xs md:text-sm text-gray-500">Gestión de producción y logística.</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Button onClick={exportToPDF} variant="outline" className="border-starbucks-green text-starbucks-green hover:bg-green-50" disabled={tickets.length === 0}>
+            <Button onClick={exportToPDF} variant="outline" size="sm" className="flex-1 md:flex-none border-starbucks-green text-starbucks-green" disabled={tickets.length === 0}>
               <FileDown className="h-4 w-4 mr-2" />
-              Exportar PDF
+              PDF
             </Button>
-            <Button onClick={handleOpenBulkLabels} variant="outline" className="bg-starbucks-green text-white hover:bg-starbucks-dark" disabled={tickets.length === 0}>
+            <Button onClick={handleOpenBulkLabels} variant="outline" size="sm" className="flex-1 md:flex-none bg-starbucks-green text-white" disabled={tickets.length === 0}>
               <Tag className="h-4 w-4 mr-2" />
-              Generar Etiquetas
+              Etiquetas
             </Button>
             {loading && (
-              <div className="flex items-center gap-2 text-sm text-starbucks-accent font-medium bg-starbucks-cream px-3 py-1 rounded-full">
-                <Loader2 className="h-4 w-4 animate-spin" />
+              <div className="flex items-center gap-2 text-[10px] md:text-sm text-starbucks-accent font-medium bg-starbucks-cream px-2 py-1 rounded-full w-full md:w-auto justify-center">
+                <Loader2 className="h-3 w-3 md:h-4 md:w-4 animate-spin" />
                 Sincronizando...
               </div>
             )}
           </div>
         </header>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 px-2">
           <Card className="shadow-sm border-starbucks-green/20">
-            <CardContent className="pt-6">
+            <CardContent className="pt-4 md:pt-6">
               <div className="space-y-2">
-                <Label htmlFor="responsable" className="flex items-center gap-2 font-bold text-starbucks-dark">
+                <Label htmlFor="responsable" className="flex items-center gap-2 font-bold text-xs md:text-sm text-starbucks-dark">
                   <UserCircle className="h-4 w-4" />
-                  Nombre del Responsable de Vaciado
+                  Responsable de Vaciado
                 </Label>
                 <div className="relative group">
                   <Input
                     id="responsable"
-                    placeholder="Escribe o selecciona responsable..."
+                    placeholder="Nombre..."
                     value={responsable}
                     onChange={handleResponsableChange}
-                    className="bg-white border-starbucks-green/30 focus-visible:ring-starbucks-green pr-10 uppercase font-bold"
+                    className="bg-white border-starbucks-green/30 focus-visible:ring-starbucks-green pr-10 uppercase font-bold text-xs md:text-sm h-9 md:h-10"
                   />
                   <Popover open={isResponsableListOpen} onOpenChange={setIsResponsableListOpen}>
                     <PopoverTrigger asChild>
@@ -311,13 +311,12 @@ export default function SewingTicketsPage() {
                         className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent text-gray-400 hover:text-starbucks-green"
                       >
                         <ChevronsUpDown className="h-4 w-4" />
-                        <span className="sr-only">Ver opciones</span>
                       </Button>
                     </PopoverTrigger>
                     <PopoverContent className="w-[300px] p-0" align="end">
                       <Command>
                         <CommandList>
-                          <CommandGroup heading="Responsables Frecuentes">
+                          <CommandGroup heading="Frecuentes">
                             {PREDEFINED_RESPONSABLES.map((name) => (
                               <CommandItem
                                 key={name}
@@ -332,7 +331,7 @@ export default function SewingTicketsPage() {
                                       responsable === name ? "opacity-100" : "opacity-0"
                                     )}
                                   />
-                                  <span className="font-bold">{name}</span>
+                                  <span className="font-bold text-xs">{name}</span>
                                 </div>
                               </CommandItem>
                             ))}
@@ -347,28 +346,28 @@ export default function SewingTicketsPage() {
           </Card>
 
           <Card className="shadow-sm border-starbucks-green/20">
-            <CardContent className="pt-6">
+            <CardContent className="pt-4 md:pt-6">
               <div className="space-y-2">
-                <Label htmlFor="manual-barcode" className="flex items-center gap-2 font-bold text-starbucks-dark">
+                <Label htmlFor="manual-barcode" className="flex items-center gap-2 font-bold text-xs md:text-sm text-starbucks-dark">
                   <Keyboard className="h-4 w-4" />
-                  Ingreso Manual (Pruebas)
+                  Ingreso Manual
                 </Label>
                 <div className="flex gap-2">
                   <Input
                     id="manual-barcode"
-                    placeholder="Escribe el código de barras..."
+                    placeholder="Código..."
                     value={manualBarcode}
                     onChange={(e) => setManualBarcode(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && handleManualAdd()}
-                    className="bg-white border-starbucks-green/30 focus-visible:ring-starbucks-green"
+                    className="bg-white border-starbucks-green/30 focus-visible:ring-starbucks-green text-xs md:text-sm h-9 md:h-10"
                   />
                   <Button 
                     onClick={handleManualAdd} 
                     disabled={loading || !manualBarcode.trim()}
-                    className="bg-starbucks-green hover:bg-starbucks-dark"
+                    className="bg-starbucks-green hover:bg-starbucks-dark px-3 h-9 md:h-10"
+                    size="sm"
                   >
-                    <PlusCircle className="h-4 w-4 mr-2" />
-                    Añadir
+                    <PlusCircle className="h-4 w-4" />
                   </Button>
                 </div>
               </div>
@@ -376,123 +375,99 @@ export default function SewingTicketsPage() {
           </Card>
         </div>
 
-        <div className="grid grid-cols-1 gap-8">
+        <div className="grid grid-cols-1 gap-4 md:gap-8 px-2">
           {/* Sección Escáner */}
-          <Card className="shadow-lg border-t-4 border-t-starbucks-green max-w-2xl mx-auto w-full">
-            <CardHeader>
-              <CardTitle className="text-lg">Escáner de Tickets</CardTitle>
-              <CardDescription>
-                {!responsable.trim() 
-                  ? "Debes ingresar tu nombre antes de comenzar a escanear." 
-                  : "Los códigos detectados se guardarán instantáneamente."}
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <SewingScanner onScan={handleScan} disabled={loading || !responsable.trim()} />
-            </CardContent>
-          </Card>
+          <div className="w-full max-w-2xl mx-auto">
+             <SewingScanner onScan={handleScan} disabled={loading || !responsable.trim()} />
+          </div>
 
-          {/* Sección Lista Reciente - Ancho Completo */}
-          <Card className="shadow-lg">
-            <CardHeader className="flex flex-row items-center justify-between">
-              <div>
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <ClipboardList className="h-5 w-5 text-starbucks-accent" />
-                  Registros de Hoy
-                </CardTitle>
-                <CardDescription>Visualiza y actualiza los estados de producción rápidamente.</CardDescription>
-              </div>
+          {/* Sección Lista Reciente */}
+          <Card className="shadow-lg border-none md:border-solid overflow-hidden">
+            <CardHeader className="p-4 md:p-6 bg-gray-50/50 md:bg-transparent border-b md:border-none">
+              <CardTitle className="text-base md:text-lg flex items-center gap-2">
+                <ClipboardList className="h-5 w-5 text-starbucks-accent" />
+                Registros de Hoy
+              </CardTitle>
             </CardHeader>
-            <CardContent>
-              <SewingTicketsTable 
-                tickets={tickets} 
-                onUpdateTicket={updateTicket}
-                onGenerateLabel={handleOpenSingleLabel}
-              />
+            <CardContent className="p-0 md:p-6">
+              <div className="w-full overflow-x-auto scrollbar-thin scrollbar-thumb-gray-300">
+                <SewingTicketsTable 
+                  tickets={tickets} 
+                  onUpdateTicket={updateTicket}
+                  onGenerateLabel={handleOpenSingleLabel}
+                />
+              </div>
             </CardContent>
           </Card>
         </div>
       </main>
 
-      {/* Modal Vista Previa de Etiquetas - Optimizado para 8 por página (2x4) */}
+      {/* Modal Vista Previa de Etiquetas */}
       <Dialog open={isLabelModalOpen} onOpenChange={setIsLabelModalOpen}>
-        <DialogContent className="max-w-5xl max-h-[95vh] overflow-y-auto p-0">
-          <DialogHeader className="p-6 bg-white border-b sticky top-0 z-20">
-            <DialogTitle>Vista Previa de Etiquetas Logísticas (8 por página)</DialogTitle>
-            <DialogDescription>
-              Se generarán {selectedLabels.length} etiquetas organizadas en cuadrículas de 2x4 para optimizar papel.
-            </DialogDescription>
+        <DialogContent className="max-w-[95vw] md:max-w-5xl max-h-[95vh] overflow-y-auto p-0">
+          <DialogHeader className="p-4 md:p-6 bg-white border-b sticky top-0 z-20">
+            <DialogTitle className="text-sm md:text-lg">Vista Previa de Etiquetas</DialogTitle>
           </DialogHeader>
           
-          <div className="bg-gray-200 p-4 md:p-8 flex justify-center">
-            {/* Contenedor de impresión con dimensiones de hoja A4/Carta aproximada */}
+          <div className="bg-gray-200 p-2 md:p-8 flex justify-center overflow-x-auto">
             <div 
               ref={labelsPrintRef} 
-              className="bg-white p-[10mm] w-[210mm] min-h-[297mm] shadow-xl grid grid-cols-2 gap-x-4 gap-y-4 content-start"
+              className="bg-white p-2 md:p-[10mm] w-full max-w-[210mm] min-h-[297mm] shadow-xl grid grid-cols-1 sm:grid-cols-2 gap-2 md:gap-4 content-start"
               style={{ 
                 fontFamily: 'monospace',
-                pageBreakAfter: 'always'
               }}
             >
               {selectedLabels.map((ticket, idx) => (
                 <div 
                   key={`${ticket.id}-${idx}`}
-                  className="w-[92mm] h-[66mm] border-[1.5px] border-black p-3 flex flex-col justify-between bg-white text-black overflow-hidden"
-                  style={{ 
-                    breakInside: 'avoid',
-                    pageBreakInside: 'avoid'
-                  }}
+                  className="w-full aspect-[1.4/1] border-[1px] md:border-[1.5px] border-black p-2 md:p-3 flex flex-col justify-between bg-white text-black overflow-hidden"
                 >
-                  {/* Encabezado Compacto */}
                   <div className="space-y-0.5">
                     <div className="flex justify-between items-center border-b border-black pb-0.5 mb-1">
-                      <span className="text-[9px] font-black tracking-tighter uppercase">INMATMEX LOGÍSTICA</span>
-                      <span className="text-[10px] font-bold">#{ticket.id}</span>
+                      <span className="text-[7px] md:text-[9px] font-black uppercase">INMATMEX LOGÍSTICA</span>
+                      <span className="text-[8px] md:text-[10px] font-bold">#{ticket.id}</span>
                     </div>
-                    
                     <div className="leading-tight">
-                      <div className="text-[7px] uppercase font-bold text-gray-600">PRODUCTO / SKU</div>
-                      <div className="text-[12px] font-black truncate uppercase">{ticket.sku || 'N/A'}</div>
-                      <div className="text-[9px] truncate uppercase font-medium">{ticket.nombre_producto || 'NO MAPEADO'}</div>
+                      <div className="text-[6px] md:text-[7px] uppercase font-bold text-gray-600">PRODUCTO / SKU</div>
+                      <div className="text-[10px] md:text-[12px] font-black truncate uppercase">{ticket.sku || 'N/A'}</div>
+                      <div className="text-[8px] md:text-[9px] truncate uppercase font-medium">{ticket.nombre_producto || 'NO MAPEADO'}</div>
                     </div>
                   </div>
 
-                  {/* Bloque Central de Datos */}
-                  <div className="grid grid-cols-5 gap-1 border-y border-black py-1.5 my-1 items-center">
+                  <div className="grid grid-cols-5 gap-1 border-y border-black py-1 md:py-1.5 my-1 items-center">
                     <div className="col-span-2 border-r border-black/20 pr-1">
-                      <div className="text-[7px] uppercase font-bold text-gray-500">CANTIDAD</div>
-                      <div className="text-xl font-black leading-none">{ticket.cantidad || 0} <span className="text-[9px] font-normal">PZS</span></div>
+                      <div className="text-[6px] md:text-[7px] font-bold text-gray-500">CANTIDAD</div>
+                      <div className="text-lg md:text-xl font-black">{ticket.cantidad || 0} <span className="text-[8px]">PZS</span></div>
                     </div>
                     <div className="col-span-3 pl-1">
-                      <div className="text-[7px] uppercase font-bold text-gray-500">VENTA / PACK</div>
-                      <div className="flex flex-col text-[10px] font-black leading-tight">
+                      <div className="text-[6px] md:text-[7px] font-bold text-gray-500">VENTA / PACK</div>
+                      <div className="flex flex-col text-[8px] md:text-[10px] font-black">
                         <span>V: {ticket.sales_num || '---'}</span>
                         <span>P: {ticket.pack_id || '---'}</span>
                       </div>
                     </div>
                   </div>
 
-                  {/* Footer de Responsables y Entrega */}
                   <div className="space-y-1">
-                    <div className="grid grid-cols-2 text-[7px] font-bold gap-x-2">
+                    <div className="grid grid-cols-2 text-[6px] md:text-[7px] font-bold gap-x-2">
                       <div className="flex flex-col">
                         <span className="text-gray-500">DESPACHÓ:</span>
-                        <span className="truncate uppercase text-[8px]">{ticket.responsable_vaciado || '---'}</span>
+                        <span className="truncate uppercase text-[7px] md:text-[8px]">{ticket.responsable_vaciado || '---'}</span>
                       </div>
                       <div className="flex flex-col">
                         <span className="text-gray-500">IMPRIMIÓ:</span>
-                        <span className="truncate uppercase text-[8px]">{ticket.responsable_impresion || '---'}</span>
+                        <span className="truncate uppercase text-[7px] md:text-[8px]">{ticket.responsable_impresion || '---'}</span>
                       </div>
                     </div>
                     
                     <div className="flex justify-between items-end pt-0.5 mt-1 border-t border-dotted border-black/30">
                       <div className="flex flex-col">
-                        <span className="text-[7px] font-bold text-gray-500 uppercase">FECHA ENTREGA:</span>
-                        <span className="text-[11px] font-black">
+                        <span className="text-[6px] md:text-[7px] font-bold text-gray-500 uppercase">ENTREGA:</span>
+                        <span className="text-[9px] md:text-[11px] font-black">
                           {ticket.fecha_entrega_paquete ? format(new Date(ticket.fecha_entrega_paquete), "dd/MM/yyyy") : 'PENDIENTE'}
                         </span>
                       </div>
-                      <div className="text-[9px] font-black border border-black px-1.5 py-0.5 bg-gray-50 uppercase tracking-tighter">
+                      <div className="text-[8px] font-black border border-black px-1 py-0.5 bg-gray-50 uppercase tracking-tighter">
                         {ticket.cuenta || 'COSTURA'}
                       </div>
                     </div>
@@ -502,11 +477,11 @@ export default function SewingTicketsPage() {
             </div>
           </div>
 
-          <DialogFooter className="p-6 bg-white border-t sticky bottom-0">
-            <Button variant="outline" onClick={() => setIsLabelModalOpen(false)}>Cerrar</Button>
-            <Button onClick={handlePrintLabels} className="bg-starbucks-green hover:bg-starbucks-dark">
+          <DialogFooter className="p-4 md:p-6 bg-white border-t sticky bottom-0 flex flex-col md:flex-row gap-2">
+            <Button variant="outline" onClick={() => setIsLabelModalOpen(false)} className="w-full md:w-auto">Cerrar</Button>
+            <Button onClick={handlePrintLabels} className="bg-starbucks-green hover:bg-starbucks-dark w-full md:w-auto">
               <Printer className="h-4 w-4 mr-2" />
-              Imprimir en Hojas A4/Carta
+              Imprimir
             </Button>
           </DialogFooter>
         </DialogContent>
