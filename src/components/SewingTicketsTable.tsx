@@ -32,7 +32,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { Check, X, Clock, User, Package, Building2, Minus, Tag, ChevronsUpDown } from 'lucide-react';
+import { Check, X, Clock, User, Package, Building2, Minus, Tag, ChevronsUpDown, Trash2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -40,6 +40,7 @@ import { cn } from '@/lib/utils';
 interface SewingTicketsTableProps {
   tickets: SewingTicket[];
   onUpdateTicket?: (id: number, updates: Partial<SewingTicket>) => Promise<void>;
+  onDeleteTicket?: (id: number) => Promise<void>;
   onGenerateLabel?: (ticket: SewingTicket) => void;
 }
 
@@ -60,7 +61,7 @@ const RECOLECTORES_OPTIONS = [
   "N/A"
 ];
 
-export function SewingTicketsTable({ tickets, onUpdateTicket, onGenerateLabel }: SewingTicketsTableProps) {
+export function SewingTicketsTable({ tickets, onUpdateTicket, onDeleteTicket, onGenerateLabel }: SewingTicketsTableProps) {
   
   // Lógica para contar SKUs repetidos
   const skuCounts = useMemo(() => {
@@ -131,7 +132,6 @@ export function SewingTicketsTable({ tickets, onUpdateTicket, onGenerateLabel }:
     );
   };
 
-  // Componente interno para el Combobox de Recolectores
   const RecolectorSelector = ({ 
     value, 
     onChange 
@@ -187,10 +187,16 @@ export function SewingTicketsTable({ tickets, onUpdateTicket, onGenerateLabel }:
     );
   };
 
+  const handleDelete = (id: number) => {
+    if (window.confirm('¿Estás seguro de eliminar este registro? Esta acción no se puede deshacer.')) {
+        onDeleteTicket?.(id);
+    }
+  };
+
   return (
     <div className="border rounded-lg overflow-hidden bg-white shadow-sm">
       <div className="max-h-[600px] overflow-auto">
-        <Table className="min-w-[2000px]">
+        <Table className="min-w-[2100px]">
           <TableHeader className="bg-gray-50 sticky top-0 z-10">
             <TableRow>
               <TableHead className="w-[60px] text-center bg-gray-50">Label</TableHead>
@@ -217,6 +223,7 @@ export function SewingTicketsTable({ tickets, onUpdateTicket, onGenerateLabel }:
               <TableHead className="w-[220px]">Recolectada Por</TableHead>
               <TableHead className="w-[150px]">Fecha Entrega</TableHead>
               <TableHead className="w-[150px]">Registro Sistema</TableHead>
+              <TableHead className="w-[100px] text-center bg-gray-50 sticky right-0 z-20 shadow-[-2px_0_5px_rgba(0,0,0,0.05)]">Acciones</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -335,11 +342,21 @@ export function SewingTicketsTable({ tickets, onUpdateTicket, onGenerateLabel }:
                   <TableCell className="text-[10px] text-gray-400">
                     {ticket.created_at ? format(new Date(ticket.created_at), "dd/MM HH:mm:ss", { locale: es }) : '---'}
                   </TableCell>
+                  <TableCell className="text-center bg-gray-50 sticky right-0 z-20 shadow-[-2px_0_5px_rgba(0,0,0,0.05)]">
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50"
+                      onClick={() => ticket.id && handleDelete(ticket.id)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </TableCell>
                 </TableRow>
               ))
             ) : (
               <TableRow>
-                <TableCell colSpan={24} className="text-center py-20 text-gray-400 bg-gray-50">
+                <TableCell colSpan={25} className="text-center py-20 text-gray-400 bg-gray-50">
                   <div className="flex flex-col items-center gap-2">
                     <Package className="h-12 w-12 opacity-10" />
                     <p className="text-lg">No hay tickets registrados hoy.</p>

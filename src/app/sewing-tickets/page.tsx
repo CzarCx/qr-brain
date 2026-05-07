@@ -51,7 +51,7 @@ const PREDEFINED_RESPONSABLES = [
 ];
 
 export default function SewingTicketsPage() {
-  const { tickets, loading, fetchTickets, createTicket, updateTicket } = useSewingTickets();
+  const { tickets, loading, fetchTickets, createTicket, updateTicket, deleteTicket } = useSewingTickets();
   const [responsable, setResponsable] = useState('');
   const [manualBarcode, setManualBarcode] = useState('');
   const [isMounted, setIsMounted] = useState(false);
@@ -169,7 +169,7 @@ export default function SewingTicketsPage() {
       t.empaquetado ? 'SÍ' : 'NO',
       t.lista_para_recoleccion ? 'SÍ' : 'NO',
       t.recolectada_por || 'PENDIENTE',
-      t.fecha_entrega_paquete ? format(new Date(t.fecha_entrega_paquete), "d MMM yyyy", { locale: es }) : '---'
+      t.fecha_entrega_paquete ? format(new Date(t.fecha_entrega_paquete), "dd MMM yyyy", { locale: es }) : '---'
     ]);
 
     autoTable(doc, {
@@ -179,7 +179,7 @@ export default function SewingTicketsPage() {
       theme: 'striped',
       headStyles: { 
         fillColor: [0, 98, 65], 
-        fontSize: 6,
+        fontSize: 5.5,
         halign: 'center',
         valign: 'middle',
         lineWidth: 0.1,
@@ -394,6 +394,7 @@ export default function SewingTicketsPage() {
                 <SewingTicketsTable 
                   tickets={tickets} 
                   onUpdateTicket={updateTicket}
+                  onDeleteTicket={deleteTicket}
                   onGenerateLabel={handleOpenSingleLabel}
                 />
               </div>

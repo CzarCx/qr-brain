@@ -58,7 +58,6 @@ export function useSewingTickets() {
     setLoading(true);
     try {
       // 1. Consultar en etiquetas_i para mapeo automático
-      // CORRECCIÓN: Se añade deli_date al select
       const { data: tagData, error: tagError } = await supabaseEtiquetas
         .from('etiquetas_i')
         .select('product, pack_id, sales_num, sku, personal_inc, organization, created_at, quantity, deli_date')
@@ -87,7 +86,6 @@ export function useSewingTickets() {
           cantidad: tagData.quantity,
           impresa: true,
           hora_vaciado: new Date().toLocaleTimeString('es-MX', { hour12: false }),
-          // CORRECCIÓN: Se mapea deli_date a fecha_entrega_paquete
           fecha_entrega_paquete: tagData.deli_date,
           tipo: null,
           asignada_a: null,
@@ -178,10 +176,34 @@ export function useSewingTickets() {
         title: 'Error de Actualización',
         description: 'No se pudo sincronizar el cambio con la base de datos.',
       });
-      // Revertir en caso de error (opcionalmente podrías recargar la lista)
+      // Revertir en caso de error
       await fetchTickets();
     }
   }, [toast, fetchTickets]);
+
+  const deleteTicket = useCallback(async (id: number) => {
+    try {
+      const { error } = await supabaseEtiquetas
+        .from('sewing_tickets')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+
+      setTickets(prev => prev.filter(t => t.id !== id));
+      toast({
+        title: 'Ticket Eliminado',
+        description: 'El registro se ha borrado correctamente de la bitácora.',
+      });
+    } catch (error: any) {
+      console.error('Error al eliminar ticket:', error.message);
+      toast({
+        variant: 'destructive',
+        title: 'Error al Eliminar',
+        description: 'No se pudo borrar el registro de la base de datos.',
+      });
+    }
+  }, [toast]);
 
   return {
     tickets,
@@ -189,5 +211,6 @@ export function useSewingTickets() {
     fetchTickets,
     createTicket,
     updateTicket,
+    deleteTicket,
   };
 }
