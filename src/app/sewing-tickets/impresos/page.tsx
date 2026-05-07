@@ -36,7 +36,7 @@ export default function SewingTicketsHistoryPage() {
     fetchTickets(true); // Cargar solo impresos
   }, [fetchTickets]);
 
-  // Lógica de cálculo de contadores (idéntica a la de Excel)
+  // Lógica de cálculo de contadores (Sumando cantidad de piezas)
   useEffect(() => {
     const calculateCounters = async () => {
       if (tickets.length === 0) {
@@ -83,16 +83,20 @@ export default function SewingTicketsHistoryPage() {
       const newCounters = { ROLLOS: 0, BOLAS: 0, COSTURA: 0 };
       tickets.forEach(t => {
         const catMdr = skuToCatMdr[t.sku || ''] || null;
+        const qty = t.cantidad || 0; // Sumar cantidad real de piezas
         if (catMdr) {
           const upper = catMdr.toUpperCase();
+          // Regla: ROLLOS
           if (upper === 'LIENZO' || upper === 'ROLLO') {
-            newCounters.ROLLOS++;
+            newCounters.ROLLOS += qty;
           }
-          else if (upper.includes('MS FABRICACION')) {
-            newCounters.BOLAS++;
+          // Regla: MALLAS BOLAS (MS Fabricacion o Malla Sombra Bolsa)
+          else if (upper.includes('MS FABRICACION') || upper === 'MALLA SOMBRA BOLSA') {
+            newCounters.BOLAS += qty;
           }
+          // Regla: MALLAS COSTURA
           else if (upper.includes('MALLA SOMBRA CONFECCIONADA')) {
-            newCounters.COSTURA++;
+            newCounters.COSTURA += qty;
           }
         }
       });
@@ -158,7 +162,7 @@ export default function SewingTicketsHistoryPage() {
       styles: { fontSize: 5.5, cellPadding: 1.5 }
     });
 
-    doc.save(`historial_costura_impresos_${format(today, "yyyy-MM-dd")}.pdf`);
+    doc.save(`historial_costura_impreos_${format(today, "yyyy-MM-dd")}.pdf`);
   };
 
   if (!isMounted) return null;
@@ -201,7 +205,7 @@ export default function SewingTicketsHistoryPage() {
               <div className="p-1 bg-blue-50 rounded-md">
                 <Layers className="h-3 w-3 text-blue-600" />
               </div>
-              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Rollos</span>
+              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Rollos (Pzs)</span>
             </div>
             <span className="text-3xl font-black text-blue-800 leading-none">{counters.ROLLOS}</span>
           </div>
@@ -211,7 +215,7 @@ export default function SewingTicketsHistoryPage() {
               <div className="p-1 bg-blue-50 rounded-md">
                 <Boxes className="h-3 w-3 text-blue-600" />
               </div>
-              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Mallas Bolas</span>
+              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Mallas Bolas (Pzs)</span>
             </div>
             <span className="text-3xl font-black text-blue-800 leading-none">{counters.BOLAS}</span>
           </div>
@@ -221,7 +225,7 @@ export default function SewingTicketsHistoryPage() {
               <div className="p-1 bg-blue-50 rounded-md">
                 <Package className="h-3 w-3 text-blue-600" />
               </div>
-              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Mallas Costura</span>
+              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Mallas Costura (Pzs)</span>
             </div>
             <span className="text-3xl font-black text-blue-800 leading-none">{counters.COSTURA}</span>
           </div>
