@@ -1,13 +1,14 @@
 'use client';
 
 import { useState, useCallback } from 'react';
-import { supabase, supabaseEtiquetas } from '@/lib/supabaseClient';
+import { supabaseEtiquetas } from '@/lib/supabaseClient';
 import { SewingTicket } from '@/types/sewing';
 import { useToast } from '@/hooks/use-toast';
 
 /**
  * Hook personalizado para gestionar la lógica de negocio de los tickets de costura.
- * Utiliza 'supabase' para la tabla principal y 'supabaseEtiquetas' para enriquecimiento.
+ * Utiliza 'supabaseEtiquetas' para todas las operaciones de la tabla sewing_tickets
+ * ya que reside en la base de datos de etiquetas.
  */
 export function useSewingTickets() {
   const [tickets, setTickets] = useState<SewingTicket[]>([]);
@@ -17,18 +18,18 @@ export function useSewingTickets() {
   const fetchTickets = useCallback(async (isPrinted: boolean = false) => {
     setLoading(true);
     try {
-      // USAR CLIENTE PRINCIPAL (supabase) para la tabla sewing_tickets
-      let query = supabase
+      // USAR CLIENTE DE ETIQUETAS para la tabla sewing_tickets
+      let query = supabaseEtiquetas
         .from('sewing_tickets')
         .select('*')
         .order('created_at', { ascending: false });
 
       if (isPrinted) {
         // Registros impresos
-        query = query.eq('impresa', true);
+        query = query.eq('impreso', true);
       } else {
         // Registros pendientes (false o null)
-        query = query.or('impresa.eq.false,impresa.is.null');
+        query = query.or('impreso.eq.false,impreso.is.null');
       }
 
       const { data, error } = await query.limit(150);
@@ -58,16 +59,16 @@ export function useSewingTickets() {
     const isDuplicate = tickets.some(t => t.codigo_barra === finalBarcode);
     if (isDuplicate) {
         toast({
-            variant: 'warning',
+            variant: 'destructive',
             title: 'Código Duplicado',
-            description: `El ticket ${finalBarcode} ya se encuentra registrado en la lista actual.`,
+            description: `El ticket ${finalBarcode} ya se encuentra en la lista de pendientes.`,
         });
         return false;
     }
 
     setLoading(true);
     try {
-      // 1. Consultar en etiquetas_i para mapeo automático (DB ETIQUETAS)
+      // 1. Consultar en etiquetas_i para mapeo automático
       const { data: tagData, error: tagError } = await supabaseEtiquetas
         .from('etiquetas_i')
         .select('product, pack_id, sales_num, sku, personal_inc, organization, created_at, quantity, deli_date')
@@ -78,73 +79,65 @@ export function useSewingTickets() {
         console.error('Error al consultar etiquetas_i:', tagError.message);
       }
 
-      // 2. Preparar payload según condiciones
-      let insertPayload: any;
+      // 2. Preparar payload
+      const insertPayload = tagData ? {
+        codigo_barra: finalBarcode,
+        responsable_vaciado: responsable,
+        nombre_producto: tagData.product,
+        pack_id: tagData.pack_id,
+        sales_num: tagData.sales_num,
+        sku: tagData.sku,
+        responsable_impresion: tagData.personal_inc,
+        cuenta: tagData.organization,
+        fecha_impresion: tagData.created_at ? new Date(tagData.created_at).toISOString().split('T')[0] : null,
+        cantidad: tagData.quantity,
+        impreso: false,
+        impresa: false,
+        hora_vaciado: new Date().toLocaleTimeString('es-MX', { hour12: false }),
+        fecha_entrega_paquete: tagData.deli_date,
+        cortada: false,
+        confeccion: false,
+        perforado: false,
+        ojillado: false,
+        empaquetado: false,
+        lista_para_recoleccion: false
+      } : {
+        codigo_barra: finalBarcode,
+        responsable_vaciado: responsable,
+        impreso: false,
+        impresa: false,
+        hora_vaciado: new Date().toLocaleTimeString('es-MX', { hour12: false }),
+        cortada: false,
+        confeccion: false,
+        perforado: false,
+        ojillado: false,
+        empaquetado: false,
+        lista_para_recoleccion: false
+      };
 
-      if (tagData) {
-        insertPayload = {
-          codigo_barra: finalBarcode,
-          responsable_vaciado: responsable,
-          nombre_producto: tagData.product,
-          pack_id: tagData.pack_id,
-          sales_num: tagData.sales_num,
-          sku: tagData.sku,
-          responsable_impresion: tagData.personal_inc,
-          cuenta: tagData.organization,
-          fecha_impresion: tagData.created_at ? new Date(tagData.created_at).toISOString().split('T')[0] : null,
-          cantidad: tagData.quantity,
-          impresa: false,
-          impreso: false, // Mantener ambos por compatibilidad de esquema
-          hora_vaciado: new Date().toLocaleTimeString('es-MX', { hour12: false }),
-          fecha_entrega_paquete: tagData.deli_date,
-          cortada: false,
-          confeccion: false,
-          perforado: false,
-          ojillado: false,
-          empaquetado: false,
-          lista_para_recoleccion: false
-        };
-      } else {
-        insertPayload = {
-          codigo_barra: finalBarcode,
-          responsable_vaciado: responsable,
-          impresa: false,
-          impreso: false,
-          hora_vaciado: new Date().toLocaleTimeString('es-MX', { hour12: false }),
-          cortada: false,
-          confeccion: false,
-          perforado: false,
-          ojillado: false,
-          empaquetado: false,
-          lista_para_recoleccion: false
-        };
-      }
-
-      // 3. Insertar en sewing_tickets (DB PRINCIPAL)
-      const { error: insertError } = await supabase
+      // 3. Insertar en sewing_tickets
+      const { error: insertError } = await supabaseEtiquetas
         .from('sewing_tickets')
         .insert([insertPayload]);
 
-      if (insertError) {
-          throw insertError;
-      }
+      if (insertError) throw insertError;
 
       toast({
         variant: 'success',
-        title: tagData ? 'Ticket Mapeado con Éxito' : 'Ticket Registrado (No Encontrado)',
+        title: tagData ? 'Ticket Mapeado' : 'Ticket Registrado',
         description: tagData 
-            ? `Se importaron datos de ${tagData.product} para el código ${finalBarcode}.`
-            : `El código ${finalBarcode} se guardó sin datos adicionales.`,
+            ? `Se importaron datos de ${tagData.product}.`
+            : `Código ${finalBarcode} guardado sin metadatos.`,
       });
 
       await fetchTickets(false);
       return true;
     } catch (error: any) {
-      console.error('Excepción en módulo de costura:', error);
+      console.error('Excepción en registro de costura:', error);
       toast({
         variant: 'destructive',
         title: 'Error de Registro',
-        description: error.message || 'No se pudo guardar el ticket en la base de datos.',
+        description: error.message || 'No se pudo guardar el ticket.',
       });
       return false;
     } finally {
@@ -157,7 +150,7 @@ export function useSewingTickets() {
       // Actualización optimista
       setTickets(prev => prev.map(t => Number(t.id) === Number(id) ? { ...t, ...updates } : t));
 
-      const { error } = await supabase
+      const { error } = await supabaseEtiquetas
         .from('sewing_tickets')
         .update(updates)
         .eq('id', id);
@@ -169,7 +162,7 @@ export function useSewingTickets() {
       toast({
         variant: 'destructive',
         title: 'Error de Actualización',
-        description: 'No se pudo sincronizar el cambio con la base de datos.',
+        description: 'No se pudo sincronizar el cambio.',
       });
       await fetchTickets();
     }
@@ -179,11 +172,11 @@ export function useSewingTickets() {
     if (ids.length === 0) return;
     setLoading(true);
     try {
-      const { error } = await supabase
+      const { error } = await supabaseEtiquetas
         .from('sewing_tickets')
         .update({ 
-          impresa: true,
-          impreso: true 
+          impreso: true,
+          impresa: true 
         })
         .in('id', ids);
 
@@ -192,42 +185,40 @@ export function useSewingTickets() {
       toast({
         variant: 'success',
         title: 'Registros Procesados',
-        description: `Se marcaron ${ids.length} registros como impresos/exportados.`,
+        description: `${ids.length} bultos marcados como impresos.`,
       });
     } catch (error: any) {
-      console.error('Error al marcar múltiples como impresos:', error.message);
+      console.error('Error en actualización masiva:', error.message);
       toast({
         variant: 'destructive',
-        title: 'Error de Actualización Masiva',
-        description: 'No se pudieron marcar los registros como impresos en el sistema.',
+        title: 'Error',
+        description: 'No se pudieron marcar como impresos.',
       });
     } finally {
       setLoading(false);
     }
   }, [toast]);
 
-  const deleteTicket = useCallback(async (id: number | string) => {
-    const numericId = typeof id === 'string' ? parseInt(id, 10) : id;
-    
+  const deleteTicket = useCallback(async (id: number) => {
     try {
-      const { error } = await supabase
+      const { error } = await supabaseEtiquetas
         .from('sewing_tickets')
         .delete()
-        .eq('id', numericId);
+        .eq('id', id);
 
       if (error) throw error;
 
-      setTickets(prev => prev.filter(t => Number(t.id) !== numericId));
+      setTickets(prev => prev.filter(t => Number(t.id) !== id));
       toast({
-        title: 'Ticket Eliminado',
-        description: 'El registro se ha borrado correctamente de la bitácora.',
+        title: 'Registro Eliminado',
+        description: 'El ticket ha sido borrado de la bitácora.',
       });
     } catch (error: any) {
       console.error('Error al eliminar ticket:', error.message);
       toast({
         variant: 'destructive',
-        title: 'Error al Eliminar',
-        description: 'No se pudo borrar el registro de la base de datos.',
+        title: 'Error',
+        description: 'No se pudo eliminar el registro.',
       });
     }
   }, [toast]);
