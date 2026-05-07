@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useCallback } from 'react';
@@ -14,14 +15,23 @@ export function useSewingTickets() {
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
 
-  const fetchTickets = useCallback(async () => {
+  const fetchTickets = useCallback(async (isPrinted: boolean = false) => {
     setLoading(true);
     try {
-      const { data, error } = await supabaseEtiquetas
+      let query = supabaseEtiquetas
         .from('sewing_tickets')
         .select('*')
-        .order('created_at', { ascending: false })
-        .limit(50);
+        .order('created_at', { ascending: false });
+
+      if (isPrinted) {
+        // Registros impresos
+        query = query.eq('impresa', true);
+      } else {
+        // Registros pendientes (false o null)
+        query = query.or('impresa.eq.false,impresa.is.null');
+      }
+
+      const { data, error } = await query.limit(100);
 
       if (error) {
         console.error('Error de Supabase Etiquetas (fetchTickets):', error.message);
@@ -84,7 +94,7 @@ export function useSewingTickets() {
           cuenta: tagData.organization,
           fecha_impresion: tagData.created_at ? new Date(tagData.created_at).toISOString().split('T')[0] : null,
           cantidad: tagData.quantity,
-          impresa: true,
+          impresa: false, // Inicialmente no impreso
           hora_vaciado: new Date().toLocaleTimeString('es-MX', { hour12: false }),
           fecha_entrega_paquete: tagData.deli_date,
           tipo: null,
@@ -142,7 +152,7 @@ export function useSewingTickets() {
             : `El código ${finalBarcode} se guardó sin datos adicionales.`,
       });
 
-      await fetchTickets();
+      await fetchTickets(false);
       return true;
     } catch (error: any) {
       console.error('Excepción en módulo de costura:', error);
@@ -181,6 +191,34 @@ export function useSewingTickets() {
     }
   }, [toast, fetchTickets]);
 
+  const markMultipleAsPrinted = useCallback(async (ids: number[]) => {
+    if (ids.length === 0) return;
+    setLoading(true);
+    try {
+      const { error } = await supabaseEtiquetas
+        .from('sewing_tickets')
+        .update({ impresa: true })
+        .in('id', ids);
+
+      if (error) throw error;
+
+      toast({
+        variant: 'success',
+        title: 'Registros Procesados',
+        description: `Se marcaron ${ids.length} registros como impresos/exportados.`,
+      });
+    } catch (error: any) {
+      console.error('Error al marcar múltiples como impresos:', error.message);
+      toast({
+        variant: 'destructive',
+        title: 'Error de Actualización Masiva',
+        description: 'No se pudieron marcar los registros como impresos en el sistema.',
+      });
+    } finally {
+      setLoading(false);
+    }
+  }, [toast]);
+
   const deleteTicket = useCallback(async (id: number | string) => {
     const numericId = typeof id === 'string' ? parseInt(id, 10) : id;
     
@@ -213,6 +251,7 @@ export function useSewingTickets() {
     fetchTickets,
     createTicket,
     updateTicket,
+    markMultipleAsPrinted,
     deleteTicket,
   };
 }

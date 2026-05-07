@@ -1,7 +1,9 @@
+
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
 import Head from 'next/head';
+import Link from 'next/link';
 import { useSewingTickets } from '@/hooks/use-sewing-tickets';
 import { SewingScanner } from '@/components/SewingScanner';
 import { SewingTicketsTable } from '@/components/SewingTicketsTable';
@@ -21,7 +23,9 @@ import {
   Printer, 
   Download,
   Check,
-  ChevronsUpDown
+  ChevronsUpDown,
+  History,
+  FileSpreadsheet
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
@@ -31,6 +35,7 @@ import autoTable from 'jspdf-autotable';
 import { SewingTicket } from '@/types/sewing';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+import Papa from 'papaparse';
 import {
   Command,
   CommandGroup,
@@ -51,7 +56,16 @@ const PREDEFINED_RESPONSABLES = [
 ];
 
 export default function SewingTicketsPage() {
-  const { tickets, loading, fetchTickets, createTicket, updateTicket, deleteTicket } = useSewingTickets();
+  const { 
+    tickets, 
+    loading, 
+    fetchTickets, 
+    createTicket, 
+    updateTicket, 
+    deleteTicket, 
+    markMultipleAsPrinted 
+  } = useSewingTickets();
+  
   const [responsable, setResponsable] = useState('');
   const [manualBarcode, setManualBarcode] = useState('');
   const [isMounted, setIsMounted] = useState(false);
@@ -65,7 +79,7 @@ export default function SewingTicketsPage() {
 
   useEffect(() => {
     setIsMounted(true);
-    fetchTickets();
+    fetchTickets(false); // Cargar solo pendientes
     
     // Recuperar responsable guardado
     const savedResponsable = localStorage.getItem('sewing_responsable');
@@ -117,6 +131,82 @@ export default function SewingTicketsPage() {
     }
   };
 
+  const exportToExcel = async () => {
+    if (tickets.length === 0) {
+      toast({
+        title: "Sin registros",
+        description: "No hay registros pendientes para exportar.",
+      });
+      return;
+    }
+
+    try {
+      const headers = [
+        'ID', 'Código de Barra', 'Producto', 'Cantidad', 'SKU', 
+        'Responsable Vaciado', 'Hora Vaciado', 'Cuenta', 'No. Venta', 'Pack ID', 
+        'Impresa', 'Resp. Impresión', 'Fecha Impresión', 'Asignada A', 
+        'Cortada', 'Confección', 'Perforado', 'Ojillado', 
+        'Empaquetado', 'Lista Recolección', 'Recolectada Por', 'Fecha Entrega'
+      ];
+
+      const rows = tickets.map(t => [
+        t.id,
+        t.codigo_barra,
+        t.nombre_producto || '---',
+        t.cantidad || 0,
+        t.sku || '---',
+        t.responsable_vaciado || '---',
+        t.hora_vaciado || '---',
+        t.cuenta || '---',
+        t.sales_num || '---',
+        t.pack_id || '---',
+        t.impresa ? 'SÍ' : 'NO',
+        t.responsable_impresion || '---',
+        t.fecha_impresion || '---',
+        t.asignada_a || '---',
+        t.cortada ? 'SÍ' : 'NO',
+        t.confeccion === true ? 'SÍ' : t.confeccion === false ? 'NO' : 'N/A',
+        t.perforado === true ? 'SÍ' : t.perforado === false ? 'NO' : 'N/A',
+        t.ojillado === true ? 'SÍ' : t.ojillado === false ? 'NO' : 'N/A',
+        t.empaquetado ? 'SÍ' : 'NO',
+        t.lista_para_recoleccion ? 'SÍ' : 'NO',
+        t.recolectada_por || 'PENDIENTE',
+        t.fecha_entrega_paquete || '---'
+      ]);
+
+      // Generar CSV
+      const csv = Papa.unparse({ fields: headers, data: rows });
+      const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      
+      link.setAttribute('href', url);
+      link.setAttribute('download', `bitacora_costura_pendientes_${format(new Date(), 'yyyy-MM-dd_HHmm')}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      // MARCAR COMO IMPRESOS
+      const idsToMark = tickets.map(t => Number(t.id)).filter(id => !isNaN(id));
+      await markMultipleAsPrinted(idsToMark);
+      
+      // RECARGAR PENDIENTES
+      await fetchTickets(false);
+
+      toast({
+        title: "Exportación Exitosa",
+        description: `Se han exportado ${idsToMark.length} registros y se han movido al historial de impresos.`,
+      });
+
+    } catch (error: any) {
+      toast({
+        variant: 'destructive',
+        title: 'Error en Exportación',
+        description: error.message || 'No se pudo completar la exportación a Excel.',
+      });
+    }
+  };
+
   const exportToPDF = () => {
     if (tickets.length === 0) return;
 
@@ -133,7 +223,7 @@ export default function SewingTicketsPage() {
     // Encabezado del PDF
     doc.setFontSize(16);
     doc.setTextColor(0, 98, 65); // Starbucks Green
-    doc.text(`Bitácora de Costura - ${dateTitle}`, 14, 15);
+    doc.text(`Bitácora de Costura (Pendientes) - ${dateTitle}`, 14, 15);
     
     doc.setFontSize(10);
     doc.setTextColor(100);
@@ -202,38 +292,10 @@ export default function SewingTicketsPage() {
       },
       alternateRowStyles: {
         fillColor: [245, 245, 245]
-      },
-      didParseCell: (data) => {
-        // Colores para estados
-        const cellText = String(data.cell.text[0]);
-        if (cellText === 'SÍ') {
-          data.cell.styles.textColor = [0, 128, 0]; // Verde
-          data.cell.styles.fontStyle = 'bold';
-        } else if (cellText === 'NO') {
-          data.cell.styles.textColor = [200, 0, 0]; // Rojo
-        } else if (['N/A', '---'].includes(cellText)) {
-          data.cell.styles.textColor = [128, 128, 128]; // Gris
-        } else if (cellText === 'PENDIENTE') {
-          data.cell.styles.textColor = [184, 134, 11]; // Amarillo oscuro
-          data.cell.styles.fontStyle = 'bold';
-        }
-
-        // Separadores visuales por bloques operativos
-        const index = data.column.index;
-        // PRODUCTO(0-4), PRODUCCIÓN(5-9), CONTROL(10-13), COSTURA(14-17), LOGÍSTICA(18-21)
-        if ([4, 9, 13, 17].includes(index)) {
-           data.cell.styles.borderRightWidth = 0.1;
-           data.cell.styles.borderRightColor = [200, 200, 200];
-        }
       }
     });
 
-    doc.save(`bitacora_costura_${format(today, "yyyy-MM-dd")}.pdf`);
-    
-    toast({
-      title: "PDF Generado",
-      description: "La bitácora completa se ha descargado en formato horizontal optimizado.",
-    });
+    doc.save(`bitacora_pendientes_${format(today, "yyyy-MM-dd")}.pdf`);
   };
 
   // Lógica de etiquetas
@@ -257,19 +319,31 @@ export default function SewingTicketsPage() {
   return (
     <>
       <Head>
-        <title>Bitácora de Costura | Sistema de Control</title>
+        <title>Bitácora de Costura | Pendientes</title>
       </Head>
       
       <main className="w-full max-w-[1600px] mx-auto p-2 md:p-8 space-y-4 md:space-y-6 animate-in fade-in duration-500 overflow-x-hidden">
         <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 px-2">
           <div className="space-y-1">
-            <h1 className="text-xl md:text-3xl font-bold text-starbucks-green flex items-center gap-2">
-              <Scissors className="h-6 w-6 md:h-8 md:w-8" />
-              Bitácora de Costura
-            </h1>
-            <p className="text-xs md:text-sm text-gray-500">Gestión de producción y logística.</p>
+            <div className="flex items-center gap-3">
+              <h1 className="text-xl md:text-3xl font-bold text-starbucks-green flex items-center gap-2">
+                <Scissors className="h-6 w-6 md:h-8 md:w-8" />
+                Registros de Hoy
+              </h1>
+              <Link href="/sewing-tickets/impresos">
+                <Button variant="ghost" size="sm" className="text-blue-600 hover:text-blue-800 hover:bg-blue-50 gap-2">
+                  <History className="h-4 w-4" />
+                  <span className="hidden sm:inline">Historial Impresos</span>
+                </Button>
+              </Link>
+            </div>
+            <p className="text-xs md:text-sm text-gray-500">Gestión de bultos pendientes de exportación.</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            <Button onClick={exportToExcel} variant="outline" size="sm" className="flex-1 md:flex-none border-green-600 text-green-700 hover:bg-green-50" disabled={tickets.length === 0 || loading}>
+              <FileSpreadsheet className="h-4 w-4 mr-2" />
+              Excel e Imprimir
+            </Button>
             <Button onClick={exportToPDF} variant="outline" size="sm" className="flex-1 md:flex-none border-starbucks-green text-starbucks-green" disabled={tickets.length === 0}>
               <FileDown className="h-4 w-4 mr-2" />
               PDF
@@ -386,7 +460,7 @@ export default function SewingTicketsPage() {
             <CardHeader className="p-4 md:p-6 bg-gray-50/50 md:bg-transparent border-b md:border-none">
               <CardTitle className="text-base md:text-lg flex items-center gap-2">
                 <ClipboardList className="h-5 w-5 text-starbucks-accent" />
-                Registros de Hoy
+                Bultos Pendientes ({tickets.length})
               </CardTitle>
             </CardHeader>
             <CardContent className="p-0 md:p-6">
