@@ -35,7 +35,9 @@ import autoTable from 'jspdf-autotable';
 import { SewingTicket } from '@/types/sewing';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import Papa from 'papaparse';
+import ExcelJS from 'exceljs';
+import { saveAs } from 'file-saver';
+import { supabaseEtiquetas } from '@/lib/supabaseClient';
 import {
   Command,
   CommandGroup,
@@ -76,6 +78,8 @@ export default function SewingTicketsPage() {
   const [selectedLabels, setSelectedLabels] = useState<SewingTicket[]>([]);
   const [isLabelModalOpen, setIsLabelModalOpen] = useState(false);
   const labelsPrintRef = useRef<HTMLDivElement>(null);
+
+  const [isExporting, setIsExporting] = useState(false);
 
   useEffect(() => {
     setIsMounted(true);
@@ -140,7 +144,66 @@ export default function SewingTicketsPage() {
       return;
     }
 
+    setIsExporting(true);
     try {
+      // 1. Obtener categorías por SKU para clasificación
+      const skus = Array.from(new Set(tickets.map(t => t.sku).filter(Boolean))) as string[];
+      let skuToCatMdr: Record<string, string> = {};
+
+      if (skus.length > 0) {
+          const { data: alternos } = await supabaseEtiquetas
+            .from('sku_alterno')
+            .select('sku, sku_mdr')
+            .in('sku', skus);
+            
+          if (alternos && alternos.length > 0) {
+              const skuToMdr: Record<string, string> = {};
+              alternos.forEach(a => skuToMdr[a.sku] = a.sku_mdr);
+              const mdrs = Array.from(new Set(alternos.map(a => a.sku_mdr)));
+              
+              const { data: mData } = await supabaseEtiquetas
+                .from('sku_m')
+                .select('sku_mdr, cat_mdr')
+                .in('sku_mdr', mdrs);
+                
+              if (mData) {
+                  const mdrToCat: Record<string, string> = {};
+                  mData.forEach(m => mdrToCat[m.sku_mdr] = m.cat_mdr);
+                  skus.forEach(sku => {
+                      const mdr = skuToMdr[sku];
+                      if (mdr && mdrToCat[mdr]) {
+                          skuToCatMdr[sku] = mdrToCat[mdr];
+                      }
+                  });
+              }
+          }
+      }
+
+      // 2. Calcular contadores dinámicos
+      const counters = { ROLLOS: 0, BOLAS: 0, COSTURA: 0 };
+      tickets.forEach(t => {
+          const catMdr = skuToCatMdr[t.sku || ''] || null;
+          if (catMdr) {
+              const upper = catMdr.toUpperCase();
+              // Regla: cat_mdr = 'LIENZO' O 'ROLLO' -> ROLLOS
+              if (upper === 'LIENZO' || upper === 'ROLLO') {
+                  counters.ROLLOS++;
+              }
+              // Regla: MS FABRICACION -> MALLAS BOLAS
+              else if (upper.includes('MS FABRICACION')) {
+                  counters.BOLAS++;
+              }
+              // Regla: MALLA SOMBRA CONFECCIONADA -> MALLAS COSTURA
+              else if (upper.includes('MALLA SOMBRA CONFECCIONADA')) {
+                  counters.COSTURA++;
+              }
+          }
+      });
+
+      // 3. Generar archivo Excel (.xlsx)
+      const workbook = new ExcelJS.Workbook();
+      const worksheet = workbook.addWorksheet('Bitácora de Costura');
+
       const headers = [
         'ID', 'Código de Barra', 'Producto', 'Cantidad', 'SKU', 
         'Responsable Vaciado', 'Hora Vaciado', 'Cuenta', 'No. Venta', 'Pack ID', 
@@ -149,61 +212,73 @@ export default function SewingTicketsPage() {
         'Empaquetado', 'Lista Recolección', 'Recolectada Por', 'Fecha Entrega'
       ];
 
-      const rows = tickets.map(t => [
-        t.id,
-        t.codigo_barra,
-        t.nombre_producto || '---',
-        t.cantidad || 0,
-        t.sku || '---',
-        t.responsable_vaciado || '---',
-        t.hora_vaciado || '---',
-        t.cuenta || '---',
-        t.sales_num || '---',
-        t.pack_id || '---',
-        t.impresa ? 'SÍ' : 'NO',
-        t.responsable_impresion || '---',
-        t.fecha_impresion || '---',
-        t.asignada_a || '---',
-        t.cortada ? 'SÍ' : 'NO',
-        t.confeccion === true ? 'SÍ' : t.confeccion === false ? 'NO' : 'N/A',
-        t.perforado === true ? 'SÍ' : t.perforado === false ? 'NO' : 'N/A',
-        t.ojillado === true ? 'SÍ' : t.ojillado === false ? 'NO' : 'N/A',
-        t.empaquetado ? 'SÍ' : 'NO',
-        t.lista_para_recoleccion ? 'SÍ' : 'NO',
-        t.recolectada_por || 'PENDIENTE',
-        t.fecha_entrega_paquete || '---'
-      ]);
+      const headerRow = worksheet.addRow(headers);
+      headerRow.font = { bold: true };
+      headerRow.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: 'FF006241' } // Starbucks Green
+      };
+      headerRow.eachCell(cell => {
+          cell.font = { color: { argb: 'FFFFFFFF' }, bold: true };
+      });
 
-      // Generar CSV
-      const csv = Papa.unparse({ fields: headers, data: rows });
-      const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
-      const link = document.createElement('a');
-      const url = URL.createObjectURL(blob);
-      
-      link.setAttribute('href', url);
-      link.setAttribute('download', `bitacora_costura_pendientes_${format(new Date(), 'yyyy-MM-dd_HHmm')}.csv`);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      tickets.forEach(t => {
+        worksheet.addRow([
+          t.id,
+          t.codigo_barra,
+          t.nombre_producto || '---',
+          t.cantidad || 0,
+          t.sku || '---',
+          t.responsable_vaciado || '---',
+          t.hora_vaciado || '---',
+          t.cuenta || '---',
+          t.sales_num || '---',
+          t.pack_id || '---',
+          t.impresa ? 'SÍ' : 'NO',
+          t.responsable_impresion || '---',
+          t.fecha_impresion || '---',
+          t.asignada_a || '---',
+          t.cortada ? 'SÍ' : 'NO',
+          t.confeccion === true ? 'SÍ' : t.confeccion === false ? 'NO' : 'N/A',
+          t.perforado === true ? 'SÍ' : t.perforado === false ? 'NO' : 'N/A',
+          t.ojillado === true ? 'SÍ' : t.ojillado === false ? 'NO' : 'N/A',
+          t.empaquetado ? 'SÍ' : 'NO',
+          t.lista_para_recoleccion ? 'SÍ' : 'NO',
+          t.recolectada_por || 'PENDIENTE',
+          t.fecha_entrega_paquete || '---'
+        ]);
+      });
 
-      // MARCAR COMO IMPRESOS
+      worksheet.columns.forEach(column => {
+          column.width = 15;
+      });
+
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      saveAs(blob, `bitacora_costura_pendientes_${format(new Date(), 'yyyy-MM-dd_HHmm')}.xlsx`);
+
+      // 4. Marcar como impresos en BD
       const idsToMark = tickets.map(t => Number(t.id)).filter(id => !isNaN(id));
       await markMultipleAsPrinted(idsToMark);
       
-      // RECARGAR PENDIENTES
+      // 5. Refrescar lista y mostrar resumen
       await fetchTickets(false);
 
       toast({
         title: "Exportación Exitosa",
-        description: `Se han exportado ${idsToMark.length} registros y se han movido al historial de impresos.`,
+        description: `ROLLOS: ${counters.ROLLOS} | MALLAS BOLAS: ${counters.BOLAS} | MALLAS COSTURA: ${counters.COSTURA}`,
       });
 
     } catch (error: any) {
+      console.error('Error en exportación Excel:', error);
       toast({
         variant: 'destructive',
         title: 'Error en Exportación',
         description: error.message || 'No se pudo completar la exportación a Excel.',
       });
+    } finally {
+      setIsExporting(false);
     }
   };
 
@@ -340,8 +415,8 @@ export default function SewingTicketsPage() {
             <p className="text-xs md:text-sm text-gray-500">Gestión de bultos pendientes de exportación.</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Button onClick={exportToExcel} variant="outline" size="sm" className="flex-1 md:flex-none border-green-600 text-green-700 hover:bg-green-50" disabled={tickets.length === 0 || loading}>
-              <FileSpreadsheet className="h-4 w-4 mr-2" />
+            <Button onClick={exportToExcel} variant="outline" size="sm" className="flex-1 md:flex-none border-green-600 text-green-700 hover:bg-green-50" disabled={tickets.length === 0 || loading || isExporting}>
+              {isExporting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <FileSpreadsheet className="h-4 w-4 mr-2" />}
               Excel e Imprimir
             </Button>
             <Button onClick={exportToPDF} variant="outline" size="sm" className="flex-1 md:flex-none border-starbucks-green text-starbucks-green" disabled={tickets.length === 0}>
