@@ -1,13 +1,14 @@
 'use client';
 
 import { useState, useCallback } from 'react';
-import { supabaseEtiquetas } from '@/lib/supabaseClient';
+import { supabase, supabaseEtiquetas } from '@/lib/supabaseClient';
 import { SewingTicket } from '@/types/sewing';
 import { useToast } from '@/hooks/use-toast';
 
 /**
  * Hook personalizado para gestionar la lógica de negocio de los tickets de costura.
- * Utiliza 'supabaseEtiquetas' para todas las operaciones de la tabla sewing_tickets
+ * Utiliza 'supabaseEtiquetas' para las operaciones de la tabla sewing_tickets y etiquetas_i.
+ * Utiliza 'supabase' (Main DB) para la sincronización con la tabla personal.
  */
 export function useSewingTickets() {
   const [tickets, setTickets] = useState<SewingTicket[]>([]);
@@ -77,7 +78,71 @@ export function useSewingTickets() {
         console.error('Error al consultar etiquetas_i:', tagError.message);
       }
 
-      // 2. Preparar payload
+      // --- SINCRONIZACIÓN AUTOMÁTICA CON TABLA 'PERSONAL' (Main DB) ---
+      // Reutiliza la lógica de '/' para iniciar el seguimiento de producción
+      if (tagData) {
+        // Verificar si ya existe el registro en la tabla de producción para evitar duplicados
+        const { data: existingInPersonal } = await supabase
+            .from('personal')
+            .select('code')
+            .eq('code', finalBarcode)
+            .maybeSingle();
+
+        if (!existingInPersonal) {
+            // Replicar lógica de obtención de tiempo estimado (esti_time)
+            let estimatedTime = null;
+            if (tagData.sku) {
+                const { data: skuAlt } = await supabaseEtiquetas
+                    .from('sku_alterno')
+                    .select('sku_mdr')
+                    .eq('sku', tagData.sku)
+                    .maybeSingle();
+                
+                if (skuAlt) {
+                    const { data: skuM } = await supabaseEtiquetas
+                        .from('sku_m')
+                        .select('esti_time')
+                        .eq('sku_mdr', skuAlt.sku_mdr)
+                        .maybeSingle();
+                    if (skuM) estimatedTime = skuM.esti_time;
+                }
+            }
+
+            const now = new Date();
+            const dateEsti = new Date(now.getTime());
+            if (estimatedTime) {
+                dateEsti.setMinutes(dateEsti.getMinutes() + estimatedTime);
+            }
+
+            const personalPayload = {
+                code: finalBarcode,
+                sku: tagData.sku,
+                name: responsable, // El responsable de vaciado inicia la producción
+                name_inc: responsable,
+                product: tagData.product,
+                quantity: tagData.quantity,
+                organization: tagData.organization,
+                sales_num: tagData.sales_num,
+                date: now.toISOString(),
+                status: 'EN PRODUCCION', // Status solicitado para flujo automático
+                esti_time: estimatedTime,
+                deli_date: tagData.deli_date,
+                date_ini: now.toISOString(),
+                date_esti: dateEsti.toISOString()
+            };
+
+            const { error: personalError } = await supabase
+                .from('personal')
+                .insert([personalPayload]);
+
+            if (personalError) {
+                console.warn("No se pudo sincronizar automáticamente con 'personal':", personalError.message);
+            }
+        }
+      }
+      // --- FIN SINCRONIZACIÓN ---
+
+      // 2. Preparar payload para sewing_tickets (Database de Etiquetas)
       const insertPayload = tagData ? {
         codigo_barra: finalBarcode,
         responsable_vaciado: responsable,
@@ -122,9 +187,9 @@ export function useSewingTickets() {
 
       toast({
         variant: 'success',
-        title: tagData ? 'Ticket Mapeado' : 'Ticket Registrado',
+        title: tagData ? 'Ticket Mapeado y Sincronizado' : 'Ticket Registrado',
         description: tagData 
-            ? `Se importaron datos de ${tagData.product}.`
+            ? `Se importaron datos y se inició el seguimiento en 'Personal'.`
             : `Código ${finalBarcode} guardado sin metadatos.`,
       });
 
