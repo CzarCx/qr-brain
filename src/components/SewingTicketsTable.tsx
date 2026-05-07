@@ -223,7 +223,7 @@ export function SewingTicketsTable({ tickets, onUpdateTicket, onDeleteTicket, on
               <TableHead className="w-[220px]">Recolectada Por</TableHead>
               <TableHead className="w-[150px]">Fecha Entrega</TableHead>
               <TableHead className="w-[150px]">Registro Sistema</TableHead>
-              <TableHead className="w-[100px] text-center bg-gray-50 sticky right-0 z-30 shadow-[-2px_0_5px_rgba(0,0,0,0.05)]">Acciones</TableHead>
+              <TableHead className="w-[100px] text-center bg-gray-50 sticky right-0 z-40 shadow-[-2px_0_5px_rgba(0,0,0,0.05)]">Acciones</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -342,14 +342,16 @@ export function SewingTicketsTable({ tickets, onUpdateTicket, onDeleteTicket, on
                   <TableCell className="text-[10px] text-gray-400">
                     {ticket.created_at ? format(new Date(ticket.created_at), "dd/MM HH:mm:ss", { locale: es }) : '---'}
                   </TableCell>
-                  <TableCell className="text-center bg-gray-50 sticky right-0 z-20 shadow-[-2px_0_5px_rgba(0,0,0,0.05)]">
+                  <TableCell className="text-center bg-white sticky right-0 z-40 shadow-[-2px_0_5px_rgba(0,0,0,0.05)] border-l">
                     <Button 
                       variant="ghost" 
                       size="icon" 
-                      className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50 cursor-pointer relative z-50"
+                      type="button"
+                      className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50 cursor-pointer"
                       onClick={(e) => {
+                        e.preventDefault();
                         e.stopPropagation();
-                        if (ticket.id !== undefined) {
+                        if (ticket.id !== undefined && ticket.id !== null) {
                           handleDelete(ticket.id);
                         }
                       }}
