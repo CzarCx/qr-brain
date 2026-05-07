@@ -79,65 +79,72 @@ export function useSewingTickets() {
       }
 
       // --- SINCRONIZACIÓN AUTOMÁTICA CON TABLA 'PERSONAL' (Main DB) ---
-      // Reutiliza la lógica de '/' para iniciar el seguimiento de producción
       if (tagData) {
-        // Verificar si ya existe el registro en la tabla de producción para evitar duplicados
-        const { data: existingInPersonal } = await supabase
-            .from('personal')
-            .select('code')
-            .eq('code', finalBarcode)
-            .maybeSingle();
+        // Intentar convertir a número para el campo 'code' que es numeric en Postgres
+        const numericCode = parseFloat(finalBarcode);
 
-        if (!existingInPersonal) {
-            // Replicar lógica de obtención de tiempo estimado (esti_time)
-            let estimatedTime = null;
-            if (tagData.sku) {
-                const { data: skuAlt } = await supabaseEtiquetas
-                    .from('sku_alterno')
-                    .select('sku_mdr')
-                    .eq('sku', tagData.sku)
-                    .maybeSingle();
-                
-                if (skuAlt) {
-                    const { data: skuM } = await supabaseEtiquetas
-                        .from('sku_m')
-                        .select('esti_time')
-                        .eq('sku_mdr', skuAlt.sku_mdr)
-                        .maybeSingle();
-                    if (skuM) estimatedTime = skuM.esti_time;
-                }
-            }
+        if (!isNaN(numericCode)) {
+          // Verificar si ya existe el registro en la tabla de producción
+          const { data: existingInPersonal } = await supabase
+              .from('personal')
+              .select('code')
+              .eq('code', numericCode)
+              .maybeSingle();
 
-            const now = new Date();
-            const dateEsti = new Date(now.getTime());
-            if (estimatedTime) {
-                dateEsti.setMinutes(dateEsti.getMinutes() + estimatedTime);
-            }
+          if (!existingInPersonal) {
+              // Replicar lógica de obtención de tiempo estimado (esti_time)
+              let estimatedTime = null;
+              if (tagData.sku) {
+                  const { data: skuAlt } = await supabaseEtiquetas
+                      .from('sku_alterno')
+                      .select('sku_mdr')
+                      .eq('sku', tagData.sku)
+                      .maybeSingle();
+                  
+                  if (skuAlt) {
+                      const { data: skuM } = await supabaseEtiquetas
+                          .from('sku_m')
+                          .select('esti_time')
+                          .eq('sku_mdr', skuAlt.sku_mdr)
+                          .maybeSingle();
+                      if (skuM) estimatedTime = skuM.esti_time;
+                  }
+              }
 
-            const personalPayload = {
-                code: finalBarcode,
-                sku: tagData.sku,
-                name: responsable, // El responsable de vaciado inicia la producción
-                name_inc: responsable,
-                product: tagData.product,
-                quantity: tagData.quantity,
-                organization: tagData.organization,
-                sales_num: tagData.sales_num,
-                date: now.toISOString(),
-                status: 'EN PRODUCCION', // Status solicitado para flujo automático
-                esti_time: estimatedTime,
-                deli_date: tagData.deli_date,
-                date_ini: now.toISOString(),
-                date_esti: dateEsti.toISOString()
-            };
+              const now = new Date();
+              const dateEsti = new Date(now.getTime());
+              if (estimatedTime) {
+                  dateEsti.setMinutes(dateEsti.getMinutes() + estimatedTime);
+              }
 
-            const { error: personalError } = await supabase
-                .from('personal')
-                .insert([personalPayload]);
+              const personalPayload = {
+                  code: numericCode,
+                  sku: tagData.sku,
+                  name: responsable, // NOT NULL en esquema
+                  name_inc: responsable,
+                  product: tagData.product,
+                  quantity: tagData.quantity,
+                  organization: tagData.organization,
+                  sales_num: tagData.sales_num,
+                  date: now.toISOString(),
+                  status: 'EN PRODUCCION',
+                  esti_time: estimatedTime,
+                  deli_date: tagData.deli_date,
+                  date_ini: now.toISOString(),
+                  date_esti: dateEsti.toISOString(),
+                  rea_details: 'Sin reasignar'
+              };
 
-            if (personalError) {
-                console.warn("No se pudo sincronizar automáticamente con 'personal':", personalError.message);
-            }
+              const { error: personalError } = await supabase
+                  .from('personal')
+                  .insert([personalPayload]);
+
+              if (personalError) {
+                  console.warn("Fallo el registro en la tabla 'personal':", personalError.message);
+              }
+          }
+        } else {
+            console.warn("El código no es un número válido, se omite registro en 'personal':", finalBarcode);
         }
       }
       // --- FIN SINCRONIZACIÓN ---
