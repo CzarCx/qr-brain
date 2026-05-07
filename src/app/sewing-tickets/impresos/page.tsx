@@ -28,15 +28,13 @@ export default function SewingTicketsHistoryPage() {
   const { tickets, loading, fetchTickets, updateTicket, deleteTicket } = useSewingTickets();
   const [isMounted, setIsMounted] = useState(false);
   
-  // Estados para contadores dinámicos
   const [counters, setCounters] = useState({ ROLLOS: 0, BOLAS: 0, COSTURA: 0 });
 
   useEffect(() => {
     setIsMounted(true);
-    fetchTickets(true); // Cargar solo impresos
+    fetchTickets(true);
   }, [fetchTickets]);
 
-  // Lógica de cálculo de contadores (Sumando cantidad de piezas)
   useEffect(() => {
     const calculateCounters = async () => {
       if (tickets.length === 0) {
@@ -83,11 +81,11 @@ export default function SewingTicketsHistoryPage() {
       const newCounters = { ROLLOS: 0, BOLAS: 0, COSTURA: 0 };
       tickets.forEach(t => {
         const catMdr = skuToCatMdr[t.sku || ''] || null;
-        const qty = t.cantidad || 0; // Sumar cantidad real de piezas
+        const qty = t.cantidad || 0;
         if (catMdr) {
           const upper = catMdr.toUpperCase();
-          // Regla: ROLLOS
-          if (upper === 'LIENZO' || upper === 'ROLLO') {
+          // Regla: ROLLOS (Lienzo o Rollo o Lienzo de Malla Sombra)
+          if (upper === 'LIENZO' || upper === 'ROLLO' || upper.includes('LIENZO DE MALLA SOMBRA')) {
             newCounters.ROLLOS += qty;
           }
           // Regla: MALLAS BOLAS (MS Fabricacion o Malla Sombra Bolsa)
@@ -108,145 +106,69 @@ export default function SewingTicketsHistoryPage() {
 
   const exportToPDF = () => {
     if (tickets.length === 0) return;
-
-    const doc = new jsPDF({
-      orientation: 'landscape',
-      unit: 'mm',
-      format: 'a4'
-    });
-
+    const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
     const today = new Date();
     const dateTitle = format(today, "d 'de' MMMM 'de' yyyy", { locale: es });
 
     doc.setFontSize(16);
     doc.setTextColor(0, 98, 65);
     doc.text(`Historial de Bultos Impresos - ${dateTitle}`, 14, 15);
-    
     doc.setFontSize(10);
-    doc.setTextColor(100);
     doc.text(`Registros Históricos: ${tickets.length}`, 14, 21);
 
-    const headers = [
-      'ID', 'Cód. Barra', 'Producto', 'Cant', 'SKU', 
-      'Vaciado', 'Cuenta', 'Venta', 'Resp Imp', 'F Imp', 'Asignada', 
-      'Corte', 'Confecc', 'Perfor', 'Ojill', 'Empaque', 'Recolector', 'F. Entrega'
-    ];
-
+    const headers = ['ID', 'Cód. Barra', 'Producto', 'Cant', 'SKU', 'Vaciado', 'Cuenta', 'Venta', 'Resp Imp', 'F Imp', 'Asignada', 'Corte', 'Confecc', 'Perfor', 'Ojill', 'Empaque', 'Recolector', 'F. Entrega'];
     const body = tickets.map(t => [
-      t.id,
-      t.codigo_barra,
-      t.nombre_producto || '---',
-      t.cantidad || 0,
-      t.sku || '---',
-      t.responsable_vaciado || '---',
-      t.cuenta || '---',
-      t.sales_num || '---',
-      t.responsable_impresion || '---',
-      t.fecha_impresion || '---',
-      t.asignada_a || '---',
-      t.cortada ? 'SÍ' : 'NO',
-      t.confeccion === true ? 'SÍ' : t.confeccion === false ? 'NO' : 'N/A',
-      t.perforado === true ? 'SÍ' : t.perforado === false ? 'NO' : 'N/A',
-      t.ojillado === true ? 'SÍ' : t.ojillado === false ? 'NO' : 'N/A',
-      t.empaquetado ? 'SÍ' : 'NO',
-      t.recolectada_por || '---',
-      t.fecha_entrega_paquete || '---'
+      t.id, t.codigo_barra, t.nombre_producto || '---', t.cantidad || 0, t.sku || '---',
+      t.responsable_vaciado || '---', t.cuenta || '---', t.sales_num || '---', t.responsable_impresion || '---', t.fecha_impresion || '---', t.asignada_a || '---',
+      t.cortada ? 'SÍ' : 'NO', t.confeccion === true ? 'SÍ' : t.confeccion === false ? 'NO' : 'N/A',
+      t.perforado === true ? 'SÍ' : t.perforado === false ? 'NO' : 'N/A', t.ojillado === true ? 'SÍ' : t.ojillado === false ? 'NO' : 'N/A',
+      t.empaquetado ? 'SÍ' : 'NO', t.recolectada_por || '---', t.fecha_entrega_paquete || '---'
     ]);
 
     autoTable(doc, {
-      startY: 26,
-      head: [headers],
-      body: body,
-      theme: 'striped',
+      startY: 26, head: [headers], body: body, theme: 'striped',
       headStyles: { fillColor: [0, 98, 65], fontSize: 5.5 },
       styles: { fontSize: 5.5, cellPadding: 1.5 }
     });
-
-    doc.save(`historial_costura_impreos_${format(today, "yyyy-MM-dd")}.pdf`);
+    doc.save(`historial_costura_impresos_${format(today, "yyyy-MM-dd")}.pdf`);
   };
 
   if (!isMounted) return null;
 
   return (
     <>
-      <Head>
-        <title>Historial Impresos | Bitácora de Costura</title>
-      </Head>
-      
+      <Head><title>Historial Impresos | Bitácora de Costura</title></Head>
       <main className="w-full max-w-[1600px] mx-auto p-2 md:p-8 space-y-4 md:space-y-6 animate-in fade-in duration-500">
         <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 px-2">
           <div className="space-y-1">
             <div className="flex items-center gap-3">
-              <Link href="/sewing-tickets">
-                <Button variant="ghost" size="icon" className="text-gray-500 hover:text-starbucks-green">
-                  <ArrowLeft className="h-6 w-6" />
-                </Button>
-              </Link>
-              <h1 className="text-xl md:text-3xl font-bold text-starbucks-green flex items-center gap-2">
-                <History className="h-6 w-6 md:h-8 md:w-8" />
-                Historial de Impresos
-              </h1>
+              <Link href="/sewing-tickets"><Button variant="ghost" size="icon" className="text-gray-500"><ArrowLeft className="h-6 w-6" /></Button></Link>
+              <h1 className="text-xl md:text-3xl font-bold text-starbucks-green flex items-center gap-2"><History className="h-6 w-6" /> Historial de Impresos</h1>
             </div>
-            <p className="text-xs md:text-sm text-gray-500 ml-12">Consulta y gestión de bultos ya exportados.</p>
           </div>
           <div className="flex items-center gap-2">
-            <Button onClick={exportToPDF} variant="outline" size="sm" className="border-starbucks-green text-starbucks-green" disabled={tickets.length === 0}>
-              <FileDown className="h-4 w-4 mr-2" />
-              Exportar PDF
-            </Button>
-            {loading && <Loader2 className="h-5 w-5 animate-spin text-starbucks-accent" />}
+            <Button onClick={exportToPDF} variant="outline" size="sm" className="border-starbucks-green text-starbucks-green" disabled={tickets.length === 0}><FileDown className="h-4 w-4 mr-2" /> Exportar PDF</Button>
           </div>
         </header>
 
-        {/* CONTADORES DINÁMICOS (HISTORIAL) */}
         <div className="flex flex-wrap gap-3 px-2">
-          <div className="bg-white border border-gray-200 rounded-xl px-4 py-3 shadow-sm flex flex-col min-w-[140px] transition-all hover:shadow-md">
-            <div className="flex items-center gap-2 mb-1">
-              <div className="p-1 bg-blue-50 rounded-md">
-                <Layers className="h-3 w-3 text-blue-600" />
-              </div>
-              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Rollos (Pzs)</span>
-            </div>
-            <span className="text-3xl font-black text-blue-800 leading-none">{counters.ROLLOS}</span>
+          <div className="bg-white border border-gray-200 rounded-xl px-4 py-3 shadow-sm flex flex-col min-w-[140px]">
+            <div className="flex items-center gap-2 mb-1"><Layers className="h-3 w-3 text-blue-600" /><span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Rollos (Pzs)</span></div>
+            <span className="text-3xl font-black text-blue-800">{counters.ROLLOS}</span>
           </div>
-          
-          <div className="bg-white border border-gray-200 rounded-xl px-4 py-3 shadow-sm flex flex-col min-w-[140px] transition-all hover:shadow-md">
-            <div className="flex items-center gap-2 mb-1">
-              <div className="p-1 bg-blue-50 rounded-md">
-                <Boxes className="h-3 w-3 text-blue-600" />
-              </div>
-              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Mallas Bolas (Pzs)</span>
-            </div>
-            <span className="text-3xl font-black text-blue-800 leading-none">{counters.BOLAS}</span>
+          <div className="bg-white border border-gray-200 rounded-xl px-4 py-3 shadow-sm flex flex-col min-w-[140px]">
+            <div className="flex items-center gap-2 mb-1"><Boxes className="h-3 w-3 text-blue-600" /><span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Mallas Bolas (Pzs)</span></div>
+            <span className="text-3xl font-black text-blue-800">{counters.BOLAS}</span>
           </div>
-
-          <div className="bg-white border border-gray-200 rounded-xl px-4 py-3 shadow-sm flex flex-col min-w-[140px] transition-all hover:shadow-md">
-            <div className="flex items-center gap-2 mb-1">
-              <div className="p-1 bg-blue-50 rounded-md">
-                <Package className="h-3 w-3 text-blue-600" />
-              </div>
-              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Mallas Costura (Pzs)</span>
-            </div>
-            <span className="text-3xl font-black text-blue-800 leading-none">{counters.COSTURA}</span>
+          <div className="bg-white border border-gray-200 rounded-xl px-4 py-3 shadow-sm flex flex-col min-w-[140px]">
+            <div className="flex items-center gap-2 mb-1"><Package className="h-3 w-3 text-blue-600" /><span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Mallas Costura (Pzs)</span></div>
+            <span className="text-3xl font-black text-blue-800">{counters.COSTURA}</span>
           </div>
         </div>
 
-        <Card className="shadow-lg overflow-hidden border-none md:border-solid">
-          <CardHeader className="p-4 md:p-6 bg-blue-50/30">
-            <CardTitle className="text-base md:text-lg flex items-center gap-2 text-blue-800">
-              <ClipboardCheck className="h-5 w-5" />
-              Registros Históricos ({tickets.length})
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-0 md:p-6">
-            <div className="w-full overflow-x-auto">
-              <SewingTicketsTable 
-                tickets={tickets} 
-                onUpdateTicket={updateTicket}
-                onDeleteTicket={deleteTicket}
-              />
-            </div>
-          </CardContent>
+        <Card className="shadow-lg overflow-hidden">
+          <CardHeader className="p-4 bg-blue-50/30"><CardTitle className="text-base flex items-center gap-2 text-blue-800"><ClipboardCheck className="h-5 w-5" /> Registros Históricos ({tickets.length})</CardTitle></CardHeader>
+          <CardContent className="p-0 md:p-6"><div className="w-full overflow-x-auto"><SewingTicketsTable tickets={tickets} onUpdateTicket={updateTicket} onDeleteTicket={deleteTicket} /></div></CardContent>
         </Card>
       </main>
     </>

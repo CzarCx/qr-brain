@@ -1,14 +1,13 @@
-
 'use client';
 
 import { useState, useCallback } from 'react';
-import { supabaseEtiquetas } from '@/lib/supabaseClient';
+import { supabase, supabaseEtiquetas } from '@/lib/supabaseClient';
 import { SewingTicket } from '@/types/sewing';
 import { useToast } from '@/hooks/use-toast';
 
 /**
  * Hook personalizado para gestionar la lógica de negocio de los tickets de costura.
- * Realiza una búsqueda en etiquetas_i para enriquecer los datos de sewing_tickets.
+ * Utiliza 'supabase' para la tabla principal y 'supabaseEtiquetas' para enriquecimiento.
  */
 export function useSewingTickets() {
   const [tickets, setTickets] = useState<SewingTicket[]>([]);
@@ -18,7 +17,7 @@ export function useSewingTickets() {
   const fetchTickets = useCallback(async (isPrinted: boolean = false) => {
     setLoading(true);
     try {
-      let query = supabaseEtiquetas
+      let query = supabase
         .from('sewing_tickets')
         .select('*')
         .order('created_at', { ascending: false });
@@ -34,7 +33,7 @@ export function useSewingTickets() {
       const { data, error } = await query.limit(100);
 
       if (error) {
-        console.error('Error de Supabase Etiquetas (fetchTickets):', error.message);
+        console.error('Error de Supabase (fetchTickets):', error.message);
         throw error;
       }
       setTickets(data || []);
@@ -67,7 +66,7 @@ export function useSewingTickets() {
 
     setLoading(true);
     try {
-      // 1. Consultar en etiquetas_i para mapeo automático
+      // 1. Consultar en etiquetas_i para mapeo automático (DB ETIQUETAS)
       const { data: tagData, error: tagError } = await supabaseEtiquetas
         .from('etiquetas_i')
         .select('product, pack_id, sales_num, sku, personal_inc, organization, created_at, quantity, deli_date')
@@ -82,7 +81,6 @@ export function useSewingTickets() {
       let insertPayload: Partial<SewingTicket>;
 
       if (tagData) {
-        // CASO B: Existe coincidencia -> Mapeo completo
         insertPayload = {
           codigo_barra: finalBarcode,
           responsable_vaciado: responsable,
@@ -94,49 +92,33 @@ export function useSewingTickets() {
           cuenta: tagData.organization,
           fecha_impresion: tagData.created_at ? new Date(tagData.created_at).toISOString().split('T')[0] : null,
           cantidad: tagData.quantity,
-          impresa: false, // Inicialmente no impreso
+          impresa: false,
           hora_vaciado: new Date().toLocaleTimeString('es-MX', { hour12: false }),
           fecha_entrega_paquete: tagData.deli_date,
-          tipo: null,
-          asignada_a: null,
           cortada: false,
           confeccion: false,
           perforado: false,
           ojillado: false,
           empaquetado: false,
-          lista_para_recoleccion: false,
-          recolectada_por: null
+          lista_para_recoleccion: false
         };
       } else {
-        // CASO A: No existe en etiquetas_i -> Registro básico
         insertPayload = {
           codigo_barra: finalBarcode,
           responsable_vaciado: responsable,
           impresa: false,
           hora_vaciado: new Date().toLocaleTimeString('es-MX', { hour12: false }),
-          nombre_producto: null,
-          pack_id: null,
-          sales_num: null,
-          sku: null,
-          responsable_impresion: null,
-          cuenta: null,
-          fecha_impresion: null,
-          cantidad: null,
-          fecha_entrega_paquete: null,
-          tipo: null,
-          asignada_a: null,
           cortada: false,
           confeccion: false,
           perforado: false,
           ojillado: false,
           empaquetado: false,
-          lista_para_recoleccion: false,
-          recolectada_por: null
+          lista_para_recoleccion: false
         };
       }
 
-      // 3. Insertar en sewing_tickets
-      const { error: insertError } = await supabaseEtiquetas
+      // 3. Insertar en sewing_tickets (DB PRINCIPAL)
+      const { error: insertError } = await supabase
         .from('sewing_tickets')
         .insert([insertPayload]);
 
@@ -169,10 +151,10 @@ export function useSewingTickets() {
 
   const updateTicket = useCallback(async (id: number, updates: Partial<SewingTicket>) => {
     try {
-      // Actualización optimista en el estado local
+      // Actualización optimista
       setTickets(prev => prev.map(t => Number(t.id) === Number(id) ? { ...t, ...updates } : t));
 
-      const { error } = await supabaseEtiquetas
+      const { error } = await supabase
         .from('sewing_tickets')
         .update(updates)
         .eq('id', id);
@@ -186,7 +168,6 @@ export function useSewingTickets() {
         title: 'Error de Actualización',
         description: 'No se pudo sincronizar el cambio con la base de datos.',
       });
-      // Revertir en caso de error
       await fetchTickets();
     }
   }, [toast, fetchTickets]);
@@ -195,7 +176,7 @@ export function useSewingTickets() {
     if (ids.length === 0) return;
     setLoading(true);
     try {
-      const { error } = await supabaseEtiquetas
+      const { error } = await supabase
         .from('sewing_tickets')
         .update({ impresa: true })
         .in('id', ids);
@@ -223,7 +204,7 @@ export function useSewingTickets() {
     const numericId = typeof id === 'string' ? parseInt(id, 10) : id;
     
     try {
-      const { error } = await supabaseEtiquetas
+      const { error } = await supabase
         .from('sewing_tickets')
         .delete()
         .eq('id', numericId);
