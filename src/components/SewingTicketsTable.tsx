@@ -197,7 +197,7 @@ export function SewingTicketsTable({ tickets, onUpdateTicket, onDeleteTicket, on
     <div className="border rounded-lg overflow-hidden bg-white shadow-sm">
       <div className="max-h-[600px] overflow-auto">
         <Table className="min-w-[2100px]">
-          <TableHeader className="bg-gray-50 sticky top-0 z-10">
+          <TableHeader className="bg-gray-50 sticky top-0 z-30">
             <TableRow>
               <TableHead className="w-[60px] text-center bg-gray-50">Label</TableHead>
               <TableHead className="w-[80px] text-center">ID</TableHead>
@@ -223,7 +223,7 @@ export function SewingTicketsTable({ tickets, onUpdateTicket, onDeleteTicket, on
               <TableHead className="w-[220px]">Recolectada Por</TableHead>
               <TableHead className="w-[150px]">Fecha Entrega</TableHead>
               <TableHead className="w-[150px]">Registro Sistema</TableHead>
-              <TableHead className="w-[100px] text-center bg-gray-50 sticky right-0 z-20 shadow-[-2px_0_5px_rgba(0,0,0,0.05)]">Acciones</TableHead>
+              <TableHead className="w-[100px] text-center bg-gray-50 sticky right-0 z-30 shadow-[-2px_0_5px_rgba(0,0,0,0.05)]">Acciones</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -346,8 +346,13 @@ export function SewingTicketsTable({ tickets, onUpdateTicket, onDeleteTicket, on
                     <Button 
                       variant="ghost" 
                       size="icon" 
-                      className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50"
-                      onClick={() => ticket.id && handleDelete(ticket.id)}
+                      className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50 cursor-pointer relative z-50"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (ticket.id !== undefined) {
+                          handleDelete(ticket.id);
+                        }
+                      }}
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
