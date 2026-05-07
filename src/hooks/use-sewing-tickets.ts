@@ -160,7 +160,7 @@ export function useSewingTickets() {
   const updateTicket = useCallback(async (id: number, updates: Partial<SewingTicket>) => {
     try {
       // Actualización optimista en el estado local
-      setTickets(prev => prev.map(t => t.id === id ? { ...t, ...updates } : t));
+      setTickets(prev => prev.map(t => Number(t.id) === Number(id) ? { ...t, ...updates } : t));
 
       const { error } = await supabaseEtiquetas
         .from('sewing_tickets')
@@ -181,16 +181,18 @@ export function useSewingTickets() {
     }
   }, [toast, fetchTickets]);
 
-  const deleteTicket = useCallback(async (id: number) => {
+  const deleteTicket = useCallback(async (id: number | string) => {
+    const numericId = typeof id === 'string' ? parseInt(id, 10) : id;
+    
     try {
       const { error } = await supabaseEtiquetas
         .from('sewing_tickets')
         .delete()
-        .eq('id', id);
+        .eq('id', numericId);
 
       if (error) throw error;
 
-      setTickets(prev => prev.filter(t => t.id !== id));
+      setTickets(prev => prev.filter(t => Number(t.id) !== numericId));
       toast({
         title: 'Ticket Eliminado',
         description: 'El registro se ha borrado correctamente de la bitácora.',

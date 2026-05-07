@@ -29,6 +29,17 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Badge } from '@/components/ui/badge';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -63,7 +74,6 @@ const RECOLECTORES_OPTIONS = [
 
 export function SewingTicketsTable({ tickets, onUpdateTicket, onDeleteTicket, onGenerateLabel }: SewingTicketsTableProps) {
   
-  // Lógica para contar SKUs repetidos
   const skuCounts = useMemo(() => {
     return tickets.reduce((acc, ticket) => {
       if (ticket.sku) {
@@ -187,12 +197,6 @@ export function SewingTicketsTable({ tickets, onUpdateTicket, onDeleteTicket, on
     );
   };
 
-  const handleDelete = (id: number) => {
-    if (window.confirm('¿Estás seguro de eliminar este registro? Esta acción no se puede deshacer.')) {
-        onDeleteTicket?.(id);
-    }
-  };
-
   return (
     <div className="border rounded-lg overflow-hidden bg-white shadow-sm">
       <div className="max-h-[600px] overflow-auto">
@@ -223,7 +227,7 @@ export function SewingTicketsTable({ tickets, onUpdateTicket, onDeleteTicket, on
               <TableHead className="w-[220px]">Recolectada Por</TableHead>
               <TableHead className="w-[150px]">Fecha Entrega</TableHead>
               <TableHead className="w-[150px]">Registro Sistema</TableHead>
-              <TableHead className="w-[100px] text-center bg-gray-50 sticky right-0 z-40 shadow-[-2px_0_5px_rgba(0,0,0,0.05)]">Acciones</TableHead>
+              <TableHead className="w-[100px] text-center bg-gray-50 sticky right-0 z-40 shadow-[-2px_0_5px_rgba(0,0,0,0.05)] border-l">Acciones</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -343,21 +347,34 @@ export function SewingTicketsTable({ tickets, onUpdateTicket, onDeleteTicket, on
                     {ticket.created_at ? format(new Date(ticket.created_at), "dd/MM HH:mm:ss", { locale: es }) : '---'}
                   </TableCell>
                   <TableCell className="text-center bg-white sticky right-0 z-40 shadow-[-2px_0_5px_rgba(0,0,0,0.05)] border-l">
-                    <Button 
-                      variant="ghost" 
-                      size="icon" 
-                      type="button"
-                      className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50 cursor-pointer"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        if (ticket.id !== undefined && ticket.id !== null) {
-                          handleDelete(ticket.id);
-                        }
-                      }}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>¿Eliminar registro?</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            Esta acción eliminará permanentemente el ticket #{ticket.id} de la bitácora de costura. Esta operación no se puede deshacer.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                          <AlertDialogAction 
+                            onClick={() => ticket.id && onDeleteTicket?.(ticket.id)}
+                            className="bg-red-600 hover:bg-red-700 text-white"
+                          >
+                            Eliminar
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
                   </TableCell>
                 </TableRow>
               ))
