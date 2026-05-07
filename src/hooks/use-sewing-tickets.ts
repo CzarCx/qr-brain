@@ -17,6 +17,7 @@ export function useSewingTickets() {
   const fetchTickets = useCallback(async (isPrinted: boolean = false) => {
     setLoading(true);
     try {
+      // USAR CLIENTE PRINCIPAL (supabase) para la tabla sewing_tickets
       let query = supabase
         .from('sewing_tickets')
         .select('*')
@@ -30,7 +31,7 @@ export function useSewingTickets() {
         query = query.or('impresa.eq.false,impresa.is.null');
       }
 
-      const { data, error } = await query.limit(100);
+      const { data, error } = await query.limit(150);
 
       if (error) {
         console.error('Error de Supabase (fetchTickets):', error.message);
@@ -78,7 +79,7 @@ export function useSewingTickets() {
       }
 
       // 2. Preparar payload según condiciones
-      let insertPayload: Partial<SewingTicket>;
+      let insertPayload: any;
 
       if (tagData) {
         insertPayload = {
@@ -93,6 +94,7 @@ export function useSewingTickets() {
           fecha_impresion: tagData.created_at ? new Date(tagData.created_at).toISOString().split('T')[0] : null,
           cantidad: tagData.quantity,
           impresa: false,
+          impreso: false, // Mantener ambos por compatibilidad de esquema
           hora_vaciado: new Date().toLocaleTimeString('es-MX', { hour12: false }),
           fecha_entrega_paquete: tagData.deli_date,
           cortada: false,
@@ -107,6 +109,7 @@ export function useSewingTickets() {
           codigo_barra: finalBarcode,
           responsable_vaciado: responsable,
           impresa: false,
+          impreso: false,
           hora_vaciado: new Date().toLocaleTimeString('es-MX', { hour12: false }),
           cortada: false,
           confeccion: false,
@@ -178,7 +181,10 @@ export function useSewingTickets() {
     try {
       const { error } = await supabase
         .from('sewing_tickets')
-        .update({ impresa: true })
+        .update({ 
+          impresa: true,
+          impreso: true 
+        })
         .in('id', ids);
 
       if (error) throw error;

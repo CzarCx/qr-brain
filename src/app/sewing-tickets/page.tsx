@@ -142,15 +142,15 @@ export default function SewingTicketsPage() {
         const qty = t.cantidad || 0;
         if (catMdr) {
           const upper = catMdr.toUpperCase();
-          // Regla: ROLLOS (Lienzo o Rollo o Lienzo de Malla Sombra)
+          // REGLA ROLLOS: LIENZO, ROLLO o LIENZO DE MALLA SOMBRA
           if (upper === 'LIENZO' || upper === 'ROLLO' || upper.includes('LIENZO DE MALLA SOMBRA')) {
             newCounters.ROLLOS += qty;
           }
-          // Regla: MALLAS BOLAS (MS Fabricacion o Malla Sombra Bolsa)
+          // REGLA BOLAS: MS FABRICACION o MALLA SOMBRA BOLSA
           else if (upper.includes('MS FABRICACION') || upper === 'MALLA SOMBRA BOLSA') {
             newCounters.BOLAS += qty;
           }
-          // Regla: MALLAS COSTURA (Malla Sombra Confeccionada)
+          // REGLA COSTURA: MALLA SOMBRA CONFECCIONADA
           else if (upper.includes('MALLA SOMBRA CONFECCIONADA')) {
             newCounters.COSTURA += qty;
           }
@@ -400,7 +400,7 @@ export default function SewingTicketsPage() {
           <div className="bg-white border border-gray-200 rounded-xl px-4 py-3 shadow-sm flex flex-col min-w-[140px]">
             <div className="flex items-center gap-2 mb-1">
               <Layers className="h-3 w-3 text-starbucks-green" />
-              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Rollos (Pzs)</span>
+              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Lienzos (Pzs)</span>
             </div>
             <span className="text-3xl font-black text-starbucks-green">{counters.ROLLOS}</span>
           </div>
