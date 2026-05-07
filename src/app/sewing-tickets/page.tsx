@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
@@ -25,7 +24,10 @@ import {
   Check,
   ChevronsUpDown,
   History,
-  FileSpreadsheet
+  FileSpreadsheet,
+  Layers,
+  Boxes,
+  Package
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
@@ -74,6 +76,9 @@ export default function SewingTicketsPage() {
   const [isResponsableListOpen, setIsResponsableListOpen] = useState(false);
   const { toast } = useToast();
 
+  // Estados para contadores dinámicos
+  const [counters, setCounters] = useState({ ROLLOS: 0, BOLAS: 0, COSTURA: 0 });
+
   // Estados para generación de etiquetas
   const [selectedLabels, setSelectedLabels] = useState<SewingTicket[]>([]);
   const [isLabelModalOpen, setIsLabelModalOpen] = useState(false);
@@ -91,6 +96,72 @@ export default function SewingTicketsPage() {
       setResponsable(savedResponsable);
     }
   }, [fetchTickets]);
+
+  // Lógica de cálculo de contadores (idéntica a la de Excel)
+  useEffect(() => {
+    const calculateCounters = async () => {
+      if (tickets.length === 0) {
+        setCounters({ ROLLOS: 0, BOLAS: 0, COSTURA: 0 });
+        return;
+      }
+
+      const skus = Array.from(new Set(tickets.map(t => t.sku).filter(Boolean))) as string[];
+      let skuToCatMdr: Record<string, string> = {};
+
+      if (skus.length > 0) {
+        try {
+          const { data: alternos } = await supabaseEtiquetas
+            .from('sku_alterno')
+            .select('sku, sku_mdr')
+            .in('sku', skus);
+            
+          if (alternos && alternos.length > 0) {
+            const skuToMdr: Record<string, string> = {};
+            alternos.forEach(a => skuToMdr[a.sku] = a.sku_mdr);
+            const mdrs = Array.from(new Set(alternos.map(a => a.sku_mdr)));
+            
+            const { data: mData } = await supabaseEtiquetas
+              .from('sku_m')
+              .select('sku_mdr, cat_mdr')
+              .in('sku_mdr', mdrs);
+              
+            if (mData) {
+              const mdrToCat: Record<string, string> = {};
+              mData.forEach(m => mdrToCat[m.sku_mdr] = m.cat_mdr);
+              skus.forEach(sku => {
+                const mdr = skuToMdr[sku];
+                if (mdr && mdrToCat[mdr]) {
+                  skuToCatMdr[sku] = mdrToCat[mdr];
+                }
+              });
+            }
+          }
+        } catch (error) {
+          console.error('Error calculating counters:', error);
+        }
+      }
+
+      const newCounters = { ROLLOS: 0, BOLAS: 0, COSTURA: 0 };
+      tickets.forEach(t => {
+        const catMdr = skuToCatMdr[t.sku || ''] || null;
+        if (catMdr) {
+          const upper = catMdr.toUpperCase();
+          if (upper === 'LIENZO' || upper === 'ROLLO') {
+            newCounters.ROLLOS++;
+          }
+          else if (upper.includes('MS FABRICACION')) {
+            newCounters.BOLAS++;
+          }
+          else if (upper.includes('MALLA SOMBRA CONFECCIONADA')) {
+            newCounters.COSTURA++;
+          }
+        }
+      });
+      setCounters(newCounters);
+    };
+
+    calculateCounters();
+  }, [tickets]);
 
   const handleResponsableChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value.toUpperCase();
@@ -180,22 +251,22 @@ export default function SewingTicketsPage() {
       }
 
       // 2. Calcular contadores dinámicos
-      const counters = { ROLLOS: 0, BOLAS: 0, COSTURA: 0 };
+      const countersExport = { ROLLOS: 0, BOLAS: 0, COSTURA: 0 };
       tickets.forEach(t => {
           const catMdr = skuToCatMdr[t.sku || ''] || null;
           if (catMdr) {
               const upper = catMdr.toUpperCase();
               // Regla: cat_mdr = 'LIENZO' O 'ROLLO' -> ROLLOS
               if (upper === 'LIENZO' || upper === 'ROLLO') {
-                  counters.ROLLOS++;
+                  countersExport.ROLLOS++;
               }
               // Regla: MS FABRICACION -> MALLAS BOLAS
               else if (upper.includes('MS FABRICACION')) {
-                  counters.BOLAS++;
+                  countersExport.BOLAS++;
               }
               // Regla: MALLA SOMBRA CONFECCIONADA -> MALLAS COSTURA
               else if (upper.includes('MALLA SOMBRA CONFECCIONADA')) {
-                  counters.COSTURA++;
+                  countersExport.COSTURA++;
               }
           }
       });
@@ -267,7 +338,7 @@ export default function SewingTicketsPage() {
 
       toast({
         title: "Exportación Exitosa",
-        description: `ROLLOS: ${counters.ROLLOS} | MALLAS BOLAS: ${counters.BOLAS} | MALLAS COSTURA: ${counters.COSTURA}`,
+        description: `ROLLOS: ${countersExport.ROLLOS} | MALLAS BOLAS: ${countersExport.BOLAS} | MALLAS COSTURA: ${countersExport.COSTURA}`,
       });
 
     } catch (error: any) {
@@ -435,6 +506,39 @@ export default function SewingTicketsPage() {
             )}
           </div>
         </header>
+
+        {/* CONTADORES DINÁMICOS */}
+        <div className="flex flex-wrap gap-3 px-2">
+          <div className="bg-white border border-gray-200 rounded-xl px-4 py-3 shadow-sm flex flex-col min-w-[140px] transition-all hover:shadow-md">
+            <div className="flex items-center gap-2 mb-1">
+              <div className="p-1 bg-green-50 rounded-md">
+                <Layers className="h-3 w-3 text-starbucks-green" />
+              </div>
+              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Rollos</span>
+            </div>
+            <span className="text-3xl font-black text-starbucks-green leading-none">{counters.ROLLOS}</span>
+          </div>
+          
+          <div className="bg-white border border-gray-200 rounded-xl px-4 py-3 shadow-sm flex flex-col min-w-[140px] transition-all hover:shadow-md">
+            <div className="flex items-center gap-2 mb-1">
+              <div className="p-1 bg-green-50 rounded-md">
+                <Boxes className="h-3 w-3 text-starbucks-green" />
+              </div>
+              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Mallas Bolas</span>
+            </div>
+            <span className="text-3xl font-black text-starbucks-green leading-none">{counters.BOLAS}</span>
+          </div>
+
+          <div className="bg-white border border-gray-200 rounded-xl px-4 py-3 shadow-sm flex flex-col min-w-[140px] transition-all hover:shadow-md">
+            <div className="flex items-center gap-2 mb-1">
+              <div className="p-1 bg-green-50 rounded-md">
+                <Package className="h-3 w-3 text-starbucks-green" />
+              </div>
+              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Mallas Costura</span>
+            </div>
+            <span className="text-3xl font-black text-starbucks-green leading-none">{counters.COSTURA}</span>
+          </div>
+        </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 px-2">
           <Card className="shadow-sm border-starbucks-green/20">

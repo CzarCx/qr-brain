@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -14,21 +13,94 @@ import {
   ArrowLeft,
   Loader2,
   ClipboardCheck,
-  FileDown
+  FileDown,
+  Layers,
+  Boxes,
+  Package
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { supabaseEtiquetas } from '@/lib/supabaseClient';
 
 export default function SewingTicketsHistoryPage() {
   const { tickets, loading, fetchTickets, updateTicket, deleteTicket } = useSewingTickets();
   const [isMounted, setIsMounted] = useState(false);
+  
+  // Estados para contadores dinámicos
+  const [counters, setCounters] = useState({ ROLLOS: 0, BOLAS: 0, COSTURA: 0 });
 
   useEffect(() => {
     setIsMounted(true);
     fetchTickets(true); // Cargar solo impresos
   }, [fetchTickets]);
+
+  // Lógica de cálculo de contadores (idéntica a la de Excel)
+  useEffect(() => {
+    const calculateCounters = async () => {
+      if (tickets.length === 0) {
+        setCounters({ ROLLOS: 0, BOLAS: 0, COSTURA: 0 });
+        return;
+      }
+
+      const skus = Array.from(new Set(tickets.map(t => t.sku).filter(Boolean))) as string[];
+      let skuToCatMdr: Record<string, string> = {};
+
+      if (skus.length > 0) {
+        try {
+          const { data: alternos } = await supabaseEtiquetas
+            .from('sku_alterno')
+            .select('sku, sku_mdr')
+            .in('sku', skus);
+            
+          if (alternos && alternos.length > 0) {
+            const skuToMdr: Record<string, string> = {};
+            alternos.forEach(a => skuToMdr[a.sku] = a.sku_mdr);
+            const mdrs = Array.from(new Set(alternos.map(a => a.sku_mdr)));
+            
+            const { data: mData } = await supabaseEtiquetas
+              .from('sku_m')
+              .select('sku_mdr, cat_mdr')
+              .in('sku_mdr', mdrs);
+              
+            if (mData) {
+              const mdrToCat: Record<string, string> = {};
+              mData.forEach(m => mdrToCat[m.sku_mdr] = m.cat_mdr);
+              skus.forEach(sku => {
+                const mdr = skuToMdr[sku];
+                if (mdr && mdrToCat[mdr]) {
+                  skuToCatMdr[sku] = mdrToCat[mdr];
+                }
+              });
+            }
+          }
+        } catch (error) {
+          console.error('Error calculating counters in history:', error);
+        }
+      }
+
+      const newCounters = { ROLLOS: 0, BOLAS: 0, COSTURA: 0 };
+      tickets.forEach(t => {
+        const catMdr = skuToCatMdr[t.sku || ''] || null;
+        if (catMdr) {
+          const upper = catMdr.toUpperCase();
+          if (upper === 'LIENZO' || upper === 'ROLLO') {
+            newCounters.ROLLOS++;
+          }
+          else if (upper.includes('MS FABRICACION')) {
+            newCounters.BOLAS++;
+          }
+          else if (upper.includes('MALLA SOMBRA CONFECCIONADA')) {
+            newCounters.COSTURA++;
+          }
+        }
+      });
+      setCounters(newCounters);
+    };
+
+    calculateCounters();
+  }, [tickets]);
 
   const exportToPDF = () => {
     if (tickets.length === 0) return;
@@ -121,6 +193,39 @@ export default function SewingTicketsHistoryPage() {
             {loading && <Loader2 className="h-5 w-5 animate-spin text-starbucks-accent" />}
           </div>
         </header>
+
+        {/* CONTADORES DINÁMICOS (HISTORIAL) */}
+        <div className="flex flex-wrap gap-3 px-2">
+          <div className="bg-white border border-gray-200 rounded-xl px-4 py-3 shadow-sm flex flex-col min-w-[140px] transition-all hover:shadow-md">
+            <div className="flex items-center gap-2 mb-1">
+              <div className="p-1 bg-blue-50 rounded-md">
+                <Layers className="h-3 w-3 text-blue-600" />
+              </div>
+              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Rollos</span>
+            </div>
+            <span className="text-3xl font-black text-blue-800 leading-none">{counters.ROLLOS}</span>
+          </div>
+          
+          <div className="bg-white border border-gray-200 rounded-xl px-4 py-3 shadow-sm flex flex-col min-w-[140px] transition-all hover:shadow-md">
+            <div className="flex items-center gap-2 mb-1">
+              <div className="p-1 bg-blue-50 rounded-md">
+                <Boxes className="h-3 w-3 text-blue-600" />
+              </div>
+              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Mallas Bolas</span>
+            </div>
+            <span className="text-3xl font-black text-blue-800 leading-none">{counters.BOLAS}</span>
+          </div>
+
+          <div className="bg-white border border-gray-200 rounded-xl px-4 py-3 shadow-sm flex flex-col min-w-[140px] transition-all hover:shadow-md">
+            <div className="flex items-center gap-2 mb-1">
+              <div className="p-1 bg-blue-50 rounded-md">
+                <Package className="h-3 w-3 text-blue-600" />
+              </div>
+              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Mallas Costura</span>
+            </div>
+            <span className="text-3xl font-black text-blue-800 leading-none">{counters.COSTURA}</span>
+          </div>
+        </div>
 
         <Card className="shadow-lg overflow-hidden border-none md:border-solid">
           <CardHeader className="p-4 md:p-6 bg-blue-50/30">
