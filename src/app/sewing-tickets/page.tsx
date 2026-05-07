@@ -151,7 +151,8 @@ export default function SewingTicketsPage() {
       const upper = catMdr.toUpperCase();
       const qty = t.cantidad || 0;
 
-      if (upper === 'LIENZO' || upper === 'ROLLO' || upper.includes('LIENZO DE MALLA SOMBRA')) {
+      // REGLA LIENZOS: 'LIENZO', 'ROLLO', 'LIENZO DE MALLA SOMBRA' O 'ROLLO LIGHT'
+      if (upper === 'LIENZO' || upper === 'ROLLO' || upper.includes('LIENZO DE MALLA SOMBRA') || upper.includes('ROLLO LIGHT')) {
         groups.LIENZOS.tickets.push(t);
         groups.LIENZOS.total += qty;
       } else if (upper.includes('MS FABRICACION') || upper === 'MALLA SOMBRA BOLSA') {
