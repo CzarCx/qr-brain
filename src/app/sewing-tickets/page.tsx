@@ -11,7 +11,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { 
-  Scissors, 
   ClipboardList, 
   Loader2, 
   UserCircle, 
@@ -26,8 +25,7 @@ import {
   History,
   Layers,
   Boxes,
-  Package,
-  Clock
+  Package
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
@@ -58,6 +56,26 @@ const PREDEFINED_RESPONSABLES = [
   "MARIANA VÁZQUEZ",
   "LESLY ROA"
 ];
+
+// Custom Sewing Machine Icon SVG
+const SewingMachineIcon = ({ className }: { className?: string }) => (
+  <svg 
+    xmlns="http://www.w3.org/2000/svg" 
+    viewBox="0 0 24 24" 
+    fill="none" 
+    stroke="currentColor" 
+    strokeWidth="2" 
+    strokeLinecap="round" 
+    strokeLinejoin="round" 
+    className={className}
+  >
+    <path d="M3 21h18" />
+    <path d="M6 18V7a2 2 0 0 1 2-2h7a2 2 0 0 1 2 2v3" />
+    <circle cx="17" cy="12" r="3" />
+    <path d="M17 15v3" />
+    <path d="M11 5v13" />
+  </svg>
+);
 
 export default function SewingTicketsPage() {
   const { 
@@ -92,7 +110,6 @@ export default function SewingTicketsPage() {
     }
   }, [fetchTickets]);
 
-  // Obtener mapeo de SKU a categorías
   useEffect(() => {
     const fetchCategories = async () => {
       if (tickets.length === 0) return;
@@ -151,7 +168,6 @@ export default function SewingTicketsPage() {
       const upper = catMdr.toUpperCase();
       const qty = t.cantidad || 0;
 
-      // REGLA LIENZOS: 'LIENZO', 'ROLLO', 'LIENZO DE MALLA SOMBRA' O 'ROLLO LIGHT'
       if (upper === 'LIENZO' || upper === 'ROLLO' || upper.includes('LIENZO DE MALLA SOMBRA') || upper.includes('ROLLO LIGHT')) {
         groups.LIENZOS.tickets.push(t);
         groups.LIENZOS.total += qty;
@@ -381,7 +397,7 @@ export default function SewingTicketsPage() {
           <div className="space-y-1">
             <div className="flex items-center gap-3">
               <h1 className="text-xl md:text-3xl font-bold text-starbucks-green flex items-center gap-2">
-                <Scissors className="h-6 w-6 md:h-8 md:w-8" />
+                <SewingMachineIcon className="h-6 w-6 md:h-8 md:w-8" />
                 Registros de Hoy
               </h1>
               <Link href="/sewing-tickets/impresos">
