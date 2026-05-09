@@ -442,6 +442,7 @@ export default function SewingTicketsPage() {
                 time={groupedTickets.LIENZOS.totalTime} 
                 icon={<Layers className="h-5 w-5" />}
                 formatTime={formatTime}
+                targetId="section-lienzos"
             />
             <SummaryCard 
                 label="Mallas Bolas" 
@@ -449,6 +450,7 @@ export default function SewingTicketsPage() {
                 time={groupedTickets['MALLAS BOLAS'].totalTime} 
                 icon={<Boxes className="h-5 w-5" />}
                 formatTime={formatTime}
+                targetId="section-mallas-bolas"
             />
             <SummaryCard 
                 label="Mallas Costura" 
@@ -456,6 +458,7 @@ export default function SewingTicketsPage() {
                 time={groupedTickets['MALLAS COSTURA'].totalTime} 
                 icon={<Package className="h-5 w-5" />}
                 formatTime={formatTime}
+                targetId="section-mallas-costura"
             />
         </div>
 
@@ -502,7 +505,7 @@ export default function SewingTicketsPage() {
           
           <div className="space-y-8 mt-4">
             {groupedTickets.LIENZOS.tickets.length > 0 && (
-              <section className="animate-in slide-in-from-bottom-4 duration-500">
+              <section id="section-lienzos" className="animate-in slide-in-from-bottom-4 duration-500 scroll-mt-24">
                 <div className="bg-blue-600 text-white px-4 py-2 rounded-t-lg font-black flex justify-between items-center shadow-md">
                    <div className="flex items-center gap-2"><Layers className="h-5 w-5" /> LIENZOS</div>
                    <div className="flex items-center gap-4">
@@ -515,7 +518,7 @@ export default function SewingTicketsPage() {
             )}
 
             {groupedTickets['MALLAS BOLAS'].tickets.length > 0 && (
-              <section className="animate-in slide-in-from-bottom-4 duration-500 delay-75">
+              <section id="section-mallas-bolas" className="animate-in slide-in-from-bottom-4 duration-500 delay-75 scroll-mt-24">
                 <div className="bg-green-600 text-white px-4 py-2 rounded-t-lg font-black flex justify-between items-center shadow-md">
                    <div className="flex items-center gap-2"><Boxes className="h-5 w-5" /> MALLAS BOLAS</div>
                    <div className="flex items-center gap-4">
@@ -528,7 +531,7 @@ export default function SewingTicketsPage() {
             )}
 
             {groupedTickets['MALLAS COSTURA'].tickets.length > 0 && (
-              <section className="animate-in slide-in-from-bottom-4 duration-500 delay-150">
+              <section id="section-mallas-costura" className="animate-in slide-in-from-bottom-4 duration-500 delay-150 scroll-mt-24">
                 <div className="bg-yellow-500 text-starbucks-dark px-4 py-2 rounded-t-lg font-black flex justify-between items-center shadow-md">
                    <div className="flex items-center gap-2"><Package className="h-5 w-5" /> MALLAS COSTURA</div>
                    <div className="flex items-center gap-4">
@@ -541,7 +544,7 @@ export default function SewingTicketsPage() {
             )}
 
             {groupedTickets.OTROS.tickets.length > 0 && (
-              <section className="animate-in slide-in-from-bottom-4 duration-500 delay-200">
+              <section id="section-otros" className="animate-in slide-in-from-bottom-4 duration-500 delay-200 scroll-mt-24">
                 <div className="bg-gray-500 text-white px-4 py-2 rounded-t-lg font-black flex justify-between items-center shadow-md">
                    <div className="flex items-center gap-2"><Tag className="h-5 w-5" /> OTROS / DIVERSOS</div>
                    <div className="flex items-center gap-4">
@@ -585,9 +588,21 @@ export default function SewingTicketsPage() {
   );
 }
 
-function SummaryCard({ label, pieces, time, icon, formatTime }: { label: string, pieces: number, time: number, icon: React.ReactNode, formatTime: (n: number) => string }) {
+function SummaryCard({ label, pieces, time, icon, formatTime, targetId }: { label: string, pieces: number, time: number, icon: React.ReactNode, formatTime: (n: number) => string, targetId?: string }) {
+    const handleClick = () => {
+        if (targetId) {
+            const element = document.getElementById(targetId);
+            if (element) {
+                element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+        }
+    };
+
     return (
-        <div className="bg-white border-2 border-gray-100 rounded-2xl p-6 shadow-md flex flex-col justify-between transition-all hover:shadow-lg hover:border-starbucks-green/20">
+        <div 
+            onClick={handleClick}
+            className="bg-white border-2 border-gray-100 rounded-2xl p-6 shadow-md flex flex-col justify-between transition-all hover:shadow-lg hover:border-starbucks-green/20 cursor-pointer active:scale-95"
+        >
             <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
                     <div className="p-2 bg-starbucks-cream rounded-lg text-starbucks-green">
