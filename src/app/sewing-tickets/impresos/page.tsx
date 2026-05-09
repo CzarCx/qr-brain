@@ -15,7 +15,8 @@ import {
   Layers,
   Boxes,
   Package,
-  Tag
+  Tag,
+  Clock
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -24,7 +25,6 @@ import { es } from 'date-fns/locale';
 import { supabaseEtiquetas } from '@/lib/supabaseClient';
 import { SewingTicket } from '@/types/sewing';
 
-// Custom Sewing Machine Icon SVG
 const SewingMachineIcon = ({ className }: { className?: string }) => (
   <svg 
     xmlns="http://www.w3.org/2000/svg" 
@@ -47,7 +47,7 @@ const SewingMachineIcon = ({ className }: { className?: string }) => (
 export default function SewingTicketsHistoryPage() {
   const { tickets, loading, fetchTickets, updateTicket, deleteTicket } = useSewingTickets();
   const [isMounted, setIsMounted] = useState(false);
-  const [skuMapping, setSkuMapping] = useState<Record<string, string>>({});
+  const [skuMetadata, setSkuMetadata] = useState<Record<string, { cat: string, time: number }>>({});
 
   useEffect(() => {
     setIsMounted(true);
@@ -74,21 +74,23 @@ export default function SewingTicketsHistoryPage() {
           
           const { data: mData } = await supabaseEtiquetas
             .from('sku_m')
-            .select('sku_mdr, cat_mdr')
+            .select('sku_mdr, cat_mdr, esti_time')
             .in('sku_mdr', mdrs);
             
           if (mData) {
-            const mdrToCat: Record<string, string> = {};
-            mData.forEach(m => mdrToCat[m.sku_mdr] = m.cat_mdr);
+            const mapping: Record<string, { cat: string, time: number }> = {};
+            const mdrData: Record<string, { cat: string, time: number }> = {};
+            mData.forEach(m => {
+              mdrData[m.sku_mdr] = { cat: m.cat_mdr || '', time: m.esti_time || 0 };
+            });
             
-            const mapping: Record<string, string> = {};
             skus.forEach(sku => {
               const mdr = skuToMdr[sku];
-              if (mdr && mdrToCat[mdr]) {
-                mapping[sku] = mdrToCat[mdr];
+              if (mdr && mdrData[mdr]) {
+                mapping[sku] = mdrData[mdr];
               }
             });
-            setSkuMapping(prev => ({ ...prev, ...mapping }));
+            setSkuMetadata(prev => ({ ...prev, ...mapping }));
           }
         }
       } catch (error) {
@@ -99,36 +101,46 @@ export default function SewingTicketsHistoryPage() {
     fetchCategories();
   }, [tickets]);
 
+  const formatTime = (minutes: number) => {
+    if (minutes === 0) return '0m';
+    if (minutes < 60) return `${minutes}m`;
+    const h = Math.floor(minutes / 60);
+    const m = minutes % 60;
+    return `${h}h ${m > 0 ? `${m}m` : ''}`;
+  };
+
   const groupedTickets = useMemo(() => {
     const groups = {
-      LIENZOS: { tickets: [] as SewingTicket[], total: 0 },
-      'MALLAS BOLAS': { tickets: [] as SewingTicket[], total: 0 },
-      'MALLAS COSTURA': { tickets: [] as SewingTicket[], total: 0 },
-      OTROS: { tickets: [] as SewingTicket[], total: 0 }
+      LIENZOS: { tickets: [] as SewingTicket[], total: 0, totalTime: 0 },
+      'MALLAS BOLAS': { tickets: [] as SewingTicket[], total: 0, totalTime: 0 },
+      'MALLAS COSTURA': { tickets: [] as SewingTicket[], total: 0, totalTime: 0 },
+      OTROS: { tickets: [] as SewingTicket[], total: 0, totalTime: 0 }
     };
 
     tickets.forEach(t => {
-      const catMdr = skuMapping[t.sku || ''] || '';
+      const meta = skuMetadata[t.sku || ''] || { cat: '', time: 0 };
+      const catMdr = meta.cat || '';
+      const estTime = meta.time || 0;
       const upper = catMdr.toUpperCase();
       const qty = t.cantidad || 0;
 
+      let targetGroup = groups.OTROS;
+
       if (upper === 'LIENZO' || upper === 'ROLLO' || upper.includes('LIENZO DE MALLA SOMBRA') || upper.includes('ROLLO DE MALLA SOMBRA') || upper.includes('ROLLO LIGHT')) {
-        groups.LIENZOS.tickets.push(t);
-        groups.LIENZOS.total += qty;
+        targetGroup = groups.LIENZOS;
       } else if (upper === 'MALLA SOMBRA BOLSA') {
-        groups['MALLAS BOLAS'].tickets.push(t);
-        groups['MALLAS BOLAS'].total += qty;
+        targetGroup = groups['MALLAS BOLAS'];
       } else if (upper.includes('MALLA SOMBRA CONFECCIONADA') || upper.includes('MS FABRICACION')) {
-        groups['MALLAS COSTURA'].tickets.push(t);
-        groups['MALLAS COSTURA'].total += qty;
-      } else {
-        groups.OTROS.tickets.push(t);
-        groups.OTROS.total += qty;
+        targetGroup = groups['MALLAS COSTURA'];
       }
+
+      targetGroup.tickets.push(t);
+      targetGroup.total += qty;
+      targetGroup.totalTime += estTime;
     });
 
     return groups;
-  }, [tickets, skuMapping]);
+  }, [tickets, skuMetadata]);
 
   const exportToPDF = () => {
     if (tickets.length === 0) return;
@@ -240,17 +252,26 @@ export default function SewingTicketsHistoryPage() {
         </header>
 
         <div className="flex flex-wrap gap-3 px-2">
-          <div className="bg-white border border-gray-200 rounded-xl px-4 py-3 shadow-sm flex flex-col min-w-[140px]">
+          <div className="bg-white border border-gray-200 rounded-xl px-4 py-3 shadow-sm flex flex-col min-w-[160px]">
             <div className="flex items-center gap-2 mb-1"><Layers className="h-3 w-3 text-blue-600" /><span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Lienzos (Pzs)</span></div>
-            <span className="text-3xl font-black text-blue-800">{groupedTickets.LIENZOS.total}</span>
+            <div className="flex items-baseline gap-2">
+                <span className="text-3xl font-black text-blue-800">{groupedTickets.LIENZOS.total}</span>
+                <span className="text-xs font-bold text-gray-400 flex items-center gap-0.5"><Clock className="h-3 w-3" /> {formatTime(groupedTickets.LIENZOS.totalTime)}</span>
+            </div>
           </div>
-          <div className="bg-white border border-gray-200 rounded-xl px-4 py-3 shadow-sm flex flex-col min-w-[140px]">
+          <div className="bg-white border border-gray-200 rounded-xl px-4 py-3 shadow-sm flex flex-col min-w-[160px]">
             <div className="flex items-center gap-2 mb-1"><Boxes className="h-3 w-3 text-blue-600" /><span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Mallas Bolas (Pzs)</span></div>
-            <span className="text-3xl font-black text-blue-800">{groupedTickets['MALLAS BOLAS'].total}</span>
+            <div className="flex items-baseline gap-2">
+                <span className="text-3xl font-black text-blue-800">{groupedTickets['MALLAS BOLAS'].total}</span>
+                <span className="text-xs font-bold text-gray-400 flex items-center gap-0.5"><Clock className="h-3 w-3" /> {formatTime(groupedTickets['MALLAS BOLAS'].totalTime)}</span>
+            </div>
           </div>
-          <div className="bg-white border border-gray-200 rounded-xl px-4 py-3 shadow-sm flex flex-col min-w-[140px]">
+          <div className="bg-white border border-gray-200 rounded-xl px-4 py-3 shadow-sm flex flex-col min-w-[160px]">
             <div className="flex items-center gap-2 mb-1"><Package className="h-3 w-3 text-blue-600" /><span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Mallas Costura (Pzs)</span></div>
-            <span className="text-3xl font-black text-blue-800">{groupedTickets['MALLAS COSTURA'].total}</span>
+            <div className="flex items-baseline gap-2">
+                <span className="text-3xl font-black text-blue-800">{groupedTickets['MALLAS COSTURA'].total}</span>
+                <span className="text-xs font-bold text-gray-400 flex items-center gap-0.5"><Clock className="h-3 w-3" /> {formatTime(groupedTickets['MALLAS COSTURA'].totalTime)}</span>
+            </div>
           </div>
         </div>
 
@@ -259,9 +280,12 @@ export default function SewingTicketsHistoryPage() {
             <section>
               <div className="bg-blue-800 text-white px-4 py-2 rounded-t-lg font-black flex justify-between items-center">
                  <div className="flex items-center gap-2"><Layers className="h-5 w-5" /> LIENZOS</div>
-                 <span className="bg-white/20 px-3 py-0.5 rounded-full text-sm">({groupedTickets.LIENZOS.total} piezas)</span>
+                 <div className="flex items-center gap-4">
+                    <span className="text-sm flex items-center gap-1 font-bold text-blue-100"><Clock className="h-4 w-4" /> {formatTime(groupedTickets.LIENZOS.totalTime)}</span>
+                    <span className="bg-white/20 px-3 py-0.5 rounded-full text-sm">({groupedTickets.LIENZOS.total} piezas)</span>
+                 </div>
               </div>
-              <SewingTicketsTable tickets={groupedTickets.LIENZOS.tickets} onUpdateTicket={updateTicket} onDeleteTicket={deleteTicket} />
+              <SewingTicketsTable tickets={groupedTickets.LIENZOS.tickets} onUpdateTicket={updateTicket} onDeleteTicket={deleteTicket} skuMetadata={skuMetadata} />
             </section>
           )}
 
@@ -269,9 +293,12 @@ export default function SewingTicketsHistoryPage() {
             <section>
               <div className="bg-blue-600 text-white px-4 py-2 rounded-t-lg font-black flex justify-between items-center">
                  <div className="flex items-center gap-2"><Boxes className="h-5 w-5" /> MALLAS BOLAS</div>
-                 <span className="bg-white/20 px-3 py-0.5 rounded-full text-sm">({groupedTickets['MALLAS BOLAS'].total} piezas)</span>
+                 <div className="flex items-center gap-4">
+                    <span className="text-sm flex items-center gap-1 font-bold text-blue-100"><Clock className="h-4 w-4" /> {formatTime(groupedTickets['MALLAS BOLAS'].totalTime)}</span>
+                    <span className="bg-white/20 px-3 py-0.5 rounded-full text-sm">({groupedTickets['MALLAS BOLAS'].total} piezas)</span>
+                 </div>
               </div>
-              <SewingTicketsTable tickets={groupedTickets['MALLAS BOLAS'].tickets} onUpdateTicket={updateTicket} onDeleteTicket={deleteTicket} />
+              <SewingTicketsTable tickets={groupedTickets['MALLAS BOLAS'].tickets} onUpdateTicket={updateTicket} onDeleteTicket={deleteTicket} skuMetadata={skuMetadata} />
             </section>
           )}
 
@@ -279,9 +306,12 @@ export default function SewingTicketsHistoryPage() {
             <section>
               <div className="bg-blue-400 text-white px-4 py-2 rounded-t-lg font-black flex justify-between items-center">
                  <div className="flex items-center gap-2"><Package className="h-5 w-5" /> MALLAS COSTURA</div>
-                 <span className="bg-white/20 px-3 py-0.5 rounded-full text-sm">({groupedTickets['MALLAS COSTURA'].total} piezas)</span>
+                 <div className="flex items-center gap-4">
+                    <span className="text-sm flex items-center gap-1 font-bold text-blue-100"><Clock className="h-4 w-4" /> {formatTime(groupedTickets['MALLAS COSTURA'].totalTime)}</span>
+                    <span className="bg-white/20 px-3 py-0.5 rounded-full text-sm">({groupedTickets['MALLAS COSTURA'].total} piezas)</span>
+                 </div>
               </div>
-              <SewingTicketsTable tickets={groupedTickets['MALLAS COSTURA'].tickets} onUpdateTicket={updateTicket} onDeleteTicket={deleteTicket} />
+              <SewingTicketsTable tickets={groupedTickets['MALLAS COSTURA'].tickets} onUpdateTicket={updateTicket} onDeleteTicket={deleteTicket} skuMetadata={skuMetadata} />
             </section>
           )}
 
@@ -289,9 +319,12 @@ export default function SewingTicketsHistoryPage() {
             <section>
               <div className="bg-gray-400 text-white px-4 py-2 rounded-t-lg font-black flex justify-between items-center">
                  <div className="flex items-center gap-2"><Tag className="h-5 w-5" /> OTROS / DIVERSOS</div>
-                 <span className="bg-white/20 px-3 py-0.5 rounded-full text-sm">({groupedTickets.OTROS.total} piezas)</span>
+                 <div className="flex items-center gap-4">
+                    <span className="text-sm flex items-center gap-1 font-bold text-gray-100"><Clock className="h-4 w-4" /> {formatTime(groupedTickets.OTROS.totalTime)}</span>
+                    <span className="bg-white/20 px-3 py-0.5 rounded-full text-sm">({groupedTickets.OTROS.total} piezas)</span>
+                 </div>
               </div>
-              <SewingTicketsTable tickets={groupedTickets.OTROS.tickets} onUpdateTicket={updateTicket} onDeleteTicket={deleteTicket} />
+              <SewingTicketsTable tickets={groupedTickets.OTROS.tickets} onUpdateTicket={updateTicket} onDeleteTicket={deleteTicket} skuMetadata={skuMetadata} />
             </section>
           )}
 

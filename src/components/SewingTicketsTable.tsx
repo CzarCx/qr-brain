@@ -53,6 +53,7 @@ interface SewingTicketsTableProps {
   onUpdateTicket?: (id: number, updates: Partial<SewingTicket>) => Promise<void>;
   onDeleteTicket?: (id: number) => Promise<void>;
   onGenerateLabel?: (ticket: SewingTicket) => void;
+  skuMetadata?: Record<string, { cat: string, time: number }>;
 }
 
 const RECOLECTORES_OPTIONS = [
@@ -72,7 +73,7 @@ const RECOLECTORES_OPTIONS = [
   "N/A"
 ];
 
-export function SewingTicketsTable({ tickets, onUpdateTicket, onDeleteTicket, onGenerateLabel }: SewingTicketsTableProps) {
+export function SewingTicketsTable({ tickets, onUpdateTicket, onDeleteTicket, onGenerateLabel, skuMetadata }: SewingTicketsTableProps) {
   
   const skuCounts = useMemo(() => {
     return tickets.reduce((acc, ticket) => {
@@ -200,7 +201,7 @@ export function SewingTicketsTable({ tickets, onUpdateTicket, onDeleteTicket, on
   return (
     <div className="border rounded-b-lg overflow-hidden bg-white shadow-sm">
       <div className="max-h-[600px] overflow-auto">
-        <Table className="min-w-[2100px]">
+        <Table className="min-w-[2200px]">
           <TableHeader className="bg-gray-50 sticky top-0 z-30">
             <TableRow>
               <TableHead className="w-[60px] text-center bg-gray-50">Label</TableHead>
@@ -208,6 +209,7 @@ export function SewingTicketsTable({ tickets, onUpdateTicket, onDeleteTicket, on
               <TableHead className="w-[180px] bg-gray-50">Código de Barra</TableHead>
               <TableHead className="w-[150px]">Producto</TableHead>
               <TableHead className="w-[100px] text-center">Cant.</TableHead>
+              <TableHead className="w-[100px] text-center">T. Est.</TableHead>
               <TableHead className="w-[180px]">SKU (Repetidos)</TableHead>
               <TableHead className="w-[150px]">Responsable Vaciado</TableHead>
               <TableHead className="w-[120px]">Hora Vaciado</TableHead>
@@ -253,6 +255,9 @@ export function SewingTicketsTable({ tickets, onUpdateTicket, onDeleteTicket, on
                   </TableCell>
                   <TableCell className="text-center font-bold text-blue-600">
                     {ticket.cantidad !== null ? ticket.cantidad : '---'}
+                  </TableCell>
+                  <TableCell className="text-center font-bold text-amber-600 text-xs">
+                    {skuMetadata && ticket.sku && skuMetadata[ticket.sku] ? `${skuMetadata[ticket.sku].time}m` : (ticket.esti_time ? `${ticket.esti_time}m` : '---')}
                   </TableCell>
                   <TableCell className="text-xs font-mono">
                     <span className="text-gray-600">{ticket.sku || '---'}</span>
@@ -380,7 +385,7 @@ export function SewingTicketsTable({ tickets, onUpdateTicket, onDeleteTicket, on
               ))
             ) : (
               <TableRow>
-                <TableCell colSpan={25} className="text-center py-20 text-gray-400 bg-gray-50">
+                <TableCell colSpan={26} className="text-center py-20 text-gray-400 bg-gray-50">
                   <div className="flex flex-col items-center gap-2">
                     <Package className="h-12 w-12 opacity-10" />
                     <p className="text-lg">No hay tickets en este bloque.</p>
