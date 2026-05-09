@@ -43,10 +43,11 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { Check, X, Clock, User, Package, Building2, Minus, Tag, ChevronsUpDown, Trash2 } from 'lucide-react';
+import { Check, X, Clock, User, Package, Building2, Minus, Tag, ChevronsUpDown, Trash2, Copy } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { useToast } from '@/hooks/use-toast';
 
 interface SewingTicketsTableProps {
   tickets: SewingTicket[];
@@ -74,6 +75,7 @@ const RECOLECTORES_OPTIONS = [
 ];
 
 export function SewingTicketsTable({ tickets, onUpdateTicket, onDeleteTicket, onGenerateLabel, skuMetadata }: SewingTicketsTableProps) {
+  const { toast } = useToast();
   
   const skuCounts = useMemo(() => {
     return tickets.reduce((acc, ticket) => {
@@ -83,6 +85,16 @@ export function SewingTicketsTable({ tickets, onUpdateTicket, onDeleteTicket, on
       return acc;
     }, {} as Record<string, number>);
   }, [tickets]);
+
+  const handleCopySKU = (sku: string) => {
+    if (!sku) return;
+    navigator.clipboard.writeText(sku);
+    toast({
+      title: "SKU Copiado",
+      description: `${sku} se ha guardado en el portapapeles.`,
+      duration: 2000,
+    });
+  };
 
   const renderBoolean = (val: boolean | null) => {
     if (val === true) return <Badge className="bg-green-100 text-green-700 hover:bg-green-100 border-green-200"><Check className="h-3 w-3 mr-1" /> SÍ</Badge>;
@@ -260,12 +272,23 @@ export function SewingTicketsTable({ tickets, onUpdateTicket, onDeleteTicket, on
                     {skuMetadata && ticket.sku && skuMetadata[ticket.sku] ? `${skuMetadata[ticket.sku].time}m` : (ticket.esti_time ? `${ticket.esti_time}m` : '---')}
                   </TableCell>
                   <TableCell className="text-xs font-mono">
-                    <span className="text-gray-600">{ticket.sku || '---'}</span>
-                    {ticket.sku && skuCounts[ticket.sku] > 1 && (
-                      <span className="ml-2 px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700 font-bold text-[10px]">
-                        (x{skuCounts[ticket.sku]})
+                    <div 
+                      className="flex items-center gap-1 group cursor-pointer"
+                      onClick={() => ticket.sku && handleCopySKU(ticket.sku)}
+                      title="Haz clic para copiar SKU"
+                    >
+                      <span className="text-gray-600 group-hover:text-starbucks-green group-hover:underline transition-colors">
+                        {ticket.sku || '---'}
                       </span>
-                    )}
+                      {ticket.sku && (
+                        <Copy className="h-3 w-3 text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity" />
+                      )}
+                      {ticket.sku && skuCounts[ticket.sku] > 1 && (
+                        <span className="ml-1 px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700 font-bold text-[10px]">
+                          (x{skuCounts[ticket.sku]})
+                        </span>
+                      )}
+                    </div>
                   </TableCell>
                   <TableCell className="text-xs">
                     <div className="flex items-center gap-1">
