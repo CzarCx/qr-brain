@@ -24,6 +24,7 @@ import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { supabaseEtiquetas } from '@/lib/supabaseClient';
 import { SewingTicket } from '@/types/sewing';
+import { Badge } from '@/components/ui/badge';
 
 const SewingMachineIcon = ({ className }: { className?: string }) => (
   <svg 
@@ -126,7 +127,7 @@ export default function SewingTicketsHistoryPage() {
 
       let targetGroup = groups.OTROS;
 
-      if (upper === 'LIENZO' || upper === 'ROLLO' || upper.includes('LIENZO DE MALLA SOMBRA') || upper.includes('ROLLO DE MALLA SOMBRA') || upper.includes('ROLLO LIGHT')) {
+      if (upper === 'LIENZO' || upper === 'ROLLO' || upper.includes('LIENZO DE MALLA SOMBRA') || upper.includes('ROLLO LIGHT') || upper.includes('ROLLO DE MALLA SOMBRA')) {
         targetGroup = groups.LIENZOS;
       } else if (upper === 'MALLA SOMBRA BOLSA') {
         targetGroup = groups['MALLAS BOLAS'];
@@ -251,28 +252,28 @@ export default function SewingTicketsHistoryPage() {
           </div>
         </header>
 
-        <div className="flex flex-wrap gap-3 px-2">
-          <div className="bg-white border border-gray-200 rounded-xl px-4 py-3 shadow-sm flex flex-col min-w-[160px]">
-            <div className="flex items-center gap-2 mb-1"><Layers className="h-3 w-3 text-blue-600" /><span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Lienzos (Pzs)</span></div>
-            <div className="flex items-baseline gap-2">
-                <span className="text-3xl font-black text-blue-800">{groupedTickets.LIENZOS.total}</span>
-                <span className="text-xs font-bold text-gray-400 flex items-center gap-0.5"><Clock className="h-3 w-3" /> {formatTime(groupedTickets.LIENZOS.totalTime)}</span>
-            </div>
-          </div>
-          <div className="bg-white border border-gray-200 rounded-xl px-4 py-3 shadow-sm flex flex-col min-w-[160px]">
-            <div className="flex items-center gap-2 mb-1"><Boxes className="h-3 w-3 text-blue-600" /><span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Mallas Bolas (Pzs)</span></div>
-            <div className="flex items-baseline gap-2">
-                <span className="text-3xl font-black text-blue-800">{groupedTickets['MALLAS BOLAS'].total}</span>
-                <span className="text-xs font-bold text-gray-400 flex items-center gap-0.5"><Clock className="h-3 w-3" /> {formatTime(groupedTickets['MALLAS BOLAS'].totalTime)}</span>
-            </div>
-          </div>
-          <div className="bg-white border border-gray-200 rounded-xl px-4 py-3 shadow-sm flex flex-col min-w-[160px]">
-            <div className="flex items-center gap-2 mb-1"><Package className="h-3 w-3 text-blue-600" /><span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Mallas Costura (Pzs)</span></div>
-            <div className="flex items-baseline gap-2">
-                <span className="text-3xl font-black text-blue-800">{groupedTickets['MALLAS COSTURA'].total}</span>
-                <span className="text-xs font-bold text-gray-400 flex items-center gap-0.5"><Clock className="h-3 w-3" /> {formatTime(groupedTickets['MALLAS COSTURA'].totalTime)}</span>
-            </div>
-          </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 px-2">
+            <SummaryCard 
+                label="Lienzos" 
+                pieces={groupedTickets.LIENZOS.total} 
+                time={groupedTickets.LIENZOS.totalTime} 
+                icon={<Layers className="h-5 w-5" />}
+                formatTime={formatTime}
+            />
+            <SummaryCard 
+                label="Mallas Bolas" 
+                pieces={groupedTickets['MALLAS BOLAS'].total} 
+                time={groupedTickets['MALLAS BOLAS'].totalTime} 
+                icon={<Boxes className="h-5 w-5" />}
+                formatTime={formatTime}
+            />
+            <SummaryCard 
+                label="Mallas Costura" 
+                pieces={groupedTickets['MALLAS COSTURA'].total} 
+                time={groupedTickets['MALLAS COSTURA'].totalTime} 
+                icon={<Package className="h-5 w-5" />}
+                formatTime={formatTime}
+            />
         </div>
 
         <div className="space-y-8 mt-4 px-2">
@@ -338,4 +339,33 @@ export default function SewingTicketsHistoryPage() {
       </main>
     </>
   );
+}
+
+function SummaryCard({ label, pieces, time, icon, formatTime }: { label: string, pieces: number, time: number, icon: React.ReactNode, formatTime: (n: number) => string }) {
+    return (
+        <div className="bg-white border-2 border-gray-100 rounded-2xl p-6 shadow-md flex flex-col justify-between transition-all hover:shadow-lg hover:border-starbucks-green/20">
+            <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                    <div className="p-2 bg-starbucks-cream rounded-lg text-starbucks-green">
+                        {icon}
+                    </div>
+                    <span className="text-xs font-black text-gray-500 uppercase tracking-widest">{label}</span>
+                </div>
+                <Badge variant="secondary" className="bg-gray-100 text-gray-600 font-bold uppercase text-[9px]">Historial</Badge>
+            </div>
+            <div className="grid grid-cols-2 gap-4 items-end">
+                <div className="flex flex-col">
+                    <span className="text-[10px] font-bold text-gray-400 uppercase mb-1">Piezas Totales</span>
+                    <span className="text-4xl font-black text-starbucks-green tabular-nums leading-none tracking-tighter">{pieces}</span>
+                </div>
+                <div className="flex flex-col border-l-2 pl-4 border-gray-100">
+                    <span className="text-[10px] font-bold text-gray-400 uppercase mb-1">Tiempo Est.</span>
+                    <span className="text-2xl font-black text-amber-600 tabular-nums leading-none flex items-center gap-1.5">
+                        <Clock className="h-5 w-5 stroke-[3px]" />
+                        {formatTime(time)}
+                    </span>
+                </div>
+            </div>
+        </div>
+    );
 }
