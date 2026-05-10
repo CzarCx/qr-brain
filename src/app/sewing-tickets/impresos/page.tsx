@@ -16,7 +16,8 @@ import {
   Boxes,
   Package,
   Tag,
-  Clock
+  Clock,
+  ArrowUp
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -49,10 +50,22 @@ export default function SewingTicketsHistoryPage() {
   const { tickets, loading, fetchTickets, updateTicket, deleteTicket } = useSewingTickets();
   const [isMounted, setIsMounted] = useState(false);
   const [skuMetadata, setSkuMetadata] = useState<Record<string, { cat: string, time: number }>>({});
+  const [showScrollTop, setShowScrollTop] = useState(false);
 
   useEffect(() => {
     setIsMounted(true);
     fetchTickets(true);
+
+    const handleScroll = () => {
+      if (window.scrollY > 300) {
+        setShowScrollTop(true);
+      } else {
+        setShowScrollTop(false);
+      }
+    };
+
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
   }, [fetchTickets]);
 
   useEffect(() => {
@@ -230,12 +243,16 @@ export default function SewingTicketsHistoryPage() {
     doc.save(`historial_costura_${format(today, "yyyy-MM-dd")}.pdf`);
   };
 
+  const scrollToTop = () => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   if (!isMounted) return null;
 
   return (
     <>
       <Head><title>Historial Impresos | Bitácora de Costura</title></Head>
-      <main className="w-full max-w-[1600px] mx-auto p-2 md:p-8 space-y-4 md:space-y-6 animate-in fade-in duration-500">
+      <main className="w-full max-w-[1600px] mx-auto p-2 md:p-8 space-y-4 md:space-y-6 animate-in fade-in duration-500 relative">
         <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 px-2">
           <div className="space-y-1">
             <div className="flex items-center gap-3">
@@ -339,6 +356,17 @@ export default function SewingTicketsHistoryPage() {
             </div>
           )}
         </div>
+
+        {/* Floating Back to Top Button */}
+        {showScrollTop && (
+          <Button
+            onClick={scrollToTop}
+            className="fixed bottom-8 right-8 z-50 rounded-full h-12 w-12 shadow-xl bg-starbucks-green hover:bg-starbucks-dark animate-in fade-in zoom-in duration-300"
+            size="icon"
+          >
+            <ArrowUp className="h-6 w-6" />
+          </Button>
+        )}
       </main>
     </>
   );
