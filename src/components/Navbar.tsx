@@ -14,7 +14,7 @@ import {
   Boxes, 
   Scissors,
   Menu,
-  X
+  Settings2
 } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
@@ -34,6 +34,7 @@ const mainNavLinks = [
   { href: '/entrega', label: 'Entrega', icon: <PackageCheck className="h-5 w-5" /> },
   { href: '/devoluciones', label: 'Devolución', icon: <Undo2 className="h-5 w-5" /> },
   { href: '/sewing-tickets', label: 'Costura', icon: <Scissors className="h-5 w-5" /> },
+  { href: '/sewing-tickets/status', label: 'Status Rápido', icon: <Settings2 className="h-5 w-5" /> },
 ];
 
 export default function Navbar() {
