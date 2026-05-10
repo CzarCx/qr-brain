@@ -361,7 +361,7 @@ export default function SewingTicketsHistoryPage() {
         {showScrollTop && (
           <Button
             onClick={scrollToTop}
-            className="fixed bottom-8 right-8 z-50 rounded-full h-12 w-12 shadow-xl bg-starbucks-green hover:bg-starbucks-dark animate-in fade-in zoom-in duration-300"
+            className="fixed bottom-24 right-4 md:bottom-8 md:right-8 z-50 rounded-full h-12 w-12 shadow-xl bg-starbucks-green hover:bg-starbucks-dark animate-in fade-in zoom-in duration-300"
             size="icon"
           >
             <ArrowUp className="h-6 w-6" />
