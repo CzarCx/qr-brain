@@ -41,6 +41,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Badge } from '@/components/ui/badge';
+import { Label } from '@/components/ui/label';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Check, X, Clock, User, Package, Building2, Minus, Tag, ChevronsUpDown, Trash2, Copy, ChevronDown, ChevronUp, LayoutGrid, List as ListIcon, Scissors, Boxes, Settings2, Truck } from 'lucide-react';
