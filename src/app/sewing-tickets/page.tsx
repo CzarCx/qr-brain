@@ -267,7 +267,7 @@ export default function SewingTicketsPage() {
       const worksheet = workbook.addWorksheet('Bitácora de Costura');
 
       const headers = [
-        'ID', 'Código de Barra', 'Producto', 'Cantidad', 'SKU', 
+        'Código de Barra', 'Producto', 'Cantidad', 'SKU', 
         'Responsable Vaciado', 'Hora Vaciado', 'Cuenta', 'No. Venta', 'Pack ID', 
         'Impresa', 'Resp. Impresión', 'Fecha Impresión', 'Asignada A', 
         'Cortada', 'Confección', 'Perforado', 'Ojillado', 
@@ -281,7 +281,7 @@ export default function SewingTicketsPage() {
 
       tickets.forEach(t => {
         worksheet.addRow([
-          t.id, t.codigo_barra, t.nombre_producto || '---', t.cantidad || 0, t.sku || '---',
+          t.codigo_barra, t.nombre_producto || '---', t.cantidad || 0, t.sku || '---',
           t.responsable_vaciado || '---', t.hora_vaciado || '---', t.cuenta || '---', t.sales_num || '---', t.pack_id || '---',
           t.impresa ? 'SÍ' : 'NO', t.responsable_impresion || '---', t.fecha_impresion || '---', t.asignada_a || '---',
           t.cortada ? 'SÍ' : 'NO', t.confeccion === true ? 'SÍ' : t.confeccion === false ? 'NO' : 'N/A',
