@@ -3,6 +3,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
+import Image from 'next/image';
 import { useSewingTickets } from '@/hooks/use-sewing-tickets';
 import { SewingTicketsTable } from '@/components/SewingTicketsTable';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
@@ -12,12 +13,9 @@ import {
   ArrowLeft,
   ClipboardCheck,
   FileDown,
-  Layers,
-  Boxes,
-  Package,
-  Tag,
   Clock,
-  ArrowUp
+  ArrowUp,
+  Tag
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -274,7 +272,7 @@ export default function SewingTicketsHistoryPage() {
                 label="Lienzos" 
                 pieces={groupedTickets.LIENZOS.total} 
                 time={groupedTickets.LIENZOS.totalTime} 
-                icon={<Layers className="h-5 w-5" />}
+                image="/canva.png"
                 formatTime={formatTime}
                 targetId="section-lienzos"
             />
@@ -282,7 +280,7 @@ export default function SewingTicketsHistoryPage() {
                 label="Mallas Bolas" 
                 pieces={groupedTickets['MALLAS BOLAS'].total} 
                 time={groupedTickets['MALLAS BOLAS'].totalTime} 
-                icon={<Boxes className="h-5 w-5" />}
+                image="/sphere.png"
                 formatTime={formatTime}
                 targetId="section-mallas-bolas"
             />
@@ -290,7 +288,7 @@ export default function SewingTicketsHistoryPage() {
                 label="Mallas Costura" 
                 pieces={groupedTickets['MALLAS COSTURA'].total} 
                 time={groupedTickets['MALLAS COSTURA'].totalTime} 
-                icon={<Package className="h-5 w-5" />}
+                image="/sewing-machine.png"
                 formatTime={formatTime}
                 targetId="section-mallas-costura"
             />
@@ -300,7 +298,10 @@ export default function SewingTicketsHistoryPage() {
           {groupedTickets.LIENZOS.tickets.length > 0 && (
             <section id="section-lienzos" className="scroll-mt-24">
               <div className="bg-blue-800 text-white px-4 py-2 rounded-t-lg font-black flex justify-between items-center">
-                 <div className="flex items-center gap-2"><Layers className="h-5 w-5" /> LIENZOS</div>
+                 <div className="flex items-center gap-2">
+                   <Image src="/canva.png" width={24} height={24} alt="Lienzos" className="brightness-0 invert" />
+                   LIENZOS
+                 </div>
                  <div className="flex items-center gap-4">
                     <span className="text-sm flex items-center gap-1 font-bold text-blue-100"><Clock className="h-4 w-4" /> {formatTime(groupedTickets.LIENZOS.totalTime)}</span>
                     <span className="bg-white/20 px-3 py-0.5 rounded-full text-sm">({groupedTickets.LIENZOS.total} piezas)</span>
@@ -313,7 +314,10 @@ export default function SewingTicketsHistoryPage() {
           {groupedTickets['MALLAS BOLAS'].tickets.length > 0 && (
             <section id="section-mallas-bolas" className="scroll-mt-24">
               <div className="bg-blue-600 text-white px-4 py-2 rounded-t-lg font-black flex justify-between items-center">
-                 <div className="flex items-center gap-2"><Boxes className="h-5 w-5" /> MALLAS BOLAS</div>
+                 <div className="flex items-center gap-2">
+                   <Image src="/sphere.png" width={24} height={24} alt="Mallas Bolas" className="brightness-0 invert" />
+                   MALLAS BOLAS
+                 </div>
                  <div className="flex items-center gap-4">
                     <span className="text-sm flex items-center gap-1 font-bold text-blue-100"><Clock className="h-4 w-4" /> {formatTime(groupedTickets['MALLAS BOLAS'].totalTime)}</span>
                     <span className="bg-white/20 px-3 py-0.5 rounded-full text-sm">({groupedTickets['MALLAS BOLAS'].total} piezas)</span>
@@ -326,7 +330,10 @@ export default function SewingTicketsHistoryPage() {
           {groupedTickets['MALLAS COSTURA'].tickets.length > 0 && (
             <section id="section-mallas-costura" className="scroll-mt-24">
               <div className="bg-blue-400 text-white px-4 py-2 rounded-t-lg font-black flex justify-between items-center">
-                 <div className="flex items-center gap-2"><Package className="h-5 w-5" /> MALLAS COSTURA</div>
+                 <div className="flex items-center gap-2">
+                   <Image src="/sewing-machine.png" width={24} height={24} alt="Mallas Costura" className="brightness-0 invert" />
+                   MALLAS COSTURA
+                 </div>
                  <div className="flex items-center gap-4">
                     <span className="text-sm flex items-center gap-1 font-bold text-blue-100"><Clock className="h-4 w-4" /> {formatTime(groupedTickets['MALLAS COSTURA'].totalTime)}</span>
                     <span className="bg-white/20 px-3 py-0.5 rounded-full text-sm">({groupedTickets['MALLAS COSTURA'].total} piezas)</span>
@@ -372,7 +379,7 @@ export default function SewingTicketsHistoryPage() {
   );
 }
 
-function SummaryCard({ label, pieces, time, icon, formatTime, targetId }: { label: string, pieces: number, time: number, icon: React.ReactNode, formatTime: (n: number) => string, targetId?: string }) {
+function SummaryCard({ label, pieces, time, image, formatTime, targetId }: { label: string, pieces: number, time: number, image: string, formatTime: (n: number) => string, targetId?: string }) {
     const handleClick = () => {
         if (targetId) {
             const element = document.getElementById(targetId);
@@ -389,8 +396,8 @@ function SummaryCard({ label, pieces, time, icon, formatTime, targetId }: { labe
         >
             <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
-                    <div className="p-2 bg-starbucks-cream rounded-lg text-starbucks-green">
-                        {icon}
+                    <div className="p-2 bg-starbucks-cream rounded-lg flex items-center justify-center">
+                        <Image src={image} width={32} height={32} alt={label} className="object-contain" />
                     </div>
                     <span className="text-xs font-black text-gray-500 uppercase tracking-widest">{label}</span>
                 </div>
