@@ -552,7 +552,7 @@ function CardItem({
                   className="flex items-center gap-1 bg-gray-50 px-2 py-0.5 rounded border border-gray-200"
                   onClick={(e) => { e.stopPropagation(); handleCopySKU(ticket.sku); }}
                 >
-                    <span className="text-xs font-bold text-gray-700 font-mono truncate max-w-[120px]">{ticket.sku || 'N/A'}</span>
+                    <span className="text-xs font-bold text-gray-700 font-mono break-all">{ticket.sku || 'N/A'}</span>
                     <Copy className="h-3 w-3 text-gray-400" />
                 </div>
             </div>
@@ -564,7 +564,7 @@ function CardItem({
         </div>
 
         <div className="space-y-1">
-            <p className="text-[11px] font-bold text-starbucks-dark line-clamp-1 uppercase">{ticket.nombre_producto || 'NO MAPEADO'}</p>
+            <p className="text-[11px] font-bold text-starbucks-dark uppercase">{ticket.nombre_producto || 'NO MAPEADO'}</p>
             <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                     <span className="text-lg font-black text-blue-600">{ticket.cantidad || 0} <span className="text-[10px] font-bold text-gray-400">PZS</span></span>
