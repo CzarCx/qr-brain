@@ -27,7 +27,8 @@ import {
   Truck,
   Search,
   User,
-  Check
+  Check,
+  ChevronsUpDown
 } from 'lucide-react';
 import Link from 'next/link';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -43,12 +44,18 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 
 type ScanLog = {
   id: string;
@@ -69,6 +76,20 @@ type PPCOrder = {
   status: string;
 };
 
+const DRIVER_OPTIONS = [
+  "JIMBO",
+  "ESTEBAN",
+  "ALFONSO",
+  "RAFA",
+  "MARVIN",
+  "CORY",
+  "SEBAS PERÚ",
+  "GENA",
+  "NORMAN",
+  "COLECTA EN LAVADO",
+  "COLECTA VIRGINIA FÁBREGAS"
+];
+
 export default function SewingStatusScannerPage() {
   const [isMounted, setIsMounted] = useState(false);
   const [targetStatus, setTargetStatus] = useState<'PPC' | 'ENTREGADO'>('PPC');
@@ -80,7 +101,6 @@ export default function SewingStatusScannerPage() {
   
   // PPC Logistics Section States
   const [ppcOrders, setPpcOrders] = useState<PPCOrder[]>([]);
-  const [drivers, setDrivers] = useState<string[]>([]);
   const [loadingPpc, setLoadingPpc] = useState(false);
   const [searchPpc, setSearchPpc] = useState('');
   
@@ -98,25 +118,7 @@ export default function SewingStatusScannerPage() {
   useEffect(() => {
     setIsMounted(true);
     fetchPpcOrders();
-    fetchDrivers();
   }, []);
-
-  const fetchDrivers = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('personal_name')
-        .select('name')
-        .eq('rol', 'entrega');
-      
-      if (error) throw error;
-      if (data) {
-        const uniqueNames = Array.from(new Set(data.map(d => d.name))).sort();
-        setDrivers(uniqueNames);
-      }
-    } catch (err) {
-      console.error('Error fetching drivers:', err);
-    }
-  };
 
   const fetchPpcOrders = async () => {
     setLoadingPpc(true);
@@ -157,6 +159,7 @@ export default function SewingStatusScannerPage() {
     } catch (err: any) {
       console.error('Error fetching PPC orders:', err.message);
     } finally {
+      setLoading(false);
       setLoadingPpc(false);
     }
   };
@@ -166,19 +169,19 @@ export default function SewingStatusScannerPage() {
       const numericCode = parseFloat(code);
       const { error } = await supabase
         .from('personal')
-        .update({ driver_name: driverName })
+        .update({ driver_name: driverName === "PENDIENTE" ? null : driverName })
         .eq('code', numericCode);
 
       if (error) throw error;
 
       setPpcOrders(prev => 
-        prev.map(order => order.code === code ? { ...order, driver_name: driverName } : order)
+        prev.map(order => order.code === code ? { ...order, driver_name: driverName === "PENDIENTE" ? null : driverName } : order)
       );
 
       toast({
         variant: 'success',
-        title: 'Driver Asignado',
-        description: `Se asignó a ${driverName} para el bulto ${code}.`,
+        title: driverName === "PENDIENTE" ? 'Driver Removido' : 'Driver Asignado',
+        description: driverName === "PENDIENTE" ? `Se quitó el driver del bulto ${code}.` : `Se asignó a ${driverName} para el bulto ${code}.`,
       });
     } catch (err: any) {
       toast({
@@ -750,26 +753,10 @@ export default function SewingStatusScannerPage() {
                              </div>
                           </TableCell>
                           <TableCell>
-                            <Select 
-                              value={order.driver_name || "PENDIENTE"} 
-                              onValueChange={(val) => updateOrderDriver(String(order.code), val)}
-                            >
-                              <SelectTrigger className={cn(
-                                "h-9 text-[10px] font-black uppercase border-2",
-                                order.driver_name ? "border-green-200 bg-green-50 text-green-800" : "border-amber-200 bg-amber-50 text-amber-800"
-                              )}>
-                                <div className="flex items-center gap-2 truncate">
-                                  <User className="h-3 w-3 shrink-0" />
-                                  <SelectValue />
-                                </div>
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="PENDIENTE" className="text-[10px] font-bold">--- SIN ASIGNAR ---</SelectItem>
-                                {drivers.map(name => (
-                                  <SelectItem key={name} value={name} className="text-[10px] font-bold uppercase">{name}</SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
+                            <DriverSelector 
+                              value={order.driver_name} 
+                              onSelect={(val) => updateOrderDriver(String(order.code), val)} 
+                            />
                           </TableCell>
                           <TableCell className="text-center">
                              {order.driver_name ? (
@@ -800,5 +787,71 @@ export default function SewingStatusScannerPage() {
         </section>
       </main>
     </>
+  );
+}
+
+function DriverSelector({ value, onSelect }: { value: string | null, onSelect: (val: string) => void }) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          role="combobox"
+          aria-expanded={open}
+          className={cn(
+            "h-9 w-full justify-between text-[10px] font-black uppercase border-2",
+            value ? "border-green-200 bg-green-50 text-green-800" : "border-amber-200 bg-amber-50 text-amber-800"
+          )}
+        >
+          <div className="flex items-center gap-2 truncate">
+            <User className="h-3 w-3 shrink-0" />
+            <span className="truncate">{value || "--- PENDIENTE ---"}</span>
+          </div>
+          <ChevronsUpDown className="ml-2 h-3 w-3 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-[250px] p-0 z-50">
+        <Command>
+          <CommandInput placeholder="Buscar recolector..." className="h-9 text-xs" />
+          <CommandList className="max-h-[300px]">
+            <CommandEmpty className="py-2 text-[10px] text-center">No se encontró.</CommandEmpty>
+            <CommandGroup>
+              <CommandItem
+                value="PENDIENTE"
+                onSelect={() => {
+                  onSelect("PENDIENTE");
+                  setOpen(false);
+                }}
+                className="text-[10px] font-bold uppercase text-red-600"
+              >
+                <XCircle className="mr-2 h-3 w-3" />
+                --- REMOVER / PENDIENTE ---
+              </CommandItem>
+              {DRIVER_OPTIONS.map((opt) => (
+                <CommandItem
+                  key={opt}
+                  value={opt}
+                  onSelect={(currentValue) => {
+                    onSelect(currentValue.toUpperCase());
+                    setOpen(false);
+                  }}
+                  className="text-[10px] font-bold uppercase"
+                >
+                  <Check
+                    className={cn(
+                      "mr-2 h-3 w-3 text-starbucks-green",
+                      value === opt ? "opacity-100" : "opacity-0"
+                    )}
+                  />
+                  {opt}
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
   );
 }
