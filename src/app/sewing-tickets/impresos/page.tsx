@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
@@ -6,8 +7,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { useSewingTickets } from '@/hooks/use-sewing-tickets';
 import { SewingTicketsTable } from '@/components/SewingTicketsTable';
-import { SewingProductionMetrics } from '@/components/SewingProductionMetrics';
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { 
   History, 
@@ -19,7 +19,8 @@ import {
   Tag,
   Calendar,
   Filter,
-  Check
+  Check,
+  Loader2
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -27,7 +28,6 @@ import { format, isToday, isYesterday, isTomorrow, isThisWeek, startOfDay } from
 import { es } from 'date-fns/locale';
 import { supabaseEtiquetas } from '@/lib/supabaseClient';
 import { SewingTicket } from '@/types/sewing';
-import { Badge } from '@/components/ui/badge';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { cn } from '@/lib/utils';
 
@@ -334,6 +334,39 @@ export default function SewingTicketsHistoryPage() {
                     ? 'IMPRESO AYER' 
                     : `IMPRESO EL ${format(new Date(dateKey + 'T12:00:00'), "d MMMM yyyy", { locale: es }).toUpperCase()}`;
                 
+                // Categorize tickets within this date group
+                const subCategorized = {
+                  LIENZOS: { tickets: [] as SewingTicket[], total: 0, totalTime: 0, label: 'LIENZOS', img: '/canva.png', color: 'bg-blue-600' },
+                  BOLAS: { tickets: [] as SewingTicket[], total: 0, totalTime: 0, label: 'MALLAS BOLAS', img: '/sphere.png', color: 'bg-green-600' },
+                  COSTURA: { tickets: [] as SewingTicket[], total: 0, totalTime: 0, label: 'MALLAS COSTURA', img: '/sewing-machine.png', color: 'bg-yellow-500' },
+                  OTROS: { tickets: [] as SewingTicket[], total: 0, totalTime: 0, label: 'OTROS / DIVERSOS', icon: <Tag className="h-4 w-4" />, color: 'bg-gray-500' }
+                };
+
+                data.tickets.forEach(t => {
+                  const meta = skuMetadata[t.sku || ''] || { cat: '', time: 0 };
+                  const upper = (meta.cat || '').toUpperCase();
+                  const estTime = meta.time || 0;
+                  const qty = t.cantidad || 0;
+
+                  if (upper === 'LIENZO' || upper === 'ROLLO' || upper.includes('LIENZO DE MALLA SOMBRA') || upper.includes('ROLLO LIGHT') || upper.includes('ROLLO DE MALLA SOMBRA')) {
+                    subCategorized.LIENZOS.tickets.push(t);
+                    subCategorized.LIENZOS.total += qty;
+                    subCategorized.LIENZOS.totalTime += estTime;
+                  } else if (upper === 'MALLA SOMBRA BOLSA') {
+                    subCategorized.BOLAS.tickets.push(t);
+                    subCategorized.BOLAS.total += qty;
+                    subCategorized.BOLAS.totalTime += estTime;
+                  } else if (upper.includes('MALLA SOMBRA CONFECCIONADA') || upper.includes('MS FABRICACION')) {
+                    subCategorized.COSTURA.tickets.push(t);
+                    subCategorized.COSTURA.total += qty;
+                    subCategorized.COSTURA.totalTime += estTime;
+                  } else {
+                    subCategorized.OTROS.tickets.push(t);
+                    subCategorized.OTROS.total += qty;
+                    subCategorized.OTROS.totalTime += estTime;
+                  }
+                });
+                
                 return (
                   <AccordionItem 
                     key={dateKey} 
@@ -356,16 +389,36 @@ export default function SewingTicketsHistoryPage() {
                         </div>
                       </div>
                     </AccordionTrigger>
-                    <AccordionContent className="pt-4 pb-0">
-                      <div className={cn("transition-all", !isCurrentGroupToday && "bg-gray-50/50 rounded-xl p-2")}>
-                         <SewingTicketsTable 
-                          tickets={data.tickets} 
-                          onUpdateTicket={updateTicket} 
-                          onDeleteTicket={deleteTicket} 
-                          skuMetadata={skuMetadata} 
-                          isMuted={!isCurrentGroupToday}
-                        />
-                      </div>
+                    <AccordionContent className="pt-4 pb-0 space-y-8">
+                      {Object.values(subCategorized).map((cat) => (
+                        cat.tickets.length > 0 && (
+                          <div key={cat.label} className={cn("transition-all", !isCurrentGroupToday && "opacity-80")}>
+                            <div className={cn(
+                              "text-white px-4 py-1.5 rounded-t-lg font-black flex justify-between items-center text-xs tracking-wider",
+                              cat.color,
+                              !isCurrentGroupToday && "grayscale-[0.5] contrast-[0.8]"
+                            )}>
+                               <div className="flex items-center gap-2">
+                                 {cat.img ? <Image src={cat.img} width={18} height={18} alt={cat.label} className="brightness-0 invert" /> : cat.icon}
+                                 {cat.label}
+                               </div>
+                               <div className="flex items-center gap-4 opacity-80">
+                                 <span className="flex items-center gap-1"><Clock className="h-3 w-3" /> {formatTime(cat.totalTime)}</span>
+                                 <span className="bg-white/20 px-2 py-0.5 rounded-full">({cat.total} piezas)</span>
+                               </div>
+                            </div>
+                            <div className={cn(!isCurrentGroupToday && "bg-gray-50/50 rounded-b-xl p-2 border-x border-b")}>
+                              <SewingTicketsTable 
+                                tickets={cat.tickets} 
+                                onUpdateTicket={updateTicket} 
+                                onDeleteTicket={deleteTicket} 
+                                skuMetadata={skuMetadata} 
+                                isMuted={!isCurrentGroupToday}
+                              />
+                            </div>
+                          </div>
+                        )
+                      ))}
                     </AccordionContent>
                   </AccordionItem>
                 );
@@ -439,7 +492,3 @@ function SummaryCard({ label, pieces, time, image, icon, formatTime }: { label: 
         </div>
     );
 }
-
-const Loader2 = ({ className }: { className?: string }) => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={cn("animate-spin", className)}><path d="M21 12a9 9 0 1 1-6.219-8.56" /></svg>
-);
