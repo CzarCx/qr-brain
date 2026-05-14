@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useEffect, useState, useRef, useMemo } from 'react';
@@ -195,17 +196,18 @@ export default function SewingTicketsPage() {
 
       let targetGroup = groups.OTROS;
 
-      if (upper === 'LIENZO' || upper === 'ROLLO' || upper.includes('LIENZO DE MALLA SOMBRA') || upper.includes('ROLLO LIGHT') || upper.includes('ROLLO DE MALLA SOMBRA')) {
-        targetGroup = groups.LIENZOS;
+      // Orden específico de categorización corregido
+      if (upper.includes('MALLA SOMBRA CONFECCIONADA') || upper.includes('MS FABRICACION')) {
+        targetGroup = groups['MALLAS COSTURA'];
       } else if (upper === 'MALLA SOMBRA BOLSA') {
         targetGroup = groups['MALLAS BOLAS'];
-      } else if (upper.includes('MALLA SOMBRA CONFECCIONADA') || upper.includes('MS FABRICACION')) {
-        targetGroup = groups['MALLAS COSTURA'];
+      } else if (upper === 'LIENZO' || upper === 'ROLLO' || upper.includes('LIENZO DE MALLA SOMBRA') || upper.includes('ROLLO LIGHT') || upper.includes('ROLLO DE MALLA SOMBRA')) {
+        targetGroup = groups.LIENZOS;
       }
 
       targetGroup.tickets.push(t);
       targetGroup.total += qty;
-      targetGroup.totalTime += estTime;
+      targetGroup.totalTime += (estTime * qty);
     });
 
     return groups;
@@ -517,7 +519,7 @@ export default function SewingTicketsPage() {
                 <Label htmlFor="manual-barcode" className="flex items-center gap-2 font-bold text-xs text-starbucks-dark"><Keyboard className="h-4 w-4" /> Ingreso Manual</Label>
                 <div className="flex gap-2">
                   <Input id="manual-barcode" placeholder="Código..." value={manualBarcode} onChange={(e) => setManualBarcode(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleManualAdd()} className="text-xs" />
-                  <Button onClick={handleManualAdd} disabled={loading || !manualBarcode.trim()} className="bg-starbucks-green"><PlusCircle className="h-4 w-4" /></Button>
+                  <Button onClick={handleManualAdd} disabled={loading || !manualBarcode.trim()} className="bg-starbucks-green"><PlusCircle className="h-5 w-5" /></Button>
                 </div>
               </div>
             </CardContent>

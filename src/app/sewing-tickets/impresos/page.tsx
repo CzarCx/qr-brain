@@ -134,20 +134,62 @@ export default function SewingTicketsHistoryPage() {
   const filteredTickets = useMemo(() => {
     if (deliveryFilter === 'all') return tickets;
     
-    const now = startOfDay(new Date());
-    
     return tickets.filter(t => {
       if (!t.fecha_entrega_paquete) return false;
-      const dDate = startOfDay(new Date(t.fecha_entrega_paquete));
-      
+      // Tratar la fecha localmente para evitar desfases UTC
+      const [year, month, day] = t.fecha_entrega_paquete.split('-').map(Number);
+      const dDate = startOfDay(new Date(year, month - 1, day));
+      const today = startOfDay(new Date());
+      const tomorrow = new Date(today);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+
       switch (deliveryFilter) {
-        case 'today': return isToday(dDate);
-        case 'tomorrow': return isTomorrow(dDate);
+        case 'today': return dDate.getTime() === today.getTime();
+        case 'tomorrow': return dDate.getTime() === tomorrow.getTime();
         case 'week': return isThisWeek(dDate, { weekStartsOn: 1 });
         default: return true;
       }
     });
   }, [tickets, deliveryFilter]);
+
+  // Metrics for categories
+  // Actualización: Las tarjetas resumen ahora solo cuentan lo IMPRESO HOY por defecto para evitar confusión
+  const categoryMetrics = useMemo(() => {
+    const groups = {
+      LIENZOS: { total: 0, totalTime: 0 },
+      'MALLAS BOLAS': { total: 0, totalTime: 0 },
+      'MALLAS COSTURA': { total: 0, totalTime: 0 },
+      OTROS: { total: 0, totalTime: 0 }
+    };
+
+    // Solo incluimos en las tarjetas superiores lo que se imprimió hoy para control diario
+    const todayPrints = filteredTickets.filter(t => t.created_at && isToday(new Date(t.created_at)));
+
+    todayPrints.forEach(t => {
+      const meta = skuMetadata[t.sku || ''] || { cat: '', time: 0 };
+      const catMdr = meta.cat || '';
+      const estTime = meta.time || 0;
+      const upper = catMdr.toUpperCase();
+      const qty = t.cantidad || 0;
+
+      // Importante: Orden de condiciones específico -> general
+      if (upper.includes('MALLA SOMBRA CONFECCIONADA') || upper.includes('MS FABRICACION')) {
+        groups['MALLAS COSTURA'].total += qty;
+        groups['MALLAS COSTURA'].totalTime += (estTime * qty);
+      } else if (upper === 'MALLA SOMBRA BOLSA') {
+        groups['MALLAS BOLAS'].total += qty;
+        groups['MALLAS BOLAS'].totalTime += (estTime * qty);
+      } else if (upper === 'LIENZO' || upper === 'ROLLO' || upper.includes('LIENZO DE MALLA SOMBRA') || upper.includes('ROLLO LIGHT') || upper.includes('ROLLO DE MALLA SOMBRA')) {
+        groups.LIENZOS.total += qty;
+        groups.LIENZOS.totalTime += (estTime * qty);
+      } else {
+        groups.OTROS.total += qty;
+        groups.OTROS.totalTime += (estTime * qty);
+      }
+    });
+
+    return groups;
+  }, [filteredTickets, skuMetadata]);
 
   // Group tickets by creation date
   const groupedByDate = useMemo(() => {
@@ -170,43 +212,8 @@ export default function SewingTicketsHistoryPage() {
       groups[dateKey].pieces += (t.cantidad || 0);
     });
 
-    // Sort dates descending
     return Object.entries(groups).sort((a, b) => b[0].localeCompare(a[0]));
   }, [filteredTickets]);
-
-  // Metrics for categories (updates dynamic based on applied filter)
-  const categoryMetrics = useMemo(() => {
-    const groups = {
-      LIENZOS: { total: 0, totalTime: 0 },
-      'MALLAS BOLAS': { total: 0, totalTime: 0 },
-      'MALLAS COSTURA': { total: 0, totalTime: 0 },
-      OTROS: { total: 0, totalTime: 0 }
-    };
-
-    filteredTickets.forEach(t => {
-      const meta = skuMetadata[t.sku || ''] || { cat: '', time: 0 };
-      const catMdr = meta.cat || '';
-      const estTime = meta.time || 0;
-      const upper = catMdr.toUpperCase();
-      const qty = t.cantidad || 0;
-
-      if (upper === 'LIENZO' || upper === 'ROLLO' || upper.includes('LIENZO DE MALLA SOMBRA') || upper.includes('ROLLO LIGHT') || upper.includes('ROLLO DE MALLA SOMBRA')) {
-        groups.LIENZOS.total += qty;
-        groups.LIENZOS.totalTime += estTime;
-      } else if (upper === 'MALLA SOMBRA BOLSA') {
-        groups['MALLAS BOLAS'].total += qty;
-        groups['MALLAS BOLAS'].totalTime += estTime;
-      } else if (upper.includes('MALLA SOMBRA CONFECCIONADA') || upper.includes('MS FABRICACION')) {
-        groups['MALLAS COSTURA'].total += qty;
-        groups['MALLAS COSTURA'].totalTime += estTime;
-      } else {
-        groups.OTROS.total += qty;
-        groups.OTROS.totalTime += estTime;
-      }
-    });
-
-    return groups;
-  }, [filteredTickets, skuMetadata]);
 
   const exportToPDF = () => {
     if (tickets.length === 0) return;
@@ -292,7 +299,7 @@ export default function SewingTicketsHistoryPage() {
           </div>
         </header>
 
-        {/* Global Summary Cards (Reactive to filters) */}
+        {/* Global Summary Cards (Métricas de lo Impreso HOY) */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 px-2">
             <SummaryCard label="Lienzos" pieces={categoryMetrics.LIENZOS.total} time={categoryMetrics.LIENZOS.totalTime} image="/canva.png" formatTime={formatTime} />
             <SummaryCard label="Mallas Bolas" pieces={categoryMetrics['MALLAS BOLAS'].total} time={categoryMetrics['MALLAS BOLAS'].totalTime} image="/sphere.png" formatTime={formatTime} />
@@ -348,22 +355,23 @@ export default function SewingTicketsHistoryPage() {
                   const estTime = meta.time || 0;
                   const qty = t.cantidad || 0;
 
-                  if (upper === 'LIENZO' || upper === 'ROLLO' || upper.includes('LIENZO DE MALLA SOMBRA') || upper.includes('ROLLO LIGHT') || upper.includes('ROLLO DE MALLA SOMBRA')) {
-                    subCategorized.LIENZOS.tickets.push(t);
-                    subCategorized.LIENZOS.total += qty;
-                    subCategorized.LIENZOS.totalTime += estTime;
+                  // Identical categorization logic with specific order
+                  if (upper.includes('MALLA SOMBRA CONFECCIONADA') || upper.includes('MS FABRICACION')) {
+                    subCategorized.COSTURA.tickets.push(t);
+                    subCategorized.COSTURA.total += qty;
+                    subCategorized.COSTURA.totalTime += (estTime * qty);
                   } else if (upper === 'MALLA SOMBRA BOLSA') {
                     subCategorized.BOLAS.tickets.push(t);
                     subCategorized.BOLAS.total += qty;
-                    subCategorized.BOLAS.totalTime += estTime;
-                  } else if (upper.includes('MALLA SOMBRA CONFECCIONADA') || upper.includes('MS FABRICACION')) {
-                    subCategorized.COSTURA.tickets.push(t);
-                    subCategorized.COSTURA.total += qty;
-                    subCategorized.COSTURA.totalTime += estTime;
+                    subCategorized.BOLAS.totalTime += (estTime * qty);
+                  } else if (upper === 'LIENZO' || upper === 'ROLLO' || upper.includes('LIENZO DE MALLA SOMBRA') || upper.includes('ROLLO LIGHT') || upper.includes('ROLLO DE MALLA SOMBRA')) {
+                    subCategorized.LIENZOS.tickets.push(t);
+                    subCategorized.LIENZOS.total += qty;
+                    subCategorized.LIENZOS.totalTime += (estTime * qty);
                   } else {
                     subCategorized.OTROS.tickets.push(t);
                     subCategorized.OTROS.total += qty;
-                    subCategorized.OTROS.totalTime += estTime;
+                    subCategorized.OTROS.totalTime += (estTime * qty);
                   }
                 });
                 
