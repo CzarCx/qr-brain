@@ -45,7 +45,7 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { Check, X, Clock, User, Package, Building2, Minus, Tag, ChevronsUpDown, Trash2, Copy, ChevronDown, ChevronUp, Scissors, Boxes, Truck, PencilLine, Plus } from 'lucide-react';
+import { Check, X, Clock, User, Package, Building2, Minus, Tag, ChevronsUpDown, Trash2, Copy, ChevronDown, ChevronUp, Scissors, Boxes, Truck, PencilLine, Plus, CheckCircle2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -62,6 +62,7 @@ interface SewingTicketsTableProps {
   onGenerateLabel?: (ticket: SewingTicket) => void;
   skuMetadata?: Record<string, { cat: string, time: number }>;
   isMuted?: boolean;
+  prodStatusMap?: Record<string, string>;
 }
 
 const RECOLECTORES_OPTIONS = [
@@ -81,7 +82,7 @@ const RECOLECTORES_OPTIONS = [
   "N/A"
 ];
 
-export function SewingTicketsTable({ tickets, onUpdateTicket, onDeleteTicket, onGenerateLabel, skuMetadata, isMuted }: SewingTicketsTableProps) {
+export function SewingTicketsTable({ tickets, onUpdateTicket, onDeleteTicket, onGenerateLabel, skuMetadata, isMuted, prodStatusMap }: SewingTicketsTableProps) {
   const { toast } = useToast();
   const isMobile = useIsMobile();
   const [expandedCards, setExpandedCards] = useState<Record<number, boolean>>({});
@@ -281,7 +282,7 @@ export function SewingTicketsTable({ tickets, onUpdateTicket, onDeleteTicket, on
   if (isMobile) {
     return (
       <TooltipProvider>
-        <div className={cn("space-y-4 px-2 pb-10 transition-all", isMuted && "opacity-80 grayscale-[0.3]")}>
+        <div className={cn("space-y-4 px-2 pb-10 transition-all", isMuted && "opacity-90 grayscale-[0.2]")}>
           {tickets.length > 0 ? (
             tickets.map((ticket) => (
               <CardItem 
@@ -300,12 +301,13 @@ export function SewingTicketsTable({ tickets, onUpdateTicket, onDeleteTicket, on
                 TriStateSelect={TriStateSelect}
                 RecolectorSelector={RecolectorSelector}
                 renderBoolean={renderBoolean}
+                prodStatusMap={prodStatusMap}
               />
             ))
           ) : (
             <div className="text-center py-10 bg-gray-50 rounded-xl border-2 border-dashed border-gray-200">
               <Package className="h-10 w-10 mx-auto mb-2 text-gray-300" />
-              <p className="text-gray-400 font-bold">No hay registros.</p>
+              <p className="text-gray-400 font-bold">No hay registros que coincidan con los filtros.</p>
             </div>
           )}
         </div>
@@ -325,7 +327,7 @@ export function SewingTicketsTable({ tickets, onUpdateTicket, onDeleteTicket, on
 
   return (
     <TooltipProvider>
-      <div className={cn("border rounded-b-lg overflow-x-auto bg-white shadow-sm transition-all", isMuted && "opacity-80 grayscale-[0.3]")}>
+      <div className={cn("border rounded-b-lg overflow-x-auto bg-white shadow-sm transition-all", isMuted && "opacity-90 grayscale-[0.2]")}>
         <Table className="min-w-[2800px] table-fixed">
           <TableHeader className="bg-gray-50 sticky top-0 z-30">
             <TableRow>
@@ -360,212 +362,226 @@ export function SewingTicketsTable({ tickets, onUpdateTicket, onDeleteTicket, on
           </TableHeader>
           <TableBody>
             {tickets.length > 0 ? (
-              tickets.map((ticket) => (
-                <TableRow key={ticket.id} className="hover:bg-gray-50 transition-colors h-14">
-                  <TableCell className="text-center">
-                    <Button 
-                      variant="ghost" 
-                      size="icon" 
-                      className="h-8 w-8 text-starbucks-green hover:bg-green-50"
-                      onClick={() => onGenerateLabel?.(ticket)}
-                    >
-                      <Tag className="h-4 w-4" />
-                    </Button>
-                  </TableCell>
-                  <TableCell className="text-center font-bold text-gray-400 text-xs">#{ticket.id}</TableCell>
-                  <TableCell>
-                    <AliasEditor ticket={ticket} />
-                  </TableCell>
-                  <TableCell className="font-mono font-bold text-starbucks-green truncate">
-                    {ticket.codigo_barra}
-                  </TableCell>
-                  <TableCell>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <div className="text-xs font-semibold truncate cursor-help">
-                          {ticket.nombre_producto || '---'}
-                        </div>
-                      </TooltipTrigger>
-                      <TooltipContent className="max-w-[300px]">
-                        <p>{ticket.nombre_producto || '---'}</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TableCell>
-                  <TableCell className="text-center font-bold text-blue-600">
-                    {ticket.cantidad !== null ? ticket.cantidad : '---'}
-                  </TableCell>
-                  <TableCell className="text-center font-bold text-amber-600 text-xs">
-                    {skuMetadata && ticket.sku && skuMetadata[ticket.sku] ? `${skuMetadata[ticket.sku].time}m` : (ticket.esti_time ? `${ticket.esti_time}m` : '---')}
-                  </TableCell>
-                  <TableCell>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <div 
-                          className="flex items-center gap-1 group cursor-pointer truncate"
-                          onClick={() => ticket.sku && handleCopy(ticket.sku, "SKU")}
-                        >
-                          <span className="text-xs font-mono text-gray-600 group-hover:text-starbucks-green group-hover:underline transition-colors break-all">
-                            {ticket.sku || '---'}
-                          </span>
-                          {ticket.sku && skuCounts[ticket.sku] > 1 && (
-                            <span className="ml-1 px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700 font-bold text-[9px] shrink-0">
-                              (x{skuCounts[ticket.sku]})
-                            </span>
-                          )}
-                        </div>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p>{ticket.sku || '---'}</p>
-                        <p className="text-[10px] text-gray-400 mt-1">Haz clic para copiar</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TableCell>
-                  <TableCell className="text-xs truncate">
-                    <div className="flex items-center gap-1">
-                      <User className="h-3 w-3 text-gray-400 shrink-0" />
-                      <span className="truncate">{ticket.responsable_vaciado || '---'}</span>
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-xs text-gray-600">
-                    <div className="flex items-center gap-1">
-                      <Clock className="h-3 w-3 text-gray-400 shrink-0" />
-                      {ticket.hora_vaciado || '---'}
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-xs uppercase text-gray-500 truncate">
-                    <div className="flex items-center gap-1 truncate">
-                      <Building2 className="h-3 w-3 text-gray-400 shrink-0" />
-                      <span className="truncate">{ticket.cuenta || '---'}</span>
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-xs font-mono">
-                    <div 
-                      className="flex items-center gap-1 group cursor-pointer"
-                      onClick={() => ticket.sales_num && handleCopy(ticket.sales_num, "Venta")}
-                    >
-                      <span className="text-gray-600 group-hover:text-starbucks-green group-hover:underline transition-colors truncate">
-                        {ticket.sales_num || '---'}
-                      </span>
-                      {ticket.sales_num && <Copy className="h-3 w-3 text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />}
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-xs font-mono">
-                    <div 
-                      className="flex items-center gap-1 group cursor-pointer"
-                      onClick={() => ticket.pack_id && handleCopy(ticket.pack_id, "Pack ID")}
-                    >
-                      <span className="text-gray-600 group-hover:text-starbucks-green group-hover:underline transition-colors truncate">
-                        {ticket.pack_id || '---'}
-                      </span>
-                      {ticket.pack_id && <Copy className="h-3 w-3 text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />}
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-center">
-                    {renderBoolean(ticket.impresa)}
-                  </TableCell>
-                  <TableCell className="text-xs text-gray-500 truncate">
-                    {ticket.responsable_impresion || '---'}
-                  </TableCell>
-                  <TableCell className="text-xs text-gray-500">
-                    {ticket.fecha_impresion ? format(new Date(ticket.fecha_impresion), "dd/MM/yyyy", { locale: es }) : '---'}
-                  </TableCell>
-                  <TableCell className="text-xs truncate">
-                    {ticket.asignada_a || '---'}
-                  </TableCell>
-                  <TableCell className="text-center">
-                    <BooleanSelect 
-                      value={ticket.cortada} 
-                      onValueChange={(val) => ticket.id && onUpdateTicket?.(ticket.id, { cortada: val })} 
-                    />
-                  </TableCell>
-                  <TableCell className="text-center">
-                    <TriStateSelect 
-                      value={ticket.confeccion} 
-                      onValueChange={(val) => ticket.id && onUpdateTicket?.(ticket.id, { confeccion: val })} 
-                    />
-                  </TableCell>
-                  <TableCell className="text-center">
-                    <TriStateSelect 
-                      value={ticket.perforado} 
-                      onValueChange={(val) => ticket.id && onUpdateTicket?.(ticket.id, { perforado: val })} 
-                    />
-                  </TableCell>
-                  <TableCell className="text-center">
-                    <TriStateSelect 
-                      value={ticket.ojillado} 
-                      onValueChange={(val) => ticket.id && onUpdateTicket?.(ticket.id, { ojillado: val })} 
-                    />
-                  </TableCell>
-                  <TableCell className="text-center">
-                    <BooleanSelect 
-                      value={ticket.empaquetado} 
-                      onValueChange={(val) => ticket.id && onUpdateTicket?.(ticket.id, { empaquetado: val })} 
-                    />
-                  </TableCell>
-                  <TableCell className="text-center">
-                    <BooleanSelect 
-                      value={ticket.lista_para_recoleccion} 
-                      onValueChange={(val) => ticket.id && onUpdateTicket?.(ticket.id, { lista_para_recoleccion: val })} 
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <RecolectorSelector 
-                      value={ticket.recolectada_por} 
-                      onChange={(val) => ticket.id && onUpdateTicket?.(ticket.id, { recolectada_por: val })}
-                    />
-                  </TableCell>
-                  <TableCell className="text-xs text-gray-500">
-                    {ticket.fecha_entrega_paquete ? format(new Date(ticket.fecha_entrega_paquete), "dd/MM/yyyy", { locale: es }) : '---'}
-                  </TableCell>
-                  <TableCell className="text-[10px] text-gray-400">
-                    {ticket.created_at ? format(new Date(ticket.created_at), "dd/MM HH:mm:ss", { locale: es }) : '---'}
-                  </TableCell>
-                  <TableCell className="text-center bg-white sticky right-0 z-40 shadow-[-2px_0_5px_rgba(0,0,0,0.05)] border-l">
-                    <div className="flex items-center justify-center gap-1">
+              tickets.map((ticket) => {
+                const prodStatus = prodStatusMap?.[ticket.codigo_barra];
+                const isFinished = prodStatus === 'PPC' || prodStatus === 'ENTREGADO';
+                
+                return (
+                  <TableRow 
+                    key={ticket.id} 
+                    className={cn(
+                      "hover:bg-gray-50 transition-colors h-14",
+                      isFinished && "bg-[#E6F7EC] hover:bg-[#DDF2E5] border-l-4 border-l-[#34A853]"
+                    )}
+                  >
+                    <TableCell className="text-center">
                       <Button 
                         variant="ghost" 
                         size="icon" 
-                        className="h-8 w-8 text-amber-600 hover:bg-amber-50"
-                        onClick={() => openTimeModal(ticket)}
+                        className="h-8 w-8 text-starbucks-green hover:bg-green-50"
+                        onClick={() => onGenerateLabel?.(ticket)}
                       >
-                        <Clock className="h-4 w-4" />
+                        <Tag className="h-4 w-4" />
                       </Button>
-                      <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50"
+                    </TableCell>
+                    <TableCell className="text-center font-bold text-gray-400 text-xs">#{ticket.id}</TableCell>
+                    <TableCell>
+                      <AliasEditor ticket={ticket} />
+                    </TableCell>
+                    <TableCell className="font-mono font-bold text-starbucks-green truncate">
+                      <div className="flex items-center gap-2">
+                        {isFinished && <CheckCircle2 className="h-4 w-4 text-[#34A853] shrink-0" />}
+                        {ticket.codigo_barra}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <div className="text-xs font-semibold truncate cursor-help">
+                            {ticket.nombre_producto || '---'}
+                          </div>
+                        </TooltipTrigger>
+                        <TooltipContent className="max-w-[300px]">
+                          <p>{ticket.nombre_producto || '---'}</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TableCell>
+                    <TableCell className="text-center font-bold text-blue-600">
+                      {ticket.cantidad !== null ? ticket.cantidad : '---'}
+                    </TableCell>
+                    <TableCell className="text-center font-bold text-amber-600 text-xs">
+                      {skuMetadata && ticket.sku && skuMetadata[ticket.sku] ? `${skuMetadata[ticket.sku].time}m` : (ticket.esti_time ? `${ticket.esti_time}m` : '---')}
+                    </TableCell>
+                    <TableCell>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <div 
+                            className="flex items-center gap-1 group cursor-pointer truncate"
+                            onClick={() => ticket.sku && handleCopy(ticket.sku, "SKU")}
                           >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>¿Eliminar registro?</AlertDialogTitle>
-                            <AlertDialogDescription>
-                              Esta acción eliminará el ticket #{ticket.id}. No se puede deshacer.
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                            <AlertDialogAction 
-                              onClick={() => ticket.id && onDeleteTicket?.(ticket.id)}
-                              className="bg-red-600 hover:bg-red-700 text-white"
+                            <span className="text-xs font-mono text-gray-600 group-hover:text-starbucks-green group-hover:underline transition-colors break-all">
+                              {ticket.sku || '---'}
+                            </span>
+                            {ticket.sku && skuCounts[ticket.sku] > 1 && (
+                              <span className="ml-1 px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700 font-bold text-[9px] shrink-0">
+                                (x{skuCounts[ticket.sku]})
+                              </span>
+                            )}
+                          </div>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>{ticket.sku || '---'}</p>
+                          <p className="text-[10px] text-gray-400 mt-1">Haz clic para copiar</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TableCell>
+                    <TableCell className="text-xs truncate">
+                      <div className="flex items-center gap-1">
+                        <User className="h-3 w-3 text-gray-400 shrink-0" />
+                        <span className="truncate">{ticket.responsable_vaciado || '---'}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-xs text-gray-600">
+                      <div className="flex items-center gap-1">
+                        <Clock className="h-3 w-3 text-gray-400 shrink-0" />
+                        {ticket.hora_vaciado || '---'}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-xs uppercase text-gray-500 truncate">
+                      <div className="flex items-center gap-1 truncate">
+                        <Building2 className="h-3 w-3 text-gray-400 shrink-0" />
+                        <span className="truncate">{ticket.cuenta || '---'}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-xs font-mono">
+                      <div 
+                        className="flex items-center gap-1 group cursor-pointer"
+                        onClick={() => ticket.sales_num && handleCopy(ticket.sales_num, "Venta")}
+                      >
+                        <span className="text-gray-600 group-hover:text-starbucks-green group-hover:underline transition-colors truncate">
+                          {ticket.sales_num || '---'}
+                        </span>
+                        {ticket.sales_num && <Copy className="h-3 w-3 text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-xs font-mono">
+                      <div 
+                        className="flex items-center gap-1 group cursor-pointer"
+                        onClick={() => ticket.pack_id && handleCopy(ticket.pack_id, "Pack ID")}
+                      >
+                        <span className="text-gray-600 group-hover:text-starbucks-green group-hover:underline transition-colors truncate">
+                          {ticket.pack_id || '---'}
+                        </span>
+                        {ticket.pack_id && <Copy className="h-3 w-3 text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-center">
+                      {renderBoolean(ticket.impresa)}
+                    </TableCell>
+                    <TableCell className="text-xs text-gray-500 truncate">
+                      {ticket.responsable_impresion || '---'}
+                    </TableCell>
+                    <TableCell className="text-xs text-gray-500">
+                      {ticket.fecha_impresion ? format(new Date(ticket.fecha_impresion), "dd/MM/yyyy", { locale: es }) : '---'}
+                    </TableCell>
+                    <TableCell className="text-xs truncate">
+                      {ticket.asignada_a || '---'}
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <BooleanSelect 
+                        value={ticket.cortada} 
+                        onValueChange={(val) => ticket.id && onUpdateTicket?.(ticket.id, { cortada: val })} 
+                      />
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <TriStateSelect 
+                        value={ticket.confeccion} 
+                        onValueChange={(val) => ticket.id && onUpdateTicket?.(ticket.id, { confeccion: val })} 
+                      />
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <TriStateSelect 
+                        value={ticket.perforado} 
+                        onValueChange={(val) => ticket.id && onUpdateTicket?.(ticket.id, { perforado: val })} 
+                      />
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <TriStateSelect 
+                        value={ticket.ojillado} 
+                        onValueChange={(val) => ticket.id && onUpdateTicket?.(ticket.id, { ojillado: val })} 
+                      />
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <BooleanSelect 
+                        value={ticket.empaquetado} 
+                        onValueChange={(val) => ticket.id && onUpdateTicket?.(ticket.id, { empaquetado: val })} 
+                      />
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <BooleanSelect 
+                        value={ticket.lista_para_recoleccion} 
+                        onValueChange={(val) => ticket.id && onUpdateTicket?.(ticket.id, { lista_para_recoleccion: val })} 
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <RecolectorSelector 
+                        value={ticket.recolectada_por} 
+                        onChange={(val) => ticket.id && onUpdateTicket?.(ticket.id, { recolectada_por: val })}
+                      />
+                    </TableCell>
+                    <TableCell className="text-xs text-gray-500">
+                      {ticket.fecha_entrega_paquete ? format(new Date(ticket.fecha_entrega_paquete), "dd/MM/yyyy", { locale: es }) : '---'}
+                    </TableCell>
+                    <TableCell className="text-[10px] text-gray-400">
+                      {ticket.created_at ? format(new Date(ticket.created_at), "dd/MM HH:mm:ss", { locale: es }) : '---'}
+                    </TableCell>
+                    <TableCell className={cn("text-center bg-white sticky right-0 z-40 shadow-[-2px_0_5px_rgba(0,0,0,0.05)] border-l", isFinished && "bg-[#E6F7EC]")}>
+                      <div className="flex items-center justify-center gap-1">
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          className="h-8 w-8 text-amber-600 hover:bg-amber-50"
+                          onClick={() => openTimeModal(ticket)}
+                        >
+                          <Clock className="h-4 w-4" />
+                        </Button>
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50"
                             >
-                              Eliminar
-                            </AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>¿Eliminar registro?</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                Esta acción eliminará el ticket #{ticket.id}. No se puede deshacer.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                              <AlertDialogAction 
+                                onClick={() => ticket.id && onDeleteTicket?.(ticket.id)}
+                                className="bg-red-600 hover:bg-red-700 text-white"
+                              >
+                                Eliminar
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                );
+              })
             ) : (
               <TableRow>
                 <TableCell colSpan={27} className="text-center py-20 text-gray-400">
-                  No hay tickets registrados hoy.
+                  No hay tickets registrados que coincidan con los filtros.
                 </TableCell>
               </TableRow>
             )}
@@ -600,9 +616,12 @@ function CardItem({
   BooleanSelect,
   TriStateSelect,
   RecolectorSelector,
-  renderBoolean
+  renderBoolean,
+  prodStatusMap
 }: any) {
   const estTime = skuMetadata && ticket.sku && skuMetadata[ticket.sku] ? `${skuMetadata[ticket.sku].time}m` : (ticket.esti_time ? `${ticket.esti_time}m` : '---');
+  const prodStatus = prodStatusMap?.[ticket.codigo_barra];
+  const isFinished = prodStatus === 'PPC' || prodStatus === 'ENTREGADO';
   
   const [isEditingAlias, setIsEditingAlias] = useState(false);
   const [tempAlias, setTempAlias] = useState(ticket.alias || '');
@@ -618,14 +637,15 @@ function CardItem({
   return (
     <div className={cn(
         "bg-white border-2 rounded-xl shadow-sm transition-all duration-300",
-        expanded ? "border-starbucks-green ring-1 ring-starbucks-green/20" : "border-gray-100"
+        expanded ? "border-starbucks-green ring-1 ring-starbucks-green/20" : "border-gray-100",
+        isFinished && "bg-[#E6F7EC] border-[#A8E6B8]"
     )}>
       <div className="p-3 cursor-pointer" onClick={onToggle}>
         <div className="flex justify-between items-start mb-2">
             <div className="flex items-center gap-2">
                 <span className="text-[10px] font-black text-gray-400">#{ticket.id}</span>
                 <div 
-                  className="flex items-center gap-1 bg-gray-50 px-2 py-0.5 rounded border border-gray-200"
+                  className="flex items-center gap-1 bg-white/50 px-2 py-0.5 rounded border border-gray-200"
                   onClick={(e) => { e.stopPropagation(); handleCopy(ticket.sku, "SKU"); }}
                 >
                     <span className="text-xs font-bold text-gray-700 font-mono break-all">{ticket.sku || 'N/A'}</span>
@@ -633,8 +653,8 @@ function CardItem({
                 </div>
             </div>
             <div className="flex gap-1">
+                {isFinished && <Badge className="h-5 bg-green-600 text-white text-[9px] px-1.5"><CheckCircle2 className="h-2 w-2 mr-1" /> OK</Badge>}
                 {ticket.confeccion === true && <Badge className="h-5 bg-blue-100 text-blue-700 text-[9px] px-1.5"><Scissors className="h-2 w-2 mr-1" /> CONF</Badge>}
-                {ticket.empaquetado === true && <Badge className="h-5 bg-green-100 text-green-700 text-[9px] px-1.5"><Check className="h-2 w-2 mr-1" /> EMP</Badge>}
                 {expanded ? <ChevronUp className="h-4 w-4 text-gray-400" /> : <ChevronDown className="h-4 w-4 text-gray-400" />}
             </div>
         </div>

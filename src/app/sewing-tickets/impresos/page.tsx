@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
@@ -20,16 +19,21 @@ import {
   Calendar,
   Filter,
   Check,
-  Loader2
+  Loader2,
+  CheckCircle2,
+  Package,
+  BarChart3,
+  Activity
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { format, isToday, isYesterday, isTomorrow, isThisWeek, startOfDay } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { supabaseEtiquetas } from '@/lib/supabaseClient';
+import { supabase, supabaseEtiquetas } from '@/lib/supabaseClient';
 import { SewingTicket } from '@/types/sewing';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { cn } from '@/lib/utils';
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const SewingMachineIcon = ({ className }: { className?: string }) => (
   <svg 
@@ -51,6 +55,7 @@ const SewingMachineIcon = ({ className }: { className?: string }) => (
 );
 
 type DeliveryFilter = 'all' | 'today' | 'tomorrow' | 'week';
+type ProdStatusFilter = 'all' | 'finished' | 'pending';
 
 export default function SewingTicketsHistoryPage() {
   const { tickets, loading, fetchTickets, updateTicket, deleteTicket } = useSewingTickets();
@@ -58,7 +63,9 @@ export default function SewingTicketsHistoryPage() {
   const [skuMetadata, setSkuMetadata] = useState<Record<string, { cat: string, time: number }>>({});
   const [showScrollTop, setShowScrollTop] = useState(false);
   const [deliveryFilter, setDeliveryFilter] = useState<DeliveryFilter>('all');
+  const [prodStatusFilter, setProdStatusFilter] = useState<ProdStatusFilter>('all');
   const [expandedGroups, setExpandedGroups] = useState<string[]>(['group-today']);
+  const [prodStatusMap, setProdStatusMap] = useState<Record<string, string>>({});
 
   useEffect(() => {
     setIsMounted(true);
@@ -75,6 +82,35 @@ export default function SewingTicketsHistoryPage() {
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
   }, [fetchTickets]);
+
+  // Fetch production status from personal table
+  useEffect(() => {
+    const fetchProdStatus = async () => {
+      if (tickets.length === 0) return;
+      const codes = tickets.map(t => parseFloat(t.codigo_barra)).filter(c => !isNaN(c));
+      if (codes.length === 0) return;
+
+      try {
+        const { data, error } = await supabase
+          .from('personal')
+          .select('code, status')
+          .in('code', codes);
+
+        if (error) throw error;
+
+        if (data) {
+          const map: Record<string, string> = {};
+          data.forEach(item => {
+            map[String(item.code)] = item.status;
+          });
+          setProdStatusMap(map);
+        }
+      } catch (err) {
+        console.error('Error fetching production status:', err);
+      }
+    };
+    fetchProdStatus();
+  }, [tickets]);
 
   useEffect(() => {
     const fetchCategories = async () => {
@@ -131,28 +167,72 @@ export default function SewingTicketsHistoryPage() {
     return `${h}h ${m > 0 ? `${m}m` : ''}`;
   };
 
-  // Filter tickets by delivery date
+  const parseLocalDate = (dateStr: string) => {
+    const [year, month, day] = dateStr.split('-').map(Number);
+    return startOfDay(new Date(year, month - 1, day));
+  };
+
+  // Filter tickets by delivery date AND production status
   const filteredTickets = useMemo(() => {
-    if (deliveryFilter === 'all') return tickets;
-    
-    return tickets.filter(t => {
-      if (!t.fecha_entrega_paquete) return false;
-      const [year, month, day] = t.fecha_entrega_paquete.split('-').map(Number);
-      const dDate = startOfDay(new Date(year, month - 1, day));
-      const today = startOfDay(new Date());
-      const tomorrow = new Date(today);
-      tomorrow.setDate(tomorrow.getDate() + 1);
+    let result = tickets;
 
-      switch (deliveryFilter) {
-        case 'today': return dDate.getTime() === today.getTime();
-        case 'tomorrow': return dDate.getTime() === tomorrow.getTime();
-        case 'week': return isThisWeek(dDate, { weekStartsOn: 1 });
-        default: return true;
-      }
+    // Delivery Filter
+    if (deliveryFilter !== 'all') {
+      result = result.filter(t => {
+        if (!t.fecha_entrega_paquete) return false;
+        const dDate = parseLocalDate(t.fecha_entrega_paquete);
+        const today = startOfDay(new Date());
+        const tomorrow = new Date(today);
+        tomorrow.setDate(tomorrow.getDate() + 1);
+
+        switch (deliveryFilter) {
+          case 'today': return dDate.getTime() === today.getTime();
+          case 'tomorrow': return dDate.getTime() === tomorrow.getTime();
+          case 'week': return isThisWeek(dDate, { weekStartsOn: 1 });
+          default: return true;
+        }
+      });
+    }
+
+    // Status Filter (Solo afecta la visibilidad en la tabla, no las métricas globales de la vista)
+    if (prodStatusFilter !== 'all') {
+      result = result.filter(t => {
+        const st = prodStatusMap[t.codigo_barra];
+        const isFinished = st === 'PPC' || st === 'ENTREGADO';
+        return prodStatusFilter === 'finished' ? isFinished : !isFinished;
+      });
+    }
+
+    return result;
+  }, [tickets, deliveryFilter, prodStatusFilter, prodStatusMap]);
+
+  // Traceability Metrics (Calculadas sobre el set filtrado por entrega)
+  const traceabilityMetrics = useMemo(() => {
+    const deliveryFiltered = tickets.filter(t => {
+        if (deliveryFilter === 'all') return true;
+        if (!t.fecha_entrega_paquete) return false;
+        const dDate = parseLocalDate(t.fecha_entrega_paquete);
+        const today = startOfDay(new Date());
+        const tomorrow = new Date(today);
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        if (deliveryFilter === 'today') return dDate.getTime() === today.getTime();
+        if (deliveryFilter === 'tomorrow') return dDate.getTime() === tomorrow.getTime();
+        if (deliveryFilter === 'week') return isThisWeek(dDate, { weekStartsOn: 1 });
+        return true;
     });
-  }, [tickets, deliveryFilter]);
 
-  // Metrics for categories: Suma registros de hoy + CUALQUIER sección desplegada
+    const total = deliveryFiltered.length;
+    const finished = deliveryFiltered.filter(t => {
+        const st = prodStatusMap[t.codigo_barra];
+        return st === 'PPC' || st === 'ENTREGADO';
+    }).length;
+    const pending = total - finished;
+    const percent = total > 0 ? Math.round((finished / total) * 100) : 0;
+
+    return { total, finished, pending, percent };
+  }, [tickets, deliveryFilter, prodStatusMap]);
+
+  // Metrics for categories: Reactivas a filtros y expansión
   const categoryMetrics = useMemo(() => {
     const groups = {
       LIENZOS: { total: 0, totalTime: 0 },
@@ -169,7 +249,6 @@ export default function SewingTicketsHistoryPage() {
       const isTodayGroup = isToday(dateObj);
       const groupKey = isTodayGroup ? 'group-today' : `group-${dateKey}`;
 
-      // CRÍTICO: Solo sumar a las tarjetas si el grupo está en expandedGroups
       if (!expandedGroups.includes(groupKey)) return;
 
       const meta = skuMetadata[t.sku || ''] || { cat: '', time: 0 };
@@ -178,23 +257,16 @@ export default function SewingTicketsHistoryPage() {
       const upper = catMdr.toUpperCase();
       const qty = t.cantidad || 0;
 
-      // Prioridad 1: COSTURA (Si dice confeccionada, es costura aunque diga lienzo)
       if (upper.includes('MALLA SOMBRA CONFECCIONADA') || upper.includes('MS FABRICACION')) {
         groups['MALLAS COSTURA'].total += qty;
         groups['MALLAS COSTURA'].totalTime += (estTime * qty);
-      } 
-      // Prioridad 2: BOLAS
-      else if (upper === 'MALLA SOMBRA BOLSA') {
+      } else if (upper === 'MALLA SOMBRA BOLSA') {
         groups['MALLAS BOLAS'].total += qty;
         groups['MALLAS BOLAS'].totalTime += (estTime * qty);
-      } 
-      // Prioridad 3: LIENZOS
-      else if (upper === 'LIENZO' || upper === 'ROLLO' || upper.includes('LIENZO DE MALLA SOMBRA') || upper.includes('ROLLO LIGHT') || upper.includes('ROLLO DE MALLA SOMBRA')) {
+      } else if (upper === 'LIENZO' || upper === 'ROLLO' || upper.includes('LIENZO DE MALLA SOMBRA') || upper.includes('ROLLO LIGHT') || upper.includes('ROLLO DE MALLA SOMBRA')) {
         groups.LIENZOS.total += qty;
         groups.LIENZOS.totalTime += (estTime * qty);
-      } 
-      // Prioridad 4: OTROS
-      else {
+      } else {
         groups.OTROS.total += qty;
         groups.OTROS.totalTime += (estTime * qty);
       }
@@ -203,7 +275,6 @@ export default function SewingTicketsHistoryPage() {
     return groups;
   }, [filteredTickets, skuMetadata, expandedGroups]);
 
-  // Group tickets by creation date
   const groupedByDate = useMemo(() => {
     const groups: Record<string, { tickets: SewingTicket[], pieces: number, isToday: boolean, isYesterday: boolean }> = {};
 
@@ -232,21 +303,15 @@ export default function SewingTicketsHistoryPage() {
     const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
     const today = new Date();
     const dateTitle = format(today, "d MMM yyyy", { locale: es });
-    const totalUnits = tickets.reduce((acc, t) => acc + (t.cantidad || 0), 0);
-
+    
     doc.setFontSize(14);
     doc.setTextColor(0, 98, 65);
     doc.text(`Bitácora de Costura (Historial) - ${dateTitle}`, 14, 15);
-    doc.setFontSize(9);
-    doc.setTextColor(100);
-    doc.text(`Registros: ${tickets.length} | Unidades: ${totalUnits}`, 14, 20);
 
     const headers = [
       'Cód. Barra', 'Alias', 'Producto', 'SKU', 'Cant',
-      'Vaciado Por', 'H. Vaciado', 'Cuenta', 'Venta', 'Pack ID',
-      'Confecc', 'Perfor', 'Ojill',
-      'Impresa', 'Resp Imp', 'F Imp', 'Asignada',
-      'Empaque', 'Recol', 'Recolector', 'Fecha Entrega'
+      'Vaciado Por', 'H. Vaciado', 'Cuenta', 'Venta',
+      'Confecc', 'Impresa', 'Asignada', 'Empaque', 'Recol', 'Recolector', 'Entrega'
     ];
 
     const body = tickets.map(t => [
@@ -259,13 +324,8 @@ export default function SewingTicketsHistoryPage() {
       t.hora_vaciado || '---',
       t.cuenta || '---',
       t.sales_num || '---',
-      t.pack_id || '---',
-      t.confeccion === true ? 'SÍ' : t.confeccion === false ? 'NO' : 'N/A',
-      t.perforado === true ? 'SÍ' : t.perforado === false ? 'NO' : 'N/A',
-      t.ojillado === true ? 'SÍ' : t.ojillado === false ? 'NO' : 'N/A',
+      t.confeccion === true ? 'SÍ' : 'NO',
       t.impresa === true ? 'SÍ' : 'NO',
-      t.responsable_impresion || '---',
-      t.fecha_impresion || '---',
       t.asignada_a || '---',
       t.empaquetado === true ? 'SÍ' : 'NO',
       t.lista_para_recoleccion === true ? 'SÍ' : 'NO',
@@ -278,8 +338,8 @@ export default function SewingTicketsHistoryPage() {
       head: [headers],
       body: body,
       theme: 'striped',
-      headStyles: { fillColor: [0, 98, 65], fontSize: 5, halign: 'center' },
-      bodyStyles: { fontSize: 4.8, valign: 'middle' },
+      headStyles: { fillColor: [0, 98, 65], fontSize: 6 },
+      bodyStyles: { fontSize: 5 },
     });
 
     doc.save(`historial_costura_${format(today, "yyyy-MM-dd")}.pdf`);
@@ -294,7 +354,7 @@ export default function SewingTicketsHistoryPage() {
   return (
     <>
       <Head><title>Historial Impresos | Bitácora de Costura</title></Head>
-      <main className="w-full max-w-[1600px] mx-auto p-2 md:p-8 space-y-4 md:space-y-6 animate-in fade-in duration-500 relative">
+      <main className="w-full max-w-[1600px] mx-auto p-2 md:p-8 space-y-6 animate-in fade-in duration-500 relative">
         <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 px-2">
           <div className="space-y-1">
             <div className="flex items-center gap-3">
@@ -311,26 +371,79 @@ export default function SewingTicketsHistoryPage() {
           </div>
         </header>
 
-        {/* Global Summary Cards - Dinámicas según expansión */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 px-2">
+        {/* Traceability Metrics Cards */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 px-2">
+            <TraceabilityCard 
+              label="Terminados" 
+              value={traceabilityMetrics.finished} 
+              icon={CheckCircle2} 
+              color="text-green-600" 
+              bgColor="bg-green-50"
+              sub="PPC / ENTREGADO"
+            />
+            <TraceabilityCard 
+              label="Pendientes" 
+              value={traceabilityMetrics.pending} 
+              icon={Clock} 
+              color="text-amber-600" 
+              bgColor="bg-amber-50"
+              sub="EN COSTURA"
+            />
+            <TraceabilityCard 
+              label="Total Visible" 
+              value={traceabilityMetrics.total} 
+              icon={Package} 
+              color="text-gray-600" 
+              bgColor="bg-gray-100"
+              sub="SEGÚN FILTROS"
+            />
+            <TraceabilityCard 
+              label="Avance" 
+              value={`${traceabilityMetrics.percent}%`} 
+              icon={BarChart3} 
+              color="text-blue-600" 
+              bgColor="bg-blue-50"
+              sub="COMPLETADO"
+            />
+        </div>
+
+        {/* Category Summary Cards */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 px-2 pt-2 border-t border-dashed">
             <SummaryCard label="Lienzos" pieces={categoryMetrics.LIENZOS.total} time={categoryMetrics.LIENZOS.totalTime} image="/canva.png" formatTime={formatTime} />
             <SummaryCard label="Mallas Bolas" pieces={categoryMetrics['MALLAS BOLAS'].total} time={categoryMetrics['MALLAS BOLAS'].totalTime} image="/sphere.png" formatTime={formatTime} />
             <SummaryCard label="Mallas Costura" pieces={categoryMetrics['MALLAS COSTURA'].total} time={categoryMetrics['MALLAS COSTURA'].totalTime} image="/sewing-machine.png" formatTime={formatTime} />
             <SummaryCard label="Otros" pieces={categoryMetrics.OTROS.total} time={categoryMetrics.OTROS.totalTime} icon={<Tag className="h-6 w-6 text-gray-400" />} formatTime={formatTime} />
         </div>
 
-        {/* Delivery Date Filters */}
+        {/* Filters Section */}
         <section className="px-2 pt-2">
-          <Card className="border-starbucks-green/10 shadow-sm">
-            <CardContent className="p-3 flex flex-wrap items-center gap-3">
-              <div className="flex items-center gap-2 text-xs font-black text-gray-400 uppercase tracking-widest mr-2">
-                <Filter className="h-4 w-4" /> Filtro Entrega
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <FilterButton active={deliveryFilter === 'all'} onClick={() => setDeliveryFilter('all')} label="Todas" />
-                <FilterButton active={deliveryFilter === 'today'} onClick={() => setDeliveryFilter('today')} label="Hoy" />
-                <FilterButton active={deliveryFilter === 'tomorrow'} onClick={() => setDeliveryFilter('tomorrow')} label="Mañana" />
-                <FilterButton active={deliveryFilter === 'week'} onClick={() => setDeliveryFilter('week')} label="Esta Semana" />
+          <Card className="border-starbucks-green/10 shadow-sm overflow-hidden">
+            <CardContent className="p-0">
+              <div className="flex flex-col md:flex-row md:items-center">
+                 <div className="p-4 border-b md:border-b-0 md:border-r flex flex-col gap-3 flex-1">
+                    <div className="flex items-center gap-2 text-[10px] font-black text-gray-400 uppercase tracking-widest">
+                        <Calendar className="h-4 w-4" /> Fecha de Entrega
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                        <FilterButton active={deliveryFilter === 'all'} onClick={() => setDeliveryFilter('all')} label="Todas" />
+                        <FilterButton active={deliveryFilter === 'today'} onClick={() => setDeliveryFilter('today')} label="Hoy" />
+                        <FilterButton active={deliveryFilter === 'tomorrow'} onClick={() => setDeliveryFilter('tomorrow')} label="Mañana" />
+                        <FilterButton active={deliveryFilter === 'week'} onClick={() => setDeliveryFilter('week')} label="Semana" />
+                    </div>
+                 </div>
+                 
+                 <div className="p-4 flex flex-col gap-3 flex-1 bg-gray-50/50">
+                    <div className="flex items-center gap-2 text-[10px] font-black text-gray-400 uppercase tracking-widest">
+                        <Activity className="h-4 w-4" /> Producción
+                    </div>
+                    <Tabs value={prodStatusFilter} onValueChange={(v) => setProdStatusFilter(v as any)} className="w-full">
+                        <TabsList className="grid grid-cols-3 h-8 bg-white border border-gray-200">
+                            <TabsTrigger value="all" className="text-[10px] font-bold">TODOS</TabsTrigger>
+                            <TabsTrigger value="finished" className="text-[10px] font-bold text-green-700 data-[state=active]:bg-green-50">TERMINADOS</TabsTrigger>
+                            <TabsTrigger value="pending" className="text-[10px] font-bold text-amber-700 data-[state=active]:bg-amber-50">PENDIENTES</TabsTrigger>
+                        </TabsList>
+                    </Tabs>
+                 </div>
               </div>
             </CardContent>
           </Card>
@@ -360,7 +473,6 @@ export default function SewingTicketsHistoryPage() {
                 
                 const groupKey = isCurrentGroupToday ? 'group-today' : `group-${dateKey}`;
                 
-                // Categorize tickets within this date group
                 const subCategorized = {
                   COSTURA: { tickets: [] as SewingTicket[], total: 0, totalTime: 0, label: 'MALLAS COSTURA', img: '/sewing-machine.png', color: 'bg-yellow-500' },
                   BOLAS: { tickets: [] as SewingTicket[], total: 0, totalTime: 0, label: 'MALLAS BOLAS', img: '/sphere.png', color: 'bg-green-600' },
@@ -418,7 +530,7 @@ export default function SewingTicketsHistoryPage() {
                     <AccordionContent className="pt-4 pb-0 space-y-8">
                       {Object.values(subCategorized).map((cat) => (
                         cat.tickets.length > 0 && (
-                          <div key={cat.label} className={cn("transition-all", !isCurrentGroupToday && "opacity-80")}>
+                          <div key={cat.label} className={cn("transition-all", !isCurrentGroupToday && "opacity-90")}>
                             <div className={cn(
                               "text-white px-4 py-1.5 rounded-t-lg font-black flex justify-between items-center text-xs tracking-wider",
                               cat.color,
@@ -433,13 +545,14 @@ export default function SewingTicketsHistoryPage() {
                                  <span className="bg-white/20 px-2 py-0.5 rounded-full">({cat.total} piezas)</span>
                                </div>
                             </div>
-                            <div className={cn(!isCurrentGroupToday && "bg-gray-50/50 rounded-b-xl p-2 border-x border-b")}>
+                            <div>
                               <SewingTicketsTable 
                                 tickets={cat.tickets} 
                                 onUpdateTicket={updateTicket} 
                                 onDeleteTicket={deleteTicket} 
                                 skuMetadata={skuMetadata} 
                                 isMuted={!isCurrentGroupToday}
+                                prodStatusMap={prodStatusMap}
                               />
                             </div>
                           </div>
@@ -460,7 +573,6 @@ export default function SewingTicketsHistoryPage() {
           )}
         </div>
 
-        {/* Floating Back to Top Button */}
         {showScrollTop && (
           <Button
             onClick={scrollToTop}
@@ -472,6 +584,23 @@ export default function SewingTicketsHistoryPage() {
         )}
       </main>
     </>
+  );
+}
+
+function TraceabilityCard({ label, value, icon: Icon, color, bgColor, sub }: any) {
+  return (
+    <Card className={cn("border-none shadow-sm overflow-hidden", bgColor)}>
+      <CardContent className="p-4 flex items-center justify-between">
+        <div className="space-y-1">
+           <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{label}</p>
+           <p className={cn("text-2xl font-black tabular-nums leading-none tracking-tighter", color)}>{value}</p>
+           <p className="text-[8px] font-bold text-gray-400 uppercase">{sub}</p>
+        </div>
+        <div className={cn("p-2 rounded-lg bg-white/50", color)}>
+          <Icon className="h-6 w-6" />
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
