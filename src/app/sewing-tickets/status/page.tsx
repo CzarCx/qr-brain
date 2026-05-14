@@ -676,7 +676,7 @@ export default function SewingStatusScannerPage() {
           <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <h2 className="text-xl font-black text-starbucks-dark flex items-center gap-2">
               <Truck className="h-6 w-6 text-amber-500" />
-              🚚 PEDIDOS PPC PENDIENTES DE DRIVER
+              PEDIDOS PPC PENDIENTES DE DRIVER
             </h2>
             <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto">
                <div className="relative flex-grow min-w-[250px]">
