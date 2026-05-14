@@ -96,7 +96,6 @@ export default function SewingStatusScannerPage() {
     const finalCode = code.trim();
     if (!finalCode) return;
 
-    // Throttle scans for hardware/camera
     const now = Date.now();
     if (now - lastScanTimeRef.current < 1500) return;
     lastScanTimeRef.current = now;
@@ -106,7 +105,6 @@ export default function SewingStatusScannerPage() {
     const time = new Date().toLocaleTimeString('es-MX', { hour12: false });
 
     try {
-      // 1. VALIDACIÓN CRÍTICA: Verificar si ya pasó por impresión
       const { data: ticketRecord, error: ticketError } = await supabaseEtiquetas
         .from('sewing_tickets')
         .select('impreso, nombre_producto')
@@ -133,7 +131,6 @@ export default function SewingStatusScannerPage() {
         throw new Error('Bulto pendiente de impresión');
       }
 
-      // 2. Si la impresión es válida, proceder con la actualización de PRODUCCIÓN (Main DB)
       const numericCode = parseFloat(finalCode);
       if (isNaN(numericCode)) throw new Error('Código no es numérico');
 
@@ -153,7 +150,6 @@ export default function SewingStatusScannerPage() {
         throw new Error('No encontrado en producción (Personal)');
       }
 
-      // 3. Actualizar fecha de modificación en SEWING_TICKETS (Labels DB)
       await supabaseEtiquetas
         .from('sewing_tickets')
         .update({ updated_at: new Date().toISOString() })
@@ -175,7 +171,7 @@ export default function SewingStatusScannerPage() {
         id: logId,
         code: finalCode,
         status: targetStatus,
-        result: error.message.includes('impresión') ? 'warning' : 'error',
+        result: error.message && error.message.includes('impresión') ? 'warning' : 'error',
         message: error.message || 'Error desconocido',
         time
       }, ...prev]);
@@ -190,12 +186,9 @@ export default function SewingStatusScannerPage() {
     setManualCode('');
   };
 
-  // Keyboard/Physical Scanner Logic
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (selectedScannerMode !== 'fisico' || !scannerActive) return;
-      
-      // If user is typing in manual input, don't capture as scanner input
       if (document.activeElement?.tagName === 'INPUT') return;
 
       if (e.key === 'Enter') {
@@ -213,7 +206,6 @@ export default function SewingStatusScannerPage() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [selectedScannerMode, scannerActive, handleProcessCode]);
 
-  // Camera Scanner Logic
   useEffect(() => {
     if (!isMounted || !readerRef.current || selectedScannerMode !== 'camara' || !scannerActive) return;
 
@@ -222,30 +214,42 @@ export default function SewingStatusScannerPage() {
     }
     const qrCode = html5QrCodeRef.current;
 
-    qrCode.start(
-      { facingMode: "environment" },
-      { fps: 10, qrbox: { width: 250, height: 250 } },
-      (text) => handleProcessCode(text),
-      () => {}
-    ).then(() => {
-      const videoElement = readerRef.current?.querySelector('video');
-      if (videoElement && videoElement.srcObject) {
-        const track = (videoElement.srcObject as MediaStream).getVideoTracks()[0];
-        if (track) setCameraCapabilities(track.getCapabilities?.() || null);
+    const cleanup = async () => {
+      if (qrCode.isScanning) {
+        try {
+          await qrCode.stop();
+        } catch (e) {
+          // Ignore
+        }
       }
-    }).catch(err => {
-      console.error(err);
-      setScannerActive(false);
-    });
+    };
+
+    const state = qrCode.getState();
+    if (state === Html5QrcodeScannerState.IDLE || state === Html5QrcodeScannerState.NOT_STARTED) {
+      qrCode.start(
+        { facingMode: "environment" },
+        { fps: 10, qrbox: { width: 250, height: 250 } },
+        (text) => handleProcessCode(text),
+        () => {}
+      ).then(() => {
+        const videoElement = readerRef.current?.querySelector('video');
+        if (videoElement && videoElement.srcObject) {
+          const track = (videoElement.srcObject as MediaStream).getVideoTracks()[0];
+          if (track) setCameraCapabilities(track.getCapabilities?.() || null);
+        }
+      }).catch(err => {
+        if (!String(err).includes('transition')) {
+          console.error(err);
+          setScannerActive(false);
+        }
+      });
+    }
 
     return () => {
-      if (qrCode.isScanning) {
-        qrCode.stop().catch(console.error);
-      }
+      cleanup();
     };
   }, [scannerActive, selectedScannerMode, isMounted, handleProcessCode]);
 
-  // Apply Camera Constraints
   useEffect(() => {
     if (selectedScannerMode === 'camara' && scannerActive && html5QrCodeRef.current?.isScanning) {
       const videoElement = readerRef.current?.querySelector('video');
@@ -282,7 +286,6 @@ export default function SewingStatusScannerPage() {
         </header>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Configuración */}
           <Card className="shadow-md border-starbucks-green/10">
             <CardHeader className="bg-gray-50/50 border-b">
               <CardTitle className="text-sm font-black uppercase tracking-wider flex items-center gap-2">
@@ -388,7 +391,6 @@ export default function SewingStatusScannerPage() {
             </CardContent>
           </Card>
 
-          {/* Scanner */}
           <Card className="shadow-md overflow-hidden flex flex-col">
             <div className={cn(
               "p-3 text-center text-xs font-black uppercase tracking-widest text-white animate-pulse",
@@ -445,7 +447,6 @@ export default function SewingStatusScannerPage() {
           </Card>
         </div>
 
-        {/* Logs */}
         <Card className="shadow-md">
           <CardHeader className="flex flex-row items-center justify-between border-b py-3 px-4">
             <CardTitle className="text-sm font-black uppercase tracking-wider flex items-center gap-2">

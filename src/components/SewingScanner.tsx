@@ -27,8 +27,6 @@ export function SewingScanner({ onScan, disabled }: SewingScannerProps) {
   const bufferRef = useRef('');
   const isMobile = useIsMobile();
   
-  // Usamos una ref para la función onScan para que el escáner no se reinicie
-  // cuando cambie el estado de carga (disabled)
   const onScanRef = useRef(onScan);
   useEffect(() => {
     onScanRef.current = onScan;
@@ -101,23 +99,25 @@ export function SewingScanner({ onScan, disabled }: SewingScannerProps) {
     }
     const qrCode = html5QrCodeRef.current;
 
-    const cleanup = () => {
+    const cleanup = async () => {
         if (qrCode && qrCode.isScanning) {
-            return qrCode.stop().catch(err => {
-                if (!String(err).includes('not started')) {
+            try {
+                await qrCode.stop();
+            } catch (err) {
+                if (!String(err).includes('not started') && !String(err).includes('transition')) {
                     console.error("Fallo al detener el escáner:", err);
                 }
-            }).finally(() => {
+            } finally {
                 setCameraCapabilities(null);
                 setIsFlashOn(false);
                 setZoom(1);
-            });
+            }
         }
-        return Promise.resolve();
     };
 
     if (scannerActive && selectedScannerMode === 'camara') {
-      if (qrCode.getState() !== Html5QrcodeScannerState.SCANNING) {
+      const state = qrCode.getState();
+      if (state === Html5QrcodeScannerState.IDLE || state === Html5QrcodeScannerState.NOT_STARTED) {
         const config = {
           fps: 10,
           qrbox: { width: 250, height: 250 },
@@ -134,10 +134,12 @@ export function SewingScanner({ onScan, disabled }: SewingScannerProps) {
             }
         })
         .catch(err => {
-            if (!String(err).includes("is ongoing")) {
+            if (!String(err).includes("is ongoing") && !String(err).includes("transition")) {
                console.error("Error al iniciar camara:", err);
             }
-            setScannerActive(false);
+            if (!String(err).includes("transition")) {
+                setScannerActive(false);
+            }
         });
       }
     } else {
