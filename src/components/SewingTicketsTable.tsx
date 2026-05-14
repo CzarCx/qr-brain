@@ -45,7 +45,7 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { Check, X, Clock, User, Package, Building2, Minus, Tag, ChevronsUpDown, Trash2, Copy, ChevronDown, ChevronUp, Scissors, Boxes, Truck, PencilLine } from 'lucide-react';
+import { Check, X, Clock, User, Package, Building2, Minus, Tag, ChevronsUpDown, Trash2, Copy, ChevronDown, ChevronUp, Scissors, Boxes, Truck, PencilLine, Plus } from 'lucide-react';
 import { useMemo, useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -267,7 +267,7 @@ export function SewingTicketsTable({ tickets, onUpdateTicket, onDeleteTicket, on
     );
   };
 
-  // MOBILE VIEW: Only cards, no option to switch
+  // MOBILE VIEW: Only cards
   if (isMobile) {
     return (
       <div className="space-y-4 px-2 pb-10">
@@ -552,6 +552,18 @@ function CardItem({
   renderBoolean
 }: any) {
   const estTime = skuMetadata && ticket.sku && skuMetadata[ticket.sku] ? `${skuMetadata[ticket.sku].time}m` : (ticket.esti_time ? `${ticket.esti_time}m` : '---');
+  
+  // Local state for inline alias editing in mobile view
+  const [isEditingAlias, setIsEditingAlias] = useState(false);
+  const [tempAlias, setTempAlias] = useState(ticket.alias || '');
+
+  const handleAliasSave = async (e?: any) => {
+    if (e) e.stopPropagation();
+    if (tempAlias.trim() !== (ticket.alias || '')) {
+      await onUpdate?.(ticket.id!, { alias: tempAlias.trim() || null });
+    }
+    setIsEditingAlias(false);
+  };
 
   return (
     <div className={cn(
@@ -579,11 +591,47 @@ function CardItem({
 
         <div className="space-y-1">
             <p className="text-[11px] font-bold text-starbucks-dark uppercase">{ticket.nombre_producto || 'NO MAPEADO'}</p>
-            {ticket.alias && (
-              <Badge variant="secondary" className="bg-amber-50 text-amber-800 text-[9px] font-black px-2 py-0">
-                <Tag className="h-2 w-2 mr-1" /> {ticket.alias.toUpperCase()}
-              </Badge>
-            )}
+            
+            {/* INLINE ALIAS EDITOR (MOBILE SUMMARY) */}
+            <div onClick={(e) => e.stopPropagation()} className="mt-1 flex flex-wrap gap-1 items-center">
+               {isEditingAlias ? (
+                 <Input 
+                   autoFocus
+                   value={tempAlias}
+                   onChange={(e) => setTempAlias(e.target.value)}
+                   onBlur={handleAliasSave}
+                   onKeyDown={(e) => e.key === 'Enter' && handleAliasSave()}
+                   className="h-7 text-[9px] font-black uppercase bg-white border-amber-300 w-full"
+                   maxLength={50}
+                   placeholder="ASIGNAR ALIAS..."
+                 />
+               ) : (
+                 <Badge 
+                   variant="secondary" 
+                   onClick={() => { setTempAlias(ticket.alias || ''); setIsEditingAlias(true); }}
+                   className={cn(
+                     "h-5 text-[9px] font-black px-2 py-0 cursor-pointer transition-colors border-2",
+                     ticket.alias 
+                      ? "bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100" 
+                      : "bg-gray-50 text-gray-400 border-dashed border-gray-300 hover:bg-gray-100"
+                   )}
+                 >
+                   {ticket.alias ? (
+                     <>
+                        <Tag className="h-2 w-2 mr-1" /> 
+                        {ticket.alias.toUpperCase()}
+                        <PencilLine className="h-2 w-2 ml-1 opacity-40" />
+                     </>
+                   ) : (
+                     <>
+                        <Plus className="h-2 w-2 mr-1" />
+                        AÑADIR ALIAS
+                     </>
+                   )}
+                 </Badge>
+               )}
+            </div>
+
             <div className="flex items-center justify-between mt-2">
                 <div className="flex items-center gap-3">
                     <span className="text-lg font-black text-blue-600">{ticket.cantidad || 0} <span className="text-[10px] font-bold text-gray-400">PZS</span></span>
@@ -603,26 +651,6 @@ function CardItem({
       <Collapsible open={expanded} onOpenChange={onToggle}>
         <CollapsibleContent className="border-t border-gray-100 bg-gray-50/50 rounded-b-xl overflow-hidden animate-in slide-in-from-top-2 duration-300">
             <div className="p-4 space-y-6">
-                {/* Seccion 0: Identificación Operativa */}
-                <div className="space-y-3">
-                    <div className="flex items-center gap-2 text-amber-600 border-b border-amber-100 pb-1">
-                        <Tag className="h-3.5 w-3.5" />
-                        <h4 className="text-[10px] font-black uppercase tracking-wider">Identificación Operativa</h4>
-                    </div>
-                    <div className="space-y-2">
-                        <Label className="text-[9px] font-bold text-gray-400 uppercase">Alias del Ticket</Label>
-                        <div className="flex gap-2">
-                            <Input 
-                                placeholder="Ej. Mesa negra, Costco..."
-                                defaultValue={ticket.alias || ''}
-                                onBlur={(e) => onUpdate?.(ticket.id, { alias: e.target.value.trim() || null })}
-                                className="h-10 text-xs font-black uppercase bg-white"
-                                maxLength={50}
-                            />
-                        </div>
-                    </div>
-                </div>
-
                 {/* Seccion 1: Producción */}
                 <div className="space-y-3">
                     <div className="flex items-center gap-2 text-blue-800 border-b border-blue-100 pb-1">
