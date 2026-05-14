@@ -45,7 +45,7 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { Check, X, Clock, User, Package, Building2, Minus, Tag, ChevronsUpDown, Trash2, Copy, ChevronDown, ChevronUp, LayoutGrid, List as ListIcon, Scissors, Boxes, Truck, PencilLine } from 'lucide-react';
+import { Check, X, Clock, User, Package, Building2, Minus, Tag, ChevronsUpDown, Trash2, Copy, ChevronDown, ChevronUp, Scissors, Boxes, Truck, PencilLine } from 'lucide-react';
 import { useMemo, useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -81,17 +81,8 @@ const RECOLECTORES_OPTIONS = [
 export function SewingTicketsTable({ tickets, onUpdateTicket, onDeleteTicket, onGenerateLabel, skuMetadata }: SewingTicketsTableProps) {
   const { toast } = useToast();
   const isMobile = useIsMobile();
-  const [viewMode, setViewMode] = useState<'cards' | 'table'>('table');
   const [expandedCards, setExpandedCards] = useState<Record<number, boolean>>({});
 
-  useEffect(() => {
-    if (isMobile) {
-      setViewMode('cards');
-    } else {
-      setViewMode('table');
-    }
-  }, [isMobile]);
-  
   const skuCounts = useMemo(() => {
     return tickets.reduce((acc, ticket) => {
       if (ticket.sku) {
@@ -276,30 +267,10 @@ export function SewingTicketsTable({ tickets, onUpdateTicket, onDeleteTicket, on
     );
   };
 
-  if (viewMode === 'cards' && isMobile) {
+  // MOBILE VIEW: Only cards, no option to switch
+  if (isMobile) {
     return (
       <div className="space-y-4 px-2 pb-10">
-        <div className="flex justify-end mb-2">
-            <div className="flex bg-gray-100 p-1 rounded-lg border border-gray-200">
-                <Button 
-                    variant={viewMode === 'cards' ? 'default' : 'ghost'} 
-                    size="sm" 
-                    className="h-8 text-[10px] font-bold gap-1"
-                    onClick={() => setViewMode('cards')}
-                >
-                    <LayoutGrid className="h-3 w-3" /> CARDS
-                </Button>
-                <Button 
-                    variant={viewMode === 'table' ? 'default' : 'ghost'} 
-                    size="sm" 
-                    className="h-8 text-[10px] font-bold gap-1"
-                    onClick={() => setViewMode('table')}
-                >
-                    <ListIcon className="h-3 w-3" /> TABLA
-                </Button>
-            </div>
-        </div>
-
         {tickets.length > 0 ? (
           tickets.map((ticket) => (
             <CardItem 
@@ -329,30 +300,9 @@ export function SewingTicketsTable({ tickets, onUpdateTicket, onDeleteTicket, on
     );
   }
 
+  // DESKTOP VIEW: Traditional table
   return (
     <div className="border rounded-b-lg overflow-hidden bg-white shadow-sm">
-      {isMobile && (
-        <div className="flex justify-end p-2 bg-gray-50 border-b">
-            <div className="flex bg-gray-200 p-1 rounded-lg">
-                <Button 
-                    variant={viewMode === 'cards' ? 'default' : 'ghost'} 
-                    size="sm" 
-                    className="h-7 text-[9px] font-bold gap-1"
-                    onClick={() => setViewMode('cards')}
-                >
-                    <LayoutGrid className="h-3 w-3" /> CARDS
-                </Button>
-                <Button 
-                    variant={viewMode === 'table' ? 'default' : 'ghost'} 
-                    size="sm" 
-                    className="h-7 text-[9px] font-bold gap-1"
-                    onClick={() => setViewMode('table')}
-                >
-                    <ListIcon className="h-3 w-3" /> TABLA
-                </Button>
-            </div>
-        </div>
-      )}
       <div className="max-h-[600px] overflow-auto">
         <Table className="min-w-[2400px]">
           <TableHeader className="bg-gray-50 sticky top-0 z-30">
