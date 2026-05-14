@@ -45,7 +45,7 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { Check, X, Clock, User, Package, Building2, Minus, Tag, ChevronsUpDown, Trash2, Copy, ChevronDown, ChevronUp, LayoutGrid, List as ListIcon, Scissors, Boxes, Settings2, Truck, PencilLine } from 'lucide-react';
+import { Check, X, Clock, User, Package, Building2, Minus, Tag, ChevronsUpDown, Trash2, Copy, ChevronDown, ChevronUp, LayoutGrid, List as ListIcon, Scissors, Boxes, Truck, PencilLine } from 'lucide-react';
 import { useMemo, useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -101,12 +101,12 @@ export function SewingTicketsTable({ tickets, onUpdateTicket, onDeleteTicket, on
     }, {} as Record<string, number>);
   }, [tickets]);
 
-  const handleCopySKU = (sku: string) => {
-    if (!sku) return;
-    navigator.clipboard.writeText(sku);
+  const handleCopy = (value: string | number | null, label: string) => {
+    if (!value) return;
+    navigator.clipboard.writeText(String(value));
     toast({
-      title: "SKU Copiado",
-      description: `${sku} se ha guardado en el portapapeles.`,
+      title: `${label} Copiado`,
+      description: `${value} se ha guardado en el portapapeles.`,
       duration: 2000,
     });
   };
@@ -312,7 +312,7 @@ export function SewingTicketsTable({ tickets, onUpdateTicket, onDeleteTicket, on
               onLabel={onGenerateLabel}
               skuMetadata={skuMetadata}
               skuCounts={skuCounts}
-              handleCopySKU={handleCopySKU}
+              handleCopy={handleCopy}
               BooleanSelect={BooleanSelect}
               TriStateSelect={TriStateSelect}
               RecolectorSelector={RecolectorSelector}
@@ -419,7 +419,7 @@ export function SewingTicketsTable({ tickets, onUpdateTicket, onDeleteTicket, on
                   <TableCell className="text-xs font-mono">
                     <div 
                       className="flex items-center gap-1 group cursor-pointer"
-                      onClick={() => ticket.sku && handleCopySKU(ticket.sku)}
+                      onClick={() => ticket.sku && handleCopy(ticket.sku, "SKU")}
                       title="Haz clic para copiar SKU"
                     >
                       <span className="text-gray-600 group-hover:text-starbucks-green group-hover:underline transition-colors">
@@ -454,10 +454,28 @@ export function SewingTicketsTable({ tickets, onUpdateTicket, onDeleteTicket, on
                     </div>
                   </TableCell>
                   <TableCell className="text-xs font-mono">
-                    {ticket.sales_num || '---'}
+                    <div 
+                      className="flex items-center gap-1 group cursor-pointer"
+                      onClick={() => ticket.sales_num && handleCopy(ticket.sales_num, "Venta")}
+                      title="Copiar Número de Venta"
+                    >
+                      <span className="text-gray-600 group-hover:text-starbucks-green group-hover:underline transition-colors">
+                        {ticket.sales_num || '---'}
+                      </span>
+                      {ticket.sales_num && <Copy className="h-3 w-3 text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity" />}
+                    </div>
                   </TableCell>
                   <TableCell className="text-xs font-mono">
-                    {ticket.pack_id || '---'}
+                    <div 
+                      className="flex items-center gap-1 group cursor-pointer"
+                      onClick={() => ticket.pack_id && handleCopy(ticket.pack_id, "Pack ID")}
+                      title="Copiar Pack ID"
+                    >
+                      <span className="text-gray-600 group-hover:text-starbucks-green group-hover:underline transition-colors">
+                        {ticket.pack_id || '---'}
+                      </span>
+                      {ticket.pack_id && <Copy className="h-3 w-3 text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity" />}
+                    </div>
                   </TableCell>
                   <TableCell className="text-center">
                     {renderBoolean(ticket.impresa)}
@@ -577,7 +595,7 @@ function CardItem({
   onLabel,
   skuMetadata,
   skuCounts,
-  handleCopySKU,
+  handleCopy,
   BooleanSelect,
   TriStateSelect,
   RecolectorSelector,
@@ -596,7 +614,7 @@ function CardItem({
                 <span className="text-[10px] font-black text-gray-400">#{ticket.id}</span>
                 <div 
                   className="flex items-center gap-1 bg-gray-50 px-2 py-0.5 rounded border border-gray-200"
-                  onClick={(e) => { e.stopPropagation(); handleCopySKU(ticket.sku); }}
+                  onClick={(e) => { e.stopPropagation(); handleCopy(ticket.sku, "SKU"); }}
                 >
                     <span className="text-xs font-bold text-gray-700 font-mono break-all">{ticket.sku || 'N/A'}</span>
                     <Copy className="h-3 w-3 text-gray-400" />
@@ -673,6 +691,22 @@ function CardItem({
                         <div className="col-span-2">
                             <p className="text-[9px] font-bold text-gray-400 uppercase mb-0.5">Cuenta / Empresa</p>
                             <p className="text-xs font-bold flex items-center gap-1 uppercase"><Building2 className="h-3 w-3" /> {ticket.cuenta || '---'}</p>
+                        </div>
+                        <div className="col-span-2 grid grid-cols-2 gap-2">
+                           <div onClick={(e) => { e.stopPropagation(); handleCopy(ticket.sales_num, "Venta"); }} className="p-2 bg-white rounded border cursor-pointer hover:border-starbucks-green transition-colors">
+                              <p className="text-[8px] font-bold text-gray-400 uppercase">Venta</p>
+                              <p className="text-[10px] font-mono font-bold flex items-center justify-between">
+                                {ticket.sales_num || '---'}
+                                {ticket.sales_num && <Copy className="h-3 w-3 text-gray-300" />}
+                              </p>
+                           </div>
+                           <div onClick={(e) => { e.stopPropagation(); handleCopy(ticket.pack_id, "Pack ID"); }} className="p-2 bg-white rounded border cursor-pointer hover:border-starbucks-green transition-colors">
+                              <p className="text-[8px] font-bold text-gray-400 uppercase">Pack ID</p>
+                              <p className="text-[10px] font-mono font-bold flex items-center justify-between">
+                                {ticket.pack_id || '---'}
+                                {ticket.pack_id && <Copy className="h-3 w-3 text-gray-300" />}
+                              </p>
+                           </div>
                         </div>
                     </div>
                 </div>
