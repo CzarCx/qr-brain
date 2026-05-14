@@ -174,7 +174,7 @@ export default function SewingTicketsHistoryPage() {
     return Object.entries(groups).sort((a, b) => b[0].localeCompare(a[0]));
   }, [filteredTickets]);
 
-  // Metrics for categories (remains global for the cards at top)
+  // Metrics for categories (updates dynamic based on applied filter)
   const categoryMetrics = useMemo(() => {
     const groups = {
       LIENZOS: { total: 0, totalTime: 0 },
@@ -183,7 +183,7 @@ export default function SewingTicketsHistoryPage() {
       OTROS: { total: 0, totalTime: 0 }
     };
 
-    tickets.forEach(t => {
+    filteredTickets.forEach(t => {
       const meta = skuMetadata[t.sku || ''] || { cat: '', time: 0 };
       const catMdr = meta.cat || '';
       const estTime = meta.time || 0;
@@ -206,7 +206,7 @@ export default function SewingTicketsHistoryPage() {
     });
 
     return groups;
-  }, [tickets, skuMetadata]);
+  }, [filteredTickets, skuMetadata]);
 
   const exportToPDF = () => {
     if (tickets.length === 0) return;
@@ -292,7 +292,7 @@ export default function SewingTicketsHistoryPage() {
           </div>
         </header>
 
-        {/* Global Summary Cards */}
+        {/* Global Summary Cards (Reactive to filters) */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 px-2">
             <SummaryCard label="Lienzos" pieces={categoryMetrics.LIENZOS.total} time={categoryMetrics.LIENZOS.totalTime} image="/canva.png" formatTime={formatTime} />
             <SummaryCard label="Mallas Bolas" pieces={categoryMetrics['MALLAS BOLAS'].total} time={categoryMetrics['MALLAS BOLAS'].totalTime} image="/sphere.png" formatTime={formatTime} />
