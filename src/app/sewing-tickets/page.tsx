@@ -7,6 +7,7 @@ import Image from 'next/image';
 import { useSewingTickets } from '@/hooks/use-sewing-tickets';
 import { SewingScanner } from '@/components/SewingScanner';
 import { SewingTicketsTable } from '@/components/SewingTicketsTable';
+import { SewingProductionMetrics } from '@/components/SewingProductionMetrics';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -452,6 +453,7 @@ export default function SewingTicketsPage() {
           </div>
         </header>
 
+        {/* Global Summary Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 px-2">
             <SummaryCard 
                 label="Lienzos" 
@@ -478,6 +480,11 @@ export default function SewingTicketsPage() {
                 targetId="section-mallas-costura"
             />
         </div>
+
+        {/* Production Metrics Section */}
+        <section className="px-2">
+            <SewingProductionMetrics />
+        </section>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 px-2">
           <Card className="shadow-sm border-starbucks-green/20">

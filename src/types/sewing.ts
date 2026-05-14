@@ -34,3 +34,24 @@ export interface SewingTicket {
   impreso?: boolean | null;
   esti_time?: number | null;
 }
+
+export type SewingProcessName = 
+  | 'CORTE' 
+  | 'COSTURA' 
+  | 'OJILLADO' 
+  | 'DOBLADO' 
+  | 'ETIQUETADO' 
+  | 'VERIFICACION' 
+  | 'EMPAQUE';
+
+export interface SewingProcessTime {
+  id?: number;
+  ticket_id?: number | null;
+  sku: string;
+  process_name: SewingProcessName;
+  time_minutes: number;
+  quantity_pieces: number;
+  operator_name: string;
+  observations?: string | null;
+  created_at?: string;
+}

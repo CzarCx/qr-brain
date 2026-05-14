@@ -1,4 +1,3 @@
-// ... (imports remain same)
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
@@ -7,6 +6,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { useSewingTickets } from '@/hooks/use-sewing-tickets';
 import { SewingTicketsTable } from '@/components/SewingTicketsTable';
+import { SewingProductionMetrics } from '@/components/SewingProductionMetrics';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { 
@@ -270,6 +270,7 @@ export default function SewingTicketsHistoryPage() {
           </div>
         </header>
 
+        {/* Global Summary Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 px-2">
             <SummaryCard 
                 label="Lienzos" 
@@ -296,6 +297,11 @@ export default function SewingTicketsHistoryPage() {
                 targetId="section-mallas-costura"
             />
         </div>
+
+        {/* Production Metrics Section */}
+        <section className="px-2">
+            <SewingProductionMetrics />
+        </section>
 
         <div className="space-y-8 mt-4 px-2">
           {groupedTickets.LIENZOS.tickets.length > 0 && (

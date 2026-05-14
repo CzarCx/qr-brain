@@ -52,6 +52,7 @@ import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { SewingTimeCaptureModal } from '@/components/SewingTimeCaptureModal';
 
 interface SewingTicketsTableProps {
   tickets: SewingTicket[];
@@ -82,6 +83,10 @@ export function SewingTicketsTable({ tickets, onUpdateTicket, onDeleteTicket, on
   const { toast } = useToast();
   const isMobile = useIsMobile();
   const [expandedCards, setExpandedCards] = useState<Record<number, boolean>>({});
+  
+  // State for time capture modal
+  const [isTimeModalOpen, setIsTimeModalOpen] = useState(false);
+  const [selectedTicketForTime, setSelectedTicketForTime] = useState<SewingTicket | null>(null);
 
   const skuCounts = useMemo(() => {
     return tickets.reduce((acc, ticket) => {
@@ -104,6 +109,11 @@ export function SewingTicketsTable({ tickets, onUpdateTicket, onDeleteTicket, on
 
   const toggleExpand = (id: number) => {
     setExpandedCards(prev => ({ ...prev, [id]: !prev[id] }));
+  };
+
+  const openTimeModal = (ticket: SewingTicket) => {
+    setSelectedTicketForTime(ticket);
+    setIsTimeModalOpen(true);
   };
 
   const renderBoolean = (val: boolean | null) => {
@@ -270,269 +280,305 @@ export function SewingTicketsTable({ tickets, onUpdateTicket, onDeleteTicket, on
   // MOBILE VIEW: Only cards
   if (isMobile) {
     return (
-      <div className="space-y-4 px-2 pb-10">
-        {tickets.length > 0 ? (
-          tickets.map((ticket) => (
-            <CardItem 
-              key={ticket.id} 
-              ticket={ticket} 
-              expanded={!!expandedCards[ticket.id!]}
-              onToggle={() => toggleExpand(ticket.id!)}
-              onUpdate={onUpdateTicket}
-              onDelete={onDeleteTicket}
-              onLabel={onGenerateLabel}
-              skuMetadata={skuMetadata}
-              skuCounts={skuCounts}
-              handleCopy={handleCopy}
-              BooleanSelect={BooleanSelect}
-              TriStateSelect={TriStateSelect}
-              RecolectorSelector={RecolectorSelector}
-              renderBoolean={renderBoolean}
-            />
-          ))
-        ) : (
-          <div className="text-center py-10 bg-gray-50 rounded-xl border-2 border-dashed border-gray-200">
-            <Package className="h-10 w-10 mx-auto mb-2 text-gray-300" />
-            <p className="text-gray-400 font-bold">No hay registros.</p>
-          </div>
+      <>
+        <div className="space-y-4 px-2 pb-10">
+          {tickets.length > 0 ? (
+            tickets.map((ticket) => (
+              <CardItem 
+                key={ticket.id} 
+                ticket={ticket} 
+                expanded={!!expandedCards[ticket.id!]}
+                onToggle={() => toggleExpand(ticket.id!)}
+                onUpdate={onUpdateTicket}
+                onDelete={onDeleteTicket}
+                onLabel={onGenerateLabel}
+                onTime={() => openTimeModal(ticket)}
+                skuMetadata={skuMetadata}
+                skuCounts={skuCounts}
+                handleCopy={handleCopy}
+                BooleanSelect={BooleanSelect}
+                TriStateSelect={TriStateSelect}
+                RecolectorSelector={RecolectorSelector}
+                renderBoolean={renderBoolean}
+              />
+            ))
+          ) : (
+            <div className="text-center py-10 bg-gray-50 rounded-xl border-2 border-dashed border-gray-200">
+              <Package className="h-10 w-10 mx-auto mb-2 text-gray-300" />
+              <p className="text-gray-400 font-bold">No hay registros.</p>
+            </div>
+          )}
+        </div>
+        
+        {selectedTicketForTime && (
+          <SewingTimeCaptureModal 
+            isOpen={isTimeModalOpen}
+            onOpenChange={setIsTimeModalOpen}
+            sku={selectedTicketForTime.sku || 'S/N'}
+            ticketId={selectedTicketForTime.id}
+            defaultPieces={selectedTicketForTime.cantidad}
+          />
         )}
-      </div>
+      </>
     );
   }
 
   // DESKTOP VIEW: Traditional table
   return (
-    <div className="border rounded-b-lg overflow-hidden bg-white shadow-sm">
-      <div className="max-h-[600px] overflow-auto">
-        <Table className="min-w-[2400px]">
-          <TableHeader className="bg-gray-50 sticky top-0 z-30">
-            <TableRow>
-              <TableHead className="w-[60px] text-center bg-gray-50">Label</TableHead>
-              <TableHead className="w-[80px] text-center">ID</TableHead>
-              <TableHead className="w-[180px] bg-gray-50">Alias Operativo</TableHead>
-              <TableHead className="w-[180px]">Código de Barra</TableHead>
-              <TableHead className="w-[150px]">Producto</TableHead>
-              <TableHead className="w-[100px] text-center">Cant.</TableHead>
-              <TableHead className="w-[100px] text-center">T. Est.</TableHead>
-              <TableHead className="w-[180px]">SKU (Repetidos)</TableHead>
-              <TableHead className="w-[150px]">Responsable Vaciado</TableHead>
-              <TableHead className="w-[120px]">Hora Vaciado</TableHead>
-              <TableHead className="w-[150px]">Cuenta / Org.</TableHead>
-              <TableHead className="w-[120px]">No. Venta</TableHead>
-              <TableHead className="w-[120px]">Pack ID</TableHead>
-              <TableHead className="w-[120px] text-center">Impresa</TableHead>
-              <TableHead className="w-[150px]">Resp. Impresión</TableHead>
-              <TableHead className="w-[120px]">Fecha Impresión</TableHead>
-              <TableHead className="w-[150px]">Asignada A</TableHead>
-              <TableHead className="w-[120px] text-center">Cortada</TableHead>
-              <TableHead className="w-[120px] text-center">Confección</TableHead>
-              <TableHead className="w-[120px] text-center">Perforado</TableHead>
-              <TableHead className="w-[120px] text-center">Ojillado</TableHead>
-              <TableHead className="w-[120px] text-center">Empaquetado</TableHead>
-              <TableHead className="w-[120px] text-center">Lista Recolecc.</TableHead>
-              <TableHead className="w-[220px]">Recolectada Por</TableHead>
-              <TableHead className="w-[150px]">Fecha Entrega</TableHead>
-              <TableHead className="w-[150px]">Registro Sistema</TableHead>
-              <TableHead className="w-[100px] text-center bg-gray-50 sticky right-0 z-40 shadow-[-2px_0_5px_rgba(0,0,0,0.05)] border-l">Acciones</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {tickets.length > 0 ? (
-              tickets.map((ticket) => (
-                <TableRow key={ticket.id} className="hover:bg-gray-50 transition-colors h-12">
-                  <TableCell className="text-center">
-                    <Button 
-                      variant="ghost" 
-                      size="icon" 
-                      className="h-8 w-8 text-starbucks-green hover:bg-green-50"
-                      onClick={() => onGenerateLabel?.(ticket)}
-                    >
-                      <Tag className="h-4 w-4" />
-                    </Button>
-                  </TableCell>
-                  <TableCell className="text-center font-bold text-gray-400 text-xs">#{ticket.id}</TableCell>
-                  <TableCell className="bg-gray-50/30">
-                    <AliasEditor ticket={ticket} />
-                  </TableCell>
-                  <TableCell className="font-mono font-bold text-starbucks-green border-r">
-                    {ticket.codigo_barra}
-                  </TableCell>
-                  <TableCell className="text-xs font-semibold truncate max-w-[150px]" title={ticket.nombre_producto || ''}>
-                    {ticket.nombre_producto || '---'}
-                  </TableCell>
-                  <TableCell className="text-center font-bold text-blue-600">
-                    {ticket.cantidad !== null ? ticket.cantidad : '---'}
-                  </TableCell>
-                  <TableCell className="text-center font-bold text-amber-600 text-xs">
-                    {skuMetadata && ticket.sku && skuMetadata[ticket.sku] ? `${skuMetadata[ticket.sku].time}m` : (ticket.esti_time ? `${ticket.esti_time}m` : '---')}
-                  </TableCell>
-                  <TableCell className="text-xs font-mono">
-                    <div 
-                      className="flex items-center gap-1 group cursor-pointer"
-                      onClick={() => ticket.sku && handleCopy(ticket.sku, "SKU")}
-                      title="Haz clic para copiar SKU"
-                    >
-                      <span className="text-gray-600 group-hover:text-starbucks-green group-hover:underline transition-colors">
-                        {ticket.sku || '---'}
-                      </span>
-                      {ticket.sku && (
-                        <Copy className="h-3 w-3 text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity" />
-                      )}
-                      {ticket.sku && skuCounts[ticket.sku] > 1 && (
-                        <span className="ml-1 px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700 font-bold text-[10px]">
-                          (x{skuCounts[ticket.sku]})
+    <>
+      <div className="border rounded-b-lg overflow-hidden bg-white shadow-sm">
+        <div className="max-h-[600px] overflow-auto">
+          <Table className="min-w-[2400px]">
+            <TableHeader className="bg-gray-50 sticky top-0 z-30">
+              <TableRow>
+                <TableHead className="w-[60px] text-center bg-gray-50">Label</TableHead>
+                <TableHead className="w-[80px] text-center">ID</TableHead>
+                <TableHead className="w-[180px] bg-gray-50">Alias Operativo</TableHead>
+                <TableHead className="w-[180px]">Código de Barra</TableHead>
+                <TableHead className="w-[150px]">Producto</TableHead>
+                <TableHead className="w-[100px] text-center">Cant.</TableHead>
+                <TableHead className="w-[100px] text-center">T. Est.</TableHead>
+                <TableHead className="w-[180px]">SKU (Repetidos)</TableHead>
+                <TableHead className="w-[150px]">Responsable Vaciado</TableHead>
+                <TableHead className="w-[120px]">Hora Vaciado</TableHead>
+                <TableHead className="w-[150px]">Cuenta / Org.</TableHead>
+                <TableHead className="w-[120px]">No. Venta</TableHead>
+                <TableHead className="w-[120px]">Pack ID</TableHead>
+                <TableHead className="w-[120px] text-center">Impresa</TableHead>
+                <TableHead className="w-[150px]">Resp. Impresión</TableHead>
+                <TableHead className="w-[120px]">Fecha Impresión</TableHead>
+                <TableHead className="w-[150px]">Asignada A</TableHead>
+                <TableHead className="w-[120px] text-center">Cortada</TableHead>
+                <TableHead className="w-[120px] text-center">Confección</TableHead>
+                <TableHead className="w-[120px] text-center">Perforado</TableHead>
+                <TableHead className="w-[120px] text-center">Ojillado</TableHead>
+                <TableHead className="w-[120px] text-center">Empaquetado</TableHead>
+                <TableHead className="w-[120px] text-center">Lista Recolecc.</TableHead>
+                <TableHead className="w-[220px]">Recolectada Por</TableHead>
+                <TableHead className="w-[150px]">Fecha Entrega</TableHead>
+                <TableHead className="w-[150px]">Registro Sistema</TableHead>
+                <TableHead className="w-[140px] text-center bg-gray-50 sticky right-0 z-40 shadow-[-2px_0_5px_rgba(0,0,0,0.05)] border-l">Acciones</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {tickets.length > 0 ? (
+                tickets.map((ticket) => (
+                  <TableRow key={ticket.id} className="hover:bg-gray-50 transition-colors h-12">
+                    <TableCell className="text-center">
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        className="h-8 w-8 text-starbucks-green hover:bg-green-50"
+                        onClick={() => onGenerateLabel?.(ticket)}
+                      >
+                        <Tag className="h-4 w-4" />
+                      </Button>
+                    </TableCell>
+                    <TableCell className="text-center font-bold text-gray-400 text-xs">#{ticket.id}</TableCell>
+                    <TableCell className="bg-gray-50/30">
+                      <AliasEditor ticket={ticket} />
+                    </TableCell>
+                    <TableCell className="font-mono font-bold text-starbucks-green border-r">
+                      {ticket.codigo_barra}
+                    </TableCell>
+                    <TableCell className="text-xs font-semibold truncate max-w-[150px]" title={ticket.nombre_producto || ''}>
+                      {ticket.nombre_producto || '---'}
+                    </TableCell>
+                    <TableCell className="text-center font-bold text-blue-600">
+                      {ticket.cantidad !== null ? ticket.cantidad : '---'}
+                    </TableCell>
+                    <TableCell className="text-center font-bold text-amber-600 text-xs">
+                      {skuMetadata && ticket.sku && skuMetadata[ticket.sku] ? `${skuMetadata[ticket.sku].time}m` : (ticket.esti_time ? `${ticket.esti_time}m` : '---')}
+                    </TableCell>
+                    <TableCell className="text-xs font-mono">
+                      <div 
+                        className="flex items-center gap-1 group cursor-pointer"
+                        onClick={() => ticket.sku && handleCopy(ticket.sku, "SKU")}
+                        title="Haz clic para copiar SKU"
+                      >
+                        <span className="text-gray-600 group-hover:text-starbucks-green group-hover:underline transition-colors break-all">
+                          {ticket.sku || '---'}
                         </span>
-                      )}
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-xs">
-                    <div className="flex items-center gap-1">
-                      <User className="h-3 w-3 text-gray-400" />
-                      {ticket.responsable_vaciado || '---'}
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-xs text-gray-600">
-                    <div className="flex items-center gap-1">
-                      <Clock className="h-3 w-3 text-gray-400" />
-                      {ticket.hora_vaciado || '---'}
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-xs uppercase text-gray-500">
-                    <div className="flex items-center gap-1">
-                      <Building2 className="h-3 w-3 text-gray-400" />
-                      {ticket.cuenta || '---'}
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-xs font-mono">
-                    <div 
-                      className="flex items-center gap-1 group cursor-pointer"
-                      onClick={() => ticket.sales_num && handleCopy(ticket.sales_num, "Venta")}
-                      title="Copiar Número de Venta"
-                    >
-                      <span className="text-gray-600 group-hover:text-starbucks-green group-hover:underline transition-colors">
-                        {ticket.sales_num || '---'}
-                      </span>
-                      {ticket.sales_num && <Copy className="h-3 w-3 text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity" />}
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-xs font-mono">
-                    <div 
-                      className="flex items-center gap-1 group cursor-pointer"
-                      onClick={() => ticket.pack_id && handleCopy(ticket.pack_id, "Pack ID")}
-                      title="Copiar Pack ID"
-                    >
-                      <span className="text-gray-600 group-hover:text-starbucks-green group-hover:underline transition-colors">
-                        {ticket.pack_id || '---'}
-                      </span>
-                      {ticket.pack_id && <Copy className="h-3 w-3 text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity" />}
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-center">
-                    {renderBoolean(ticket.impresa)}
-                  </TableCell>
-                  <TableCell className="text-xs text-gray-500">
-                    {ticket.responsable_impresion || '---'}
-                  </TableCell>
-                  <TableCell className="text-xs text-gray-500">
-                    {ticket.fecha_impresion ? format(new Date(ticket.fecha_impresion), "dd/MM/yyyy", { locale: es }) : '---'}
-                  </TableCell>
-                  <TableCell className="text-xs">
-                    {ticket.asignada_a || '---'}
-                  </TableCell>
-                  <TableCell className="text-center">
-                    <BooleanSelect 
-                      value={ticket.cortada} 
-                      onValueChange={(val) => ticket.id && onUpdateTicket?.(ticket.id, { cortada: val })} 
-                    />
-                  </TableCell>
-                  <TableCell className="text-center">
-                    <TriStateSelect 
-                      value={ticket.confeccion} 
-                      onValueChange={(val) => ticket.id && onUpdateTicket?.(ticket.id, { confeccion: val })} 
-                    />
-                  </TableCell>
-                  <TableCell className="text-center">
-                    <TriStateSelect 
-                      value={ticket.perforado} 
-                      onValueChange={(val) => ticket.id && onUpdateTicket?.(ticket.id, { perforado: val })} 
-                    />
-                  </TableCell>
-                  <TableCell className="text-center">
-                    <TriStateSelect 
-                      value={ticket.ojillado} 
-                      onValueChange={(val) => ticket.id && onUpdateTicket?.(ticket.id, { ojillado: val })} 
-                    />
-                  </TableCell>
-                  <TableCell className="text-center">
-                    <BooleanSelect 
-                      value={ticket.empaquetado} 
-                      onValueChange={(val) => ticket.id && onUpdateTicket?.(ticket.id, { empaquetado: val })} 
-                    />
-                  </TableCell>
-                  <TableCell className="text-center">
-                    <BooleanSelect 
-                      value={ticket.lista_para_recoleccion} 
-                      onValueChange={(val) => ticket.id && onUpdateTicket?.(ticket.id, { lista_para_recoleccion: val })} 
-                    />
-                  </TableCell>
-                  <TableCell className="text-xs">
-                    <RecolectorSelector 
-                      value={ticket.recolectada_por} 
-                      onChange={(val) => ticket.id && onUpdateTicket?.(ticket.id, { recolectada_por: val })}
-                    />
-                  </TableCell>
-                  <TableCell className="text-xs text-gray-500">
-                    {ticket.fecha_entrega_paquete ? format(new Date(ticket.fecha_entrega_paquete), "dd/MM/yyyy", { locale: es }) : '---'}
-                  </TableCell>
-                  <TableCell className="text-[10px] text-gray-400">
-                    {ticket.created_at ? format(new Date(ticket.created_at), "dd/MM HH:mm:ss", { locale: es }) : '---'}
-                  </TableCell>
-                  <TableCell className="text-center bg-white sticky right-0 z-40 shadow-[-2px_0_5px_rgba(0,0,0,0.05)] border-l">
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
+                        {ticket.sku && (
+                          <Copy className="h-3 w-3 text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
+                        )}
+                        {ticket.sku && skuCounts[ticket.sku] > 1 && (
+                          <span className="ml-1 px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700 font-bold text-[10px] shrink-0">
+                            (x{skuCounts[ticket.sku]})
+                          </span>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-xs">
+                      <div className="flex items-center gap-1">
+                        <User className="h-3 w-3 text-gray-400" />
+                        {ticket.responsable_vaciado || '---'}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-xs text-gray-600">
+                      <div className="flex items-center gap-1">
+                        <Clock className="h-3 w-3 text-gray-400" />
+                        {ticket.hora_vaciado || '---'}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-xs uppercase text-gray-500">
+                      <div className="flex items-center gap-1">
+                        <Building2 className="h-3 w-3 text-gray-400" />
+                        {ticket.cuenta || '---'}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-xs font-mono">
+                      <div 
+                        className="flex items-center gap-1 group cursor-pointer"
+                        onClick={() => ticket.sales_num && handleCopy(ticket.sales_num, "Venta")}
+                        title="Copiar Número de Venta"
+                      >
+                        <span className="text-gray-600 group-hover:text-starbucks-green group-hover:underline transition-colors">
+                          {ticket.sales_num || '---'}
+                        </span>
+                        {ticket.sales_num && <Copy className="h-3 w-3 text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity" />}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-xs font-mono">
+                      <div 
+                        className="flex items-center gap-1 group cursor-pointer"
+                        onClick={() => ticket.pack_id && handleCopy(ticket.pack_id, "Pack ID")}
+                        title="Copiar Pack ID"
+                      >
+                        <span className="text-gray-600 group-hover:text-starbucks-green group-hover:underline transition-colors">
+                          {ticket.pack_id || '---'}
+                        </span>
+                        {ticket.pack_id && <Copy className="h-3 w-3 text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity" />}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-center">
+                      {renderBoolean(ticket.impresa)}
+                    </TableCell>
+                    <TableCell className="text-xs text-gray-500">
+                      {ticket.responsable_impresion || '---'}
+                    </TableCell>
+                    <TableCell className="text-xs text-gray-500">
+                      {ticket.fecha_impresion ? format(new Date(ticket.fecha_impresion), "dd/MM/yyyy", { locale: es }) : '---'}
+                    </TableCell>
+                    <TableCell className="text-xs">
+                      {ticket.asignada_a || '---'}
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <BooleanSelect 
+                        value={ticket.cortada} 
+                        onValueChange={(val) => ticket.id && onUpdateTicket?.(ticket.id, { cortada: val })} 
+                      />
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <TriStateSelect 
+                        value={ticket.confeccion} 
+                        onValueChange={(val) => ticket.id && onUpdateTicket?.(ticket.id, { confeccion: val })} 
+                      />
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <TriStateSelect 
+                        value={ticket.perforado} 
+                        onValueChange={(val) => ticket.id && onUpdateTicket?.(ticket.id, { perforado: val })} 
+                      />
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <TriStateSelect 
+                        value={ticket.ojillado} 
+                        onValueChange={(val) => ticket.id && onUpdateTicket?.(ticket.id, { ojillado: val })} 
+                      />
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <BooleanSelect 
+                        value={ticket.empaquetado} 
+                        onValueChange={(val) => ticket.id && onUpdateTicket?.(ticket.id, { empaquetado: val })} 
+                      />
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <BooleanSelect 
+                        value={ticket.lista_para_recoleccion} 
+                        onValueChange={(val) => ticket.id && onUpdateTicket?.(ticket.id, { lista_para_recoleccion: val })} 
+                      />
+                    </TableCell>
+                    <TableCell className="text-xs">
+                      <RecolectorSelector 
+                        value={ticket.recolectada_por} 
+                        onChange={(val) => ticket.id && onUpdateTicket?.(ticket.id, { recolectada_por: val })}
+                      />
+                    </TableCell>
+                    <TableCell className="text-xs text-gray-500">
+                      {ticket.fecha_entrega_paquete ? format(new Date(ticket.fecha_entrega_paquete), "dd/MM/yyyy", { locale: es }) : '---'}
+                    </TableCell>
+                    <TableCell className="text-[10px] text-gray-400">
+                      {ticket.created_at ? format(new Date(ticket.created_at), "dd/MM HH:mm:ss", { locale: es }) : '---'}
+                    </TableCell>
+                    <TableCell className="text-center bg-white sticky right-0 z-40 shadow-[-2px_0_5px_rgba(0,0,0,0.05)] border-l">
+                      <div className="flex items-center justify-center gap-1">
                         <Button 
                           variant="ghost" 
                           size="icon" 
-                          className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50"
+                          className="h-8 w-8 text-amber-600 hover:bg-amber-50"
+                          onClick={() => openTimeModal(ticket)}
+                          title="Registrar Tiempo de Producción"
                         >
-                          <Trash2 className="h-4 w-4" />
+                          <Clock className="h-4 w-4" />
                         </Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>¿Eliminar registro?</AlertDialogTitle>
-                          <AlertDialogDescription>
-                            Esta acción eliminará permanentemente el ticket #{ticket.id} de la bitácora de costura. Esta operación no se puede deshacer.
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                          <AlertDialogAction 
-                            onClick={() => ticket.id && onDeleteTicket?.(ticket.id)}
-                            className="bg-red-600 hover:bg-red-700 text-white"
-                          >
-                            Eliminar
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>¿Eliminar registro?</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                Esta acción eliminará permanentemente el ticket #{ticket.id} de la bitácora de costura. Esta operación no se puede deshacer.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                              <AlertDialogAction 
+                                onClick={() => ticket.id && onDeleteTicket?.(ticket.id)}
+                                className="bg-red-600 hover:bg-red-700 text-white"
+                              >
+                                Eliminar
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))
+              ) : (
+                <TableRow>
+                  <TableCell colSpan={27} className="text-center py-20 text-gray-400 bg-gray-50">
+                    <div className="flex flex-col items-center gap-2">
+                      <Package className="h-12 w-12 opacity-10" />
+                      <p className="text-lg">No hay tickets en este bloque.</p>
+                    </div>
                   </TableCell>
                 </TableRow>
-              ))
-            ) : (
-              <TableRow>
-                <TableCell colSpan={27} className="text-center py-20 text-gray-400 bg-gray-50">
-                  <div className="flex flex-col items-center gap-2">
-                    <Package className="h-12 w-12 opacity-10" />
-                    <p className="text-lg">No hay tickets en este bloque.</p>
-                  </div>
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
+              )}
+            </TableBody>
+          </Table>
+        </div>
       </div>
-    </div>
+      
+      {selectedTicketForTime && (
+        <SewingTimeCaptureModal 
+          isOpen={isTimeModalOpen}
+          onOpenChange={setIsTimeModalOpen}
+          sku={selectedTicketForTime.sku || 'S/N'}
+          ticketId={selectedTicketForTime.id}
+          defaultPieces={selectedTicketForTime.cantidad}
+        />
+      )}
+    </>
   );
 }
 
@@ -543,6 +589,7 @@ function CardItem({
   onUpdate, 
   onDelete, 
   onLabel,
+  onTime,
   skuMetadata,
   skuCounts,
   handleCopy,
@@ -579,7 +626,7 @@ function CardItem({
                   onClick={(e) => { e.stopPropagation(); handleCopy(ticket.sku, "SKU"); }}
                 >
                     <span className="text-xs font-bold text-gray-700 font-mono break-all">{ticket.sku || 'N/A'}</span>
-                    <Copy className="h-3 w-3 text-gray-400" />
+                    <Copy className="h-3 w-3 text-gray-400 shrink-0" />
                 </div>
             </div>
             <div className="flex gap-1">
@@ -675,14 +722,14 @@ function CardItem({
                               <p className="text-[8px] font-bold text-gray-400 uppercase">Venta</p>
                               <p className="text-[10px] font-mono font-bold flex items-center justify-between">
                                 {ticket.sales_num || '---'}
-                                {ticket.sales_num && <Copy className="h-3 w-3 text-gray-300" />}
+                                {ticket.sales_num && <Copy className="h-3 w-3 text-gray-300 shrink-0" />}
                               </p>
                            </div>
                            <div onClick={(e) => { e.stopPropagation(); handleCopy(ticket.pack_id, "Pack ID"); }} className="p-2 bg-white rounded border cursor-pointer hover:border-starbucks-green transition-colors">
                               <p className="text-[8px] font-bold text-gray-400 uppercase">Pack ID</p>
                               <p className="text-[10px] font-mono font-bold flex items-center justify-between">
                                 {ticket.pack_id || '---'}
-                                {ticket.pack_id && <Copy className="h-3 w-3 text-gray-300" />}
+                                {ticket.pack_id && <Copy className="h-3 w-3 text-gray-300 shrink-0" />}
                               </p>
                            </div>
                         </div>
@@ -747,7 +794,7 @@ function CardItem({
                             />
                         </div>
                         <div className="flex flex-col gap-1">
-                            <Label className="text-[9px] font-bold text-gray-400 uppercase">Lista Recolect.</Label>
+                            <Label className="text-[9px] font-bold text-gray-400 uppercase">Lista Recolecc.</Label>
                             <BooleanSelect 
                                 value={ticket.lista_para_recoleccion} 
                                 onValueChange={(val: any) => onUpdate?.(ticket.id, { lista_para_recoleccion: val })} 
@@ -776,17 +823,23 @@ function CardItem({
                 </div>
 
                 {/* Acciones */}
-                <div className="flex gap-2 pt-4 border-t border-gray-200">
+                <div className="grid grid-cols-2 gap-2 pt-4 border-t border-gray-200">
                     <Button 
-                        className="flex-1 bg-starbucks-green hover:bg-starbucks-dark text-white font-bold h-11 gap-2"
-                        onClick={() => onLabel?.(ticket)}
+                        className="bg-starbucks-green hover:bg-starbucks-dark text-white font-bold h-11 gap-2"
+                        onClick={(e) => { e.stopPropagation(); onLabel?.(ticket); }}
                     >
                         <Tag className="h-4 w-4" /> ETIQUETA
                     </Button>
+                    <Button 
+                        className="bg-amber-600 hover:bg-amber-700 text-white font-bold h-11 gap-2"
+                        onClick={(e) => { e.stopPropagation(); onTime?.(); }}
+                    >
+                        <Clock className="h-4 w-4" /> TIEMPO
+                    </Button>
                     <AlertDialog>
                         <AlertDialogTrigger asChild>
-                            <Button variant="outline" className="flex-1 border-red-200 text-red-600 hover:bg-red-50 font-bold h-11 gap-2">
-                                <Trash2 className="h-4 w-4" /> BORRAR
+                            <Button variant="outline" className="col-span-2 border-red-200 text-red-600 hover:bg-red-50 font-bold h-11 gap-2">
+                                <Trash2 className="h-4 w-4" /> BORRAR REGISTRO
                             </Button>
                         </AlertDialogTrigger>
                         <AlertDialogContent className="w-[90vw] rounded-xl">
