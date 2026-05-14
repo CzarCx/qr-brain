@@ -58,6 +58,7 @@ export default function SewingTicketsHistoryPage() {
   const [skuMetadata, setSkuMetadata] = useState<Record<string, { cat: string, time: number }>>({});
   const [showScrollTop, setShowScrollTop] = useState(false);
   const [deliveryFilter, setDeliveryFilter] = useState<DeliveryFilter>('all');
+  const [expandedGroups, setExpandedGroups] = useState<string[]>(['group-today']);
 
   useEffect(() => {
     setIsMounted(true);
@@ -136,7 +137,6 @@ export default function SewingTicketsHistoryPage() {
     
     return tickets.filter(t => {
       if (!t.fecha_entrega_paquete) return false;
-      // Tratar la fecha localmente para evitar desfases UTC
       const [year, month, day] = t.fecha_entrega_paquete.split('-').map(Number);
       const dDate = startOfDay(new Date(year, month - 1, day));
       const today = startOfDay(new Date());
@@ -152,8 +152,7 @@ export default function SewingTicketsHistoryPage() {
     });
   }, [tickets, deliveryFilter]);
 
-  // Metrics for categories
-  // Actualización: Las tarjetas resumen ahora solo cuentan lo IMPRESO HOY por defecto para evitar confusión
+  // Metrics for categories: Suma registros de hoy + CUALQUIER sección desplegada
   const categoryMetrics = useMemo(() => {
     const groups = {
       LIENZOS: { total: 0, totalTime: 0 },
@@ -162,34 +161,47 @@ export default function SewingTicketsHistoryPage() {
       OTROS: { total: 0, totalTime: 0 }
     };
 
-    // Solo incluimos en las tarjetas superiores lo que se imprimió hoy para control diario
-    const todayPrints = filteredTickets.filter(t => t.created_at && isToday(new Date(t.created_at)));
+    filteredTickets.forEach(t => {
+      if (!t.created_at) return;
+      
+      const dateObj = new Date(t.created_at);
+      const dateKey = format(dateObj, 'yyyy-MM-dd');
+      const isTodayGroup = isToday(dateObj);
+      const groupKey = isTodayGroup ? 'group-today' : `group-${dateKey}`;
 
-    todayPrints.forEach(t => {
+      // CRÍTICO: Solo sumar a las tarjetas si el grupo está en expandedGroups
+      if (!expandedGroups.includes(groupKey)) return;
+
       const meta = skuMetadata[t.sku || ''] || { cat: '', time: 0 };
       const catMdr = meta.cat || '';
       const estTime = meta.time || 0;
       const upper = catMdr.toUpperCase();
       const qty = t.cantidad || 0;
 
-      // Importante: Orden de condiciones específico -> general
+      // Prioridad 1: COSTURA (Si dice confeccionada, es costura aunque diga lienzo)
       if (upper.includes('MALLA SOMBRA CONFECCIONADA') || upper.includes('MS FABRICACION')) {
         groups['MALLAS COSTURA'].total += qty;
         groups['MALLAS COSTURA'].totalTime += (estTime * qty);
-      } else if (upper === 'MALLA SOMBRA BOLSA') {
+      } 
+      // Prioridad 2: BOLAS
+      else if (upper === 'MALLA SOMBRA BOLSA') {
         groups['MALLAS BOLAS'].total += qty;
         groups['MALLAS BOLAS'].totalTime += (estTime * qty);
-      } else if (upper === 'LIENZO' || upper === 'ROLLO' || upper.includes('LIENZO DE MALLA SOMBRA') || upper.includes('ROLLO LIGHT') || upper.includes('ROLLO DE MALLA SOMBRA')) {
+      } 
+      // Prioridad 3: LIENZOS
+      else if (upper === 'LIENZO' || upper === 'ROLLO' || upper.includes('LIENZO DE MALLA SOMBRA') || upper.includes('ROLLO LIGHT') || upper.includes('ROLLO DE MALLA SOMBRA')) {
         groups.LIENZOS.total += qty;
         groups.LIENZOS.totalTime += (estTime * qty);
-      } else {
+      } 
+      // Prioridad 4: OTROS
+      else {
         groups.OTROS.total += qty;
         groups.OTROS.totalTime += (estTime * qty);
       }
     });
 
     return groups;
-  }, [filteredTickets, skuMetadata]);
+  }, [filteredTickets, skuMetadata, expandedGroups]);
 
   // Group tickets by creation date
   const groupedByDate = useMemo(() => {
@@ -299,7 +311,7 @@ export default function SewingTicketsHistoryPage() {
           </div>
         </header>
 
-        {/* Global Summary Cards (Métricas de lo Impreso HOY) */}
+        {/* Global Summary Cards - Dinámicas según expansión */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 px-2">
             <SummaryCard label="Lienzos" pieces={categoryMetrics.LIENZOS.total} time={categoryMetrics.LIENZOS.totalTime} image="/canva.png" formatTime={formatTime} />
             <SummaryCard label="Mallas Bolas" pieces={categoryMetrics['MALLAS BOLAS'].total} time={categoryMetrics['MALLAS BOLAS'].totalTime} image="/sphere.png" formatTime={formatTime} />
@@ -332,7 +344,12 @@ export default function SewingTicketsHistoryPage() {
               <p className="text-gray-400 font-bold">Cargando historial...</p>
             </div>
           ) : (
-            <Accordion type="multiple" defaultValue={['group-today']} className="space-y-6">
+            <Accordion 
+                type="multiple" 
+                value={expandedGroups}
+                onValueChange={setExpandedGroups}
+                className="space-y-6"
+            >
               {groupedByDate.map(([dateKey, data]) => {
                 const isCurrentGroupToday = data.isToday;
                 const dateLabel = isCurrentGroupToday 
@@ -341,11 +358,13 @@ export default function SewingTicketsHistoryPage() {
                     ? 'IMPRESO AYER' 
                     : `IMPRESO EL ${format(new Date(dateKey + 'T12:00:00'), "d MMMM yyyy", { locale: es }).toUpperCase()}`;
                 
+                const groupKey = isCurrentGroupToday ? 'group-today' : `group-${dateKey}`;
+                
                 // Categorize tickets within this date group
                 const subCategorized = {
-                  LIENZOS: { tickets: [] as SewingTicket[], total: 0, totalTime: 0, label: 'LIENZOS', img: '/canva.png', color: 'bg-blue-600' },
-                  BOLAS: { tickets: [] as SewingTicket[], total: 0, totalTime: 0, label: 'MALLAS BOLAS', img: '/sphere.png', color: 'bg-green-600' },
                   COSTURA: { tickets: [] as SewingTicket[], total: 0, totalTime: 0, label: 'MALLAS COSTURA', img: '/sewing-machine.png', color: 'bg-yellow-500' },
+                  BOLAS: { tickets: [] as SewingTicket[], total: 0, totalTime: 0, label: 'MALLAS BOLAS', img: '/sphere.png', color: 'bg-green-600' },
+                  LIENZOS: { tickets: [] as SewingTicket[], total: 0, totalTime: 0, label: 'LIENZOS', img: '/canva.png', color: 'bg-blue-600' },
                   OTROS: { tickets: [] as SewingTicket[], total: 0, totalTime: 0, label: 'OTROS / DIVERSOS', icon: <Tag className="h-4 w-4" />, color: 'bg-gray-500' }
                 };
 
@@ -355,7 +374,6 @@ export default function SewingTicketsHistoryPage() {
                   const estTime = meta.time || 0;
                   const qty = t.cantidad || 0;
 
-                  // Identical categorization logic with specific order
                   if (upper.includes('MALLA SOMBRA CONFECCIONADA') || upper.includes('MS FABRICACION')) {
                     subCategorized.COSTURA.tickets.push(t);
                     subCategorized.COSTURA.total += qty;
@@ -378,7 +396,7 @@ export default function SewingTicketsHistoryPage() {
                 return (
                   <AccordionItem 
                     key={dateKey} 
-                    value={isCurrentGroupToday ? 'group-today' : `group-${dateKey}`}
+                    value={groupKey}
                     className="border-none"
                   >
                     <AccordionTrigger className={cn(
