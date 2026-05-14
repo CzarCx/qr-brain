@@ -328,7 +328,11 @@ export default function SewingTicketsHistoryPage() {
             <Accordion type="multiple" defaultValue={['group-today']} className="space-y-6">
               {groupedByDate.map(([dateKey, data]) => {
                 const isCurrentGroupToday = data.isToday;
-                const dateLabel = isCurrentGroupToday ? 'HOY' : data.isYesterday ? 'AYER' : format(new Date(dateKey + 'T12:00:00'), "d MMMM yyyy", { locale: es }).toUpperCase();
+                const dateLabel = isCurrentGroupToday 
+                  ? 'IMPRESO HOY' 
+                  : data.isYesterday 
+                    ? 'IMPRESO AYER' 
+                    : `IMPRESO EL ${format(new Date(dateKey + 'T12:00:00'), "d MMMM yyyy", { locale: es }).toUpperCase()}`;
                 
                 return (
                   <AccordionItem 
