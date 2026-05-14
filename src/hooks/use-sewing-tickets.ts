@@ -67,7 +67,7 @@ export function useSewingTickets() {
 
     setLoading(true);
     try {
-      // 1. Consultar en etiquetas_i para mapeo automático
+      // 1. Consultar en etiquetas_i para validación y mapeo automático
       const { data: tagData, error: tagError } = await supabaseEtiquetas
         .from('etiquetas_i')
         .select('product, pack_id, sales_num, sku, personal_inc, organization, created_at, quantity, deli_date')
@@ -75,82 +75,91 @@ export function useSewingTickets() {
         .maybeSingle();
 
       if (tagError) {
-        console.error('Error al consultar etiquetas_i:', tagError.message);
+        throw new Error(`Error al consultar etiquetas_i: ${tagError.message}`);
+      }
+
+      // VALIDACIÓN CRÍTICA: El código DEBE existir en etiquetas_i
+      if (!tagData) {
+        toast({
+          variant: 'destructive',
+          title: 'Código Inválido',
+          description: 'Este código no existe en etiquetas_i. Verifica que haya sido generado correctamente antes de escanearlo.',
+        });
+        setLoading(false);
+        return false;
       }
 
       // --- SINCRONIZACIÓN AUTOMÁTICA CON TABLA 'PERSONAL' (Main DB) ---
-      if (tagData) {
-        // Intentar convertir a número para el campo 'code' que es numeric en Postgres
-        const numericCode = parseFloat(finalBarcode);
+      // Intentar convertir a número para el campo 'code' que es numeric en Postgres
+      const numericCode = parseFloat(finalBarcode);
 
-        if (!isNaN(numericCode)) {
-          // Verificar si ya existe el registro en la tabla de producción
-          const { data: existingInPersonal } = await supabase
-              .from('personal')
-              .select('code')
-              .eq('code', numericCode)
-              .maybeSingle();
+      if (!isNaN(numericCode)) {
+        // Verificar si ya existe el registro en la tabla de producción
+        const { data: existingInPersonal } = await supabase
+            .from('personal')
+            .select('code')
+            .eq('code', numericCode)
+            .maybeSingle();
 
-          if (!existingInPersonal) {
-              // Replicar lógica de obtención de tiempo estimado (esti_time)
-              let estimatedTime = null;
-              if (tagData.sku) {
-                  const { data: skuAlt } = await supabaseEtiquetas
-                      .from('sku_alterno')
-                      .select('sku_mdr')
-                      .eq('sku', tagData.sku)
-                      .maybeSingle();
-                  
-                  if (skuAlt) {
-                      const { data: skuM } = await supabaseEtiquetas
-                          .from('sku_m')
-                          .select('esti_time')
-                          .eq('sku_mdr', skuAlt.sku_mdr)
-                          .maybeSingle();
-                      if (skuM) estimatedTime = skuM.esti_time;
-                  }
-              }
+        if (!existingInPersonal) {
+            // Replicar lógica de obtención de tiempo estimado (esti_time)
+            let estimatedTime = null;
+            if (tagData.sku) {
+                const { data: skuAlt } = await supabaseEtiquetas
+                    .from('sku_alterno')
+                    .select('sku_mdr')
+                    .eq('sku', tagData.sku)
+                    .maybeSingle();
+                
+                if (skuAlt) {
+                    const { data: skuM } = await supabaseEtiquetas
+                        .from('sku_m')
+                        .select('esti_time')
+                        .eq('sku_mdr', skuAlt.sku_mdr)
+                        .maybeSingle();
+                    if (skuM) estimatedTime = skuM.esti_time;
+                }
+            }
 
-              const now = new Date();
-              const dateEsti = new Date(now.getTime());
-              if (estimatedTime) {
-                  dateEsti.setMinutes(dateEsti.getMinutes() + estimatedTime);
-              }
+            const now = new Date();
+            const dateEsti = new Date(now.getTime());
+            if (estimatedTime) {
+                dateEsti.setMinutes(dateEsti.getMinutes() + estimatedTime);
+            }
 
-              const personalPayload = {
-                  code: numericCode,
-                  sku: tagData.sku,
-                  name: responsable, // NOT NULL en esquema
-                  name_inc: responsable,
-                  product: tagData.product,
-                  quantity: tagData.quantity,
-                  organization: tagData.organization,
-                  sales_num: tagData.sales_num,
-                  date: now.toISOString(),
-                  status: 'EN PRODUCCION',
-                  esti_time: estimatedTime,
-                  deli_date: tagData.deli_date,
-                  date_ini: now.toISOString(),
-                  date_esti: dateEsti.toISOString(),
-                  rea_details: 'Sin reasignar'
-              };
+            const personalPayload = {
+                code: numericCode,
+                sku: tagData.sku,
+                name: responsable, // NOT NULL en esquema
+                name_inc: responsable,
+                product: tagData.product,
+                quantity: tagData.quantity,
+                organization: tagData.organization,
+                sales_num: tagData.sales_num,
+                date: now.toISOString(),
+                status: 'EN PRODUCCION',
+                esti_time: estimatedTime,
+                deli_date: tagData.deli_date,
+                date_ini: now.toISOString(),
+                date_esti: dateEsti.toISOString(),
+                rea_details: 'Sin reasignar'
+            };
 
-              const { error: personalError } = await supabase
-                  .from('personal')
-                  .insert([personalPayload]);
+            const { error: personalError } = await supabase
+                .from('personal')
+                .insert([personalPayload]);
 
-              if (personalError) {
-                  console.warn("Fallo el registro en la tabla 'personal':", personalError.message);
-              }
-          }
-        } else {
-            console.warn("El código no es un número válido, se omite registro en 'personal':", finalBarcode);
+            if (personalError) {
+                console.warn("Fallo el registro en la tabla 'personal':", personalError.message);
+            }
         }
+      } else {
+          console.warn("El código no es un número válido, se omite registro en 'personal':", finalBarcode);
       }
       // --- FIN SINCRONIZACIÓN ---
 
       // 2. Preparar payload para sewing_tickets (Database de Etiquetas)
-      const insertPayload = tagData ? {
+      const insertPayload = {
         codigo_barra: finalBarcode,
         responsable_vaciado: responsable,
         nombre_producto: tagData.product,
@@ -172,19 +181,6 @@ export function useSewingTickets() {
         empaquetado: false,
         lista_para_recoleccion: false,
         alias: null
-      } : {
-        codigo_barra: finalBarcode,
-        responsable_vaciado: responsable,
-        impreso: false,
-        impresa: false,
-        hora_vaciado: new Date().toLocaleTimeString('es-MX', { hour12: false }),
-        cortada: false,
-        confeccion: false,
-        perforado: false,
-        ojillado: false,
-        empaquetado: false,
-        lista_para_recoleccion: false,
-        alias: null
       };
 
       // 3. Insertar en sewing_tickets
@@ -196,10 +192,8 @@ export function useSewingTickets() {
 
       toast({
         variant: 'success',
-        title: tagData ? 'Ticket Mapeado y Sincronizado' : 'Ticket Registrado',
-        description: tagData 
-            ? `Se importaron datos y se inició el seguimiento en 'Personal'.`
-            : `Código ${finalBarcode} guardado sin metadatos.`,
+        title: 'Ticket Mapeado y Sincronizado',
+        description: `Se importaron datos y se inició el seguimiento en 'Personal'.`,
       });
 
       await fetchTickets(false);
