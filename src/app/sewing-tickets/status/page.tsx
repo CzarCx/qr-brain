@@ -5,6 +5,7 @@ import Head from 'next/head';
 import { Html5Qrcode, Html5QrcodeScannerState } from 'html5-qrcode';
 import { supabase, supabaseEtiquetas } from '@/lib/supabaseClient';
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -20,11 +21,13 @@ import {
   Clock,
   History,
   PackageCheck,
-  ClipboardList
+  ClipboardList,
+  PlusCircle
 } from 'lucide-react';
 import Link from 'next/link';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { cn } from '@/lib/utils';
+import { Badge } from '@/components/ui/badge';
 
 type ScanLog = {
   id: string;
@@ -42,6 +45,7 @@ export default function SewingStatusScannerPage() {
   const [selectedScannerMode, setSelectedScannerMode] = useState<'camara' | 'fisico'>('camara');
   const [loading, setLoading] = useState(false);
   const [scanLogs, setScanLogs] = useState<ScanLog[]>([]);
+  const [manualCode, setManualCode] = useState('');
   
   const [isFlashOn, setIsFlashOn] = useState(false);
   const [zoom, setZoom] = useState(1);
@@ -89,7 +93,7 @@ export default function SewingStatusScannerPage() {
     const finalCode = code.trim();
     if (!finalCode) return;
 
-    // Throttle scans
+    // Throttle scans for hardware/camera
     const now = Date.now();
     if (now - lastScanTimeRef.current < 1500) return;
     lastScanTimeRef.current = now;
@@ -102,7 +106,7 @@ export default function SewingStatusScannerPage() {
       const numericCode = parseFloat(finalCode);
       if (isNaN(numericCode)) throw new Error('Código no es numérico');
 
-      // 1. Actualizar tabla PERSONAL (Main DB)
+      // 1. Validar y Actualizar tabla PERSONAL (Main DB)
       const personalUpdate: any = { status: targetStatus };
       if (targetStatus === 'PPC') personalUpdate.date_ppc = new Date().toISOString();
       if (targetStatus === 'ENTREGADO') personalUpdate.date_entre = new Date().toISOString();
@@ -111,15 +115,18 @@ export default function SewingStatusScannerPage() {
         .from('personal')
         .update(personalUpdate)
         .eq('code', numericCode)
-        .select('id');
+        .select('id, product');
 
       if (personalError) throw personalError;
       
-      // 2. Intentar actualizar SEWING_TICKETS (Labels DB) si existe la columna status
-      // Nota: Si no existe la columna status en sewing_tickets, esto fallará silenciosamente o se puede omitir
+      if (!personalData || personalData.length === 0) {
+        throw new Error('Código no encontrado en producción');
+      }
+
+      // 2. Intentar actualizar SEWING_TICKETS (Labels DB) para registro histórico
       await supabaseEtiquetas
         .from('sewing_tickets')
-        .update({ updated_at: new Date().toISOString() }) // Al menos actualizamos el timestamp
+        .update({ updated_at: new Date().toISOString() })
         .eq('codigo_barra', finalCode);
 
       playBeep();
@@ -128,7 +135,7 @@ export default function SewingStatusScannerPage() {
         code: finalCode,
         status: targetStatus,
         result: 'success',
-        message: personalData && personalData.length > 0 ? 'Actualizado correctamente' : 'No encontrado en producción pero procesado',
+        message: personalData[0].product || 'Actualizado correctamente',
         time
       }, ...prev]);
 
@@ -147,10 +154,20 @@ export default function SewingStatusScannerPage() {
     }
   }, [targetStatus]);
 
+  const handleManualSubmit = () => {
+    if (!manualCode.trim()) return;
+    handleProcessCode(manualCode);
+    setManualCode('');
+  };
+
   // Keyboard/Physical Scanner Logic
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (selectedScannerMode !== 'fisico' || !scannerActive) return;
+      
+      // If user is typing in manual input, don't capture as scanner input
+      if (document.activeElement?.tagName === 'INPUT') return;
+
       if (e.key === 'Enter') {
         e.preventDefault();
         if (bufferRef.current) {
@@ -240,7 +257,7 @@ export default function SewingStatusScannerPage() {
             <CardHeader className="bg-gray-50/50 border-b">
               <CardTitle className="text-sm font-black uppercase tracking-wider flex items-center gap-2">
                 <ClipboardList className="h-4 w-4 text-starbucks-green" />
-                Configuración del Escáner
+                Configuración y Manual
               </CardTitle>
             </CardHeader>
             <CardContent className="pt-6 space-y-6">
@@ -307,7 +324,27 @@ export default function SewingStatusScannerPage() {
                 </div>
               </div>
 
-              <div className="pt-4">
+              <div className="pt-4 border-t border-dashed space-y-3">
+                <Label className="text-xs font-bold text-gray-400 uppercase">3. Ingreso Manual</Label>
+                <div className="flex gap-2">
+                  <Input 
+                    placeholder="Escriba código..." 
+                    value={manualCode}
+                    onChange={(e) => setManualCode(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleManualSubmit()}
+                    className="h-11 font-mono font-bold"
+                  />
+                  <Button 
+                    onClick={handleManualSubmit}
+                    disabled={loading || !manualCode.trim()}
+                    className="h-11 bg-starbucks-green"
+                  >
+                    <PlusCircle className="h-5 w-5" />
+                  </Button>
+                </div>
+              </div>
+
+              <div className="pt-2">
                 <Button 
                   className={cn(
                     "w-full h-14 text-lg font-black tracking-tighter transition-all",
@@ -315,7 +352,7 @@ export default function SewingStatusScannerPage() {
                   )}
                   onClick={() => setScannerActive(!scannerActive)}
                 >
-                  {scannerActive ? 'DETENER ESCÁNER' : 'INICIAR ACTUALIZACIÓN'}
+                  {scannerActive ? 'DETENER ESCÁNER' : 'INICIAR ESCÁNER'}
                 </Button>
               </div>
             </CardContent>
@@ -329,7 +366,7 @@ export default function SewingStatusScannerPage() {
             )}>
               MODO ACTUAL: {targetStatus}
             </div>
-            <CardContent className="p-0 flex-grow relative bg-black flex items-center justify-center min-h-[300px]">
+            <CardContent className="p-0 flex-grow relative bg-black flex items-center justify-center min-h-[350px]">
               {selectedScannerMode === 'camara' && (
                 <div id="status-reader" ref={readerRef} className="w-full h-full" style={{ display: scannerActive ? 'block' : 'none' }}></div>
               )}
