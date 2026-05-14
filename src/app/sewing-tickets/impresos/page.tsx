@@ -230,10 +230,10 @@ export default function SewingTicketsHistoryPage() {
   // Metrics for categories: DINÁMICAS (Solo cuenta lo que está en grupos expandidos)
   const categoryMetrics = useMemo(() => {
     const groups = {
-      LIENZOS: { total: 0, totalTime: 0 },
-      'MALLAS BOLAS': { total: 0, totalTime: 0 },
-      'MALLAS COSTURA': { total: 0, totalTime: 0 },
-      OTROS: { total: 0, totalTime: 0 }
+      LIENZOS: { total: 0, totalTime: 0, count: 0, finishedCount: 0 },
+      'MALLAS BOLAS': { total: 0, totalTime: 0, count: 0, finishedCount: 0 },
+      'MALLAS COSTURA': { total: 0, totalTime: 0, count: 0, finishedCount: 0 },
+      OTROS: { total: 0, totalTime: 0, count: 0, finishedCount: 0 }
     };
 
     filteredTickets.forEach(t => {
@@ -251,25 +251,29 @@ export default function SewingTicketsHistoryPage() {
       const estTime = meta.time || 0;
       const upper = catMdr.toUpperCase();
       const qty = t.cantidad || 0;
+      
+      const st = prodStatusMap[t.codigo_barra];
+      const isFin = st === 'PPC' || st === 'ENTREGADO';
+
+      let catKey: keyof typeof groups = 'OTROS';
 
       // Prioridad: Si contiene "CONFECCIONADA" o "FABRICACION" va a MALLAS COSTURA primero
       if (upper.includes('CONFECCIONADA') || upper.includes('MS FABRICACION')) {
-        groups['MALLAS COSTURA'].total += qty;
-        groups['MALLAS COSTURA'].totalTime += (estTime * qty);
+        catKey = 'MALLAS COSTURA';
       } else if (upper === 'MALLA SOMBRA BOLSA') {
-        groups['MALLAS BOLAS'].total += qty;
-        groups['MALLAS BOLAS'].totalTime += (estTime * qty);
+        catKey = 'MALLAS BOLAS';
       } else if (upper === 'LIENZO' || upper === 'ROLLO' || upper.includes('LIENZO DE MALLA SOMBRA') || upper.includes('ROLLO LIGHT') || upper.includes('ROLLO DE MALLA SOMBRA')) {
-        groups.LIENZOS.total += qty;
-        groups.LIENZOS.totalTime += (estTime * qty);
-      } else {
-        groups.OTROS.total += qty;
-        groups.OTROS.totalTime += (estTime * qty);
+        catKey = 'LIENZOS';
       }
+
+      groups[catKey].total += qty;
+      groups[catKey].totalTime += (estTime * qty);
+      groups[catKey].count++;
+      if (isFin) groups[catKey].finishedCount++;
     });
 
     return groups;
-  }, [filteredTickets, skuMetadata, expandedGroups]);
+  }, [filteredTickets, skuMetadata, expandedGroups, prodStatusMap]);
 
   const groupedByDate = useMemo(() => {
     const groups: Record<string, { tickets: SewingTicket[], pieces: number, isToday: boolean, isYesterday: boolean }> = {};
@@ -405,10 +409,38 @@ export default function SewingTicketsHistoryPage() {
 
         {/* Category Summary Cards */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 px-2 pt-2 border-t border-dashed">
-            <SummaryCard label="Lienzos" pieces={categoryMetrics.LIENZOS.total} time={categoryMetrics.LIENZOS.totalTime} image="/canva.png" formatTime={formatTime} />
-            <SummaryCard label="Mallas Bolas" pieces={categoryMetrics['MALLAS BOLAS'].total} time={categoryMetrics['MALLAS BOLAS'].totalTime} image="/sphere.png" formatTime={formatTime} />
-            <SummaryCard label="Mallas Costura" pieces={categoryMetrics['MALLAS COSTURA'].total} time={categoryMetrics['MALLAS COSTURA'].totalTime} image="/sewing-machine.png" formatTime={formatTime} />
-            <SummaryCard label="Otros" pieces={categoryMetrics.OTROS.total} time={categoryMetrics.OTROS.totalTime} icon={<Tag className="h-6 w-6 text-gray-400" />} formatTime={formatTime} />
+            <SummaryCard 
+              label="Lienzos" 
+              pieces={categoryMetrics.LIENZOS.total} 
+              time={categoryMetrics.LIENZOS.totalTime} 
+              image="/canva.png" 
+              formatTime={formatTime} 
+              isFinished={categoryMetrics.LIENZOS.count > 0 && categoryMetrics.LIENZOS.count === categoryMetrics.LIENZOS.finishedCount}
+            />
+            <SummaryCard 
+              label="Mallas Bolas" 
+              pieces={categoryMetrics['MALLAS BOLAS'].total} 
+              time={categoryMetrics['MALLAS BOLAS'].totalTime} 
+              image="/sphere.png" 
+              formatTime={formatTime} 
+              isFinished={categoryMetrics['MALLAS BOLAS'].count > 0 && categoryMetrics['MALLAS BOLAS'].count === categoryMetrics['MALLAS BOLAS'].finishedCount}
+            />
+            <SummaryCard 
+              label="Mallas Costura" 
+              pieces={categoryMetrics['MALLAS COSTURA'].total} 
+              time={categoryMetrics['MALLAS COSTURA'].totalTime} 
+              image="/sewing-machine.png" 
+              formatTime={formatTime} 
+              isFinished={categoryMetrics['MALLAS COSTURA'].count > 0 && categoryMetrics['MALLAS COSTURA'].count === categoryMetrics['MALLAS COSTURA'].finishedCount}
+            />
+            <SummaryCard 
+              label="Otros" 
+              pieces={categoryMetrics.OTROS.total} 
+              time={categoryMetrics.OTROS.totalTime} 
+              icon={<Tag className="h-6 w-6 text-gray-400" />} 
+              formatTime={formatTime} 
+              isFinished={categoryMetrics.OTROS.count > 0 && categoryMetrics.OTROS.count === categoryMetrics.OTROS.finishedCount}
+            />
         </div>
 
         {/* Filters Section */}
@@ -618,27 +650,33 @@ function FilterButton({ active, onClick, label }: { active: boolean, onClick: ()
   );
 }
 
-function SummaryCard({ label, pieces, time, image, icon, formatTime }: { label: string, pieces: number, time: number, image?: string, icon?: React.ReactNode, formatTime: (n: number) => string }) {
+function SummaryCard({ label, pieces, time, image, icon, formatTime, isFinished }: { label: string, pieces: number, time: number, image?: string, icon?: React.ReactNode, formatTime: (n: number) => string, isFinished?: boolean }) {
     return (
-        <div className="bg-white border-2 border-gray-100 rounded-2xl p-4 shadow-sm flex flex-col justify-between transition-all hover:shadow-md">
+        <div className={cn(
+            "border-2 rounded-2xl p-4 shadow-sm flex flex-col justify-between transition-all hover:shadow-md",
+            isFinished ? "bg-[#E6F7EC] border-[#34A853]" : "bg-white border-gray-100"
+        )}>
             <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
-                    <div className="p-1.5 bg-starbucks-cream rounded-lg flex items-center justify-center">
-                        {image ? <Image src={image} width={24} height={24} alt={label} className="object-contain" /> : icon}
+                    <div className={cn("p-1.5 rounded-lg flex items-center justify-center", isFinished ? "bg-green-100" : "bg-starbucks-cream")}>
+                        {image ? <Image src={image} width={24} height={24} alt={label} className={cn("object-contain", isFinished && "brightness-75")} /> : icon}
                     </div>
-                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{label}</span>
+                    <span className={cn("text-[10px] font-black uppercase tracking-widest", isFinished ? "text-green-800" : "text-gray-400")}>
+                        {label}
+                        {isFinished && <CheckCircle2 className="h-2.5 w-2.5 ml-1 inline text-green-600" />}
+                    </span>
                 </div>
             </div>
             <div className="flex justify-between items-end">
                 <div className="flex flex-col">
-                    <span className="text-2xl font-black text-starbucks-green tabular-nums leading-none tracking-tighter">{pieces}</span>
-                    <span className="text-[8px] font-bold text-gray-400 uppercase mt-0.5">Pzs</span>
+                    <span className={cn("text-2xl font-black tabular-nums leading-none tracking-tighter", isFinished ? "text-green-700" : "text-starbucks-green")}>{pieces}</span>
+                    <span className={cn("text-[8px] font-bold uppercase mt-0.5", isFinished ? "text-green-600" : "text-gray-400")}>Pzs</span>
                 </div>
                 <div className="flex flex-col text-right">
-                    <span className="text-xs font-black text-amber-600 tabular-nums leading-none flex items-center justify-end gap-1">
+                    <span className={cn("text-xs font-black tabular-nums leading-none flex items-center justify-end gap-1", isFinished ? "text-green-600" : "text-amber-600")}>
                         <Clock className="h-3 w-3" /> {formatTime(time)}
                     </span>
-                    <span className="text-[8px] font-bold text-gray-400 uppercase mt-0.5">Est.</span>
+                    <span className={cn("text-[8px] font-bold uppercase mt-0.5", isFinished ? "text-green-600" : "text-gray-400")}>Est.</span>
                 </div>
             </div>
         </div>
