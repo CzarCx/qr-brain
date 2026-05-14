@@ -30,4 +30,7 @@ export interface SewingTicket {
   pack_id: number | null;
   sales_num: number | null;
   sku: string | null;
+  alias?: string | null;
+  impreso?: boolean | null;
+  esti_time?: number | null;
 }

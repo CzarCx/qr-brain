@@ -265,7 +265,7 @@ export default function SewingTicketsPage() {
       const worksheet = workbook.addWorksheet('Bitácora de Costura');
 
       const headers = [
-        'Código de Barra', 'Producto', 'Cantidad', 'SKU', 
+        'Código de Barra', 'Alias', 'Producto', 'Cantidad', 'SKU', 
         'Responsable Vaciado', 'Hora Vaciado', 'Cuenta', 'No. Venta', 'Pack ID', 
         'Impresa', 'Resp. Impresión', 'Fecha Impresión', 'Asignada A', 
         'Cortada', 'Confección', 'Perforado', 'Ojillado', 
@@ -279,7 +279,7 @@ export default function SewingTicketsPage() {
 
       tickets.forEach(t => {
         worksheet.addRow([
-          t.codigo_barra, t.nombre_producto || '---', t.cantidad || 0, t.sku || '---',
+          t.codigo_barra, t.alias || '', t.nombre_producto || '---', t.cantidad || 0, t.sku || '---',
           t.responsable_vaciado || '---', t.hora_vaciado || '---', t.cuenta || '---', t.sales_num || '---', t.pack_id || '---',
           t.impresa ? 'SÍ' : 'NO', t.responsable_impresion || '---', t.fecha_impresion || '---', t.asignada_a || '---',
           t.cortada ? 'SÍ' : 'NO', t.confeccion === true ? 'SÍ' : t.confeccion === false ? 'NO' : 'N/A',
@@ -326,7 +326,7 @@ export default function SewingTicketsPage() {
     doc.text(`Registros: ${tickets.length} | Unidades: ${totalUnits}`, 14, 20);
 
     const headers = [
-      'Cód. Barra', 'Producto', 'SKU', 'Cant',
+      'Cód. Barra', 'Alias', 'Producto', 'SKU', 'Cant',
       'Vaciado Por', 'H. Vaciado', 'Cuenta', 'Venta', 'Pack ID',
       'Confecc', 'Perfor', 'Ojill',
       'Impresa', 'Resp Imp', 'F Imp', 'Asignada',
@@ -350,6 +350,7 @@ export default function SewingTicketsPage() {
 
     const body = tickets.map(t => [
       t.codigo_barra,
+      t.alias || '---',
       t.nombre_producto || '---',
       t.sku || '---',
       t.cantidad || 0,
@@ -379,11 +380,12 @@ export default function SewingTicketsPage() {
       headStyles: { fillColor: [0, 98, 65], fontSize: 5, halign: 'center' },
       bodyStyles: { fontSize: 4.8, valign: 'middle' },
       columnStyles: {
-        1: { cellWidth: 35 },
-        2: { fontStyle: 'bold' },
-        3: { fontStyle: 'bold', halign: 'center' },
-        18: { fontStyle: 'bold' },
+        1: { cellWidth: 15 },
+        2: { cellWidth: 35 },
+        3: { fontStyle: 'bold' },
+        4: { fontStyle: 'bold', halign: 'center' },
         19: { fontStyle: 'bold' },
+        20: { fontStyle: 'bold' },
       },
       didParseCell: (data) => {
         if (data.section === 'body') {
@@ -609,7 +611,12 @@ export default function SewingTicketsPage() {
               {selectedLabels.map((ticket, idx) => (
                 <div key={`${ticket.id}-${idx}`} className="w-full aspect-[1.4/1] border-black border-[1px] p-2 flex flex-col justify-between text-black">
                   <div className="flex justify-between border-b border-black pb-0.5"><span className="text-[7px] font-black">INMATMEX LOGÍSTICA</span><span className="text-[8px] font-bold">#{ticket.id}</span></div>
-                  <div><div className="text-[6px] font-bold text-gray-600">PRODUCTO / SKU</div><div className="text-[10px] font-black truncate">{ticket.sku || 'N/A'}</div><div className="text-[8px] truncate">{ticket.nombre_producto || 'NO MAPEADO'}</div></div>
+                  <div>
+                    <div className="text-[6px] font-bold text-gray-600">PRODUCTO / SKU / ALIAS</div>
+                    <div className="text-[10px] font-black truncate">{ticket.sku || 'N/A'}</div>
+                    <div className="text-[8px] truncate">{ticket.nombre_producto || 'NO MAPEADO'}</div>
+                    {ticket.alias && <div className="text-[9px] font-black bg-black text-white px-1 mt-0.5 inline-block">{ticket.alias.toUpperCase()}</div>}
+                  </div>
                   <div className="grid grid-cols-5 border-y border-black py-1"><div className="col-span-2 border-r border-black pr-1"><div className="text-[6px] font-bold">CANTIDAD</div><div className="text-lg font-black">{ticket.cantidad || 0} PZS</div></div><div className="col-span-3 pl-1"><div className="text-[6px] font-bold">VENTA / PACK</div><div className="flex flex-col text-[8px] font-black"><span>V: {ticket.sales_num || '---'}</span><span>P: {ticket.pack_id || '---'}</span></div></div></div>
                   <div className="flex justify-between text-[6px] font-bold"><div><span className="text-gray-500">DESPACHÓ:</span> {ticket.responsable_vaciado || '---'}</div><div><span className="text-gray-500">IMPRIMIÓ:</span> {ticket.responsable_impresion || '---'}</div></div>
                 </div>

@@ -42,9 +42,10 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { Check, X, Clock, User, Package, Building2, Minus, Tag, ChevronsUpDown, Trash2, Copy, ChevronDown, ChevronUp, LayoutGrid, List as ListIcon, Scissors, Boxes, Settings2, Truck } from 'lucide-react';
+import { Check, X, Clock, User, Package, Building2, Minus, Tag, ChevronsUpDown, Trash2, Copy, ChevronDown, ChevronUp, LayoutGrid, List as ListIcon, Scissors, Boxes, Settings2, Truck, PencilLine } from 'lucide-react';
 import { useMemo, useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -118,6 +119,47 @@ export function SewingTicketsTable({ tickets, onUpdateTicket, onDeleteTicket, on
     if (val === true) return <Badge className="bg-green-100 text-green-700 hover:bg-green-100 border-green-200"><Check className="h-3 w-3 mr-1" /> SÍ</Badge>;
     if (val === false) return <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200"><X className="h-3 w-3 mr-1" /> NO</Badge>;
     return <Badge variant="outline" className="bg-gray-100 text-gray-500 border-gray-200"><Minus className="h-3 w-3 mr-1" /> N/A</Badge>;
+  };
+
+  const AliasEditor = ({ ticket }: { ticket: SewingTicket }) => {
+    const [isEditing, setIsEditing] = useState(false);
+    const [tempAlias, setTempAlias] = useState(ticket.alias || '');
+
+    const handleSave = async () => {
+      if (tempAlias.trim() !== (ticket.alias || '')) {
+        await onUpdateTicket?.(ticket.id!, { alias: tempAlias.trim() || null });
+      }
+      setIsEditing(false);
+    };
+
+    if (isEditing) {
+      return (
+        <Input 
+          autoFocus
+          value={tempAlias}
+          onChange={(e) => setTempAlias(e.target.value)}
+          onBlur={handleSave}
+          onKeyDown={(e) => e.key === 'Enter' && handleSave()}
+          className="h-8 text-[10px] font-black uppercase"
+          maxLength={50}
+        />
+      );
+    }
+
+    return (
+      <div 
+        onClick={() => setIsEditing(true)}
+        className={cn(
+          "flex items-center gap-2 group cursor-pointer h-8 px-2 rounded hover:bg-gray-100 transition-colors",
+          !ticket.alias && "text-gray-300 italic"
+        )}
+      >
+        <span className="text-[10px] font-black uppercase truncate max-w-[120px]">
+          {ticket.alias || "Sin alias"}
+        </span>
+        <PencilLine className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity" />
+      </div>
+    );
   };
 
   const BooleanSelect = ({ 
@@ -312,12 +354,13 @@ export function SewingTicketsTable({ tickets, onUpdateTicket, onDeleteTicket, on
         </div>
       )}
       <div className="max-h-[600px] overflow-auto">
-        <Table className="min-w-[2200px]">
+        <Table className="min-w-[2400px]">
           <TableHeader className="bg-gray-50 sticky top-0 z-30">
             <TableRow>
               <TableHead className="w-[60px] text-center bg-gray-50">Label</TableHead>
               <TableHead className="w-[80px] text-center">ID</TableHead>
-              <TableHead className="w-[180px] bg-gray-50">Código de Barra</TableHead>
+              <TableHead className="w-[180px] bg-gray-50">Alias Operativo</TableHead>
+              <TableHead className="w-[180px]">Código de Barra</TableHead>
               <TableHead className="w-[150px]">Producto</TableHead>
               <TableHead className="w-[100px] text-center">Cant.</TableHead>
               <TableHead className="w-[100px] text-center">T. Est.</TableHead>
@@ -358,6 +401,9 @@ export function SewingTicketsTable({ tickets, onUpdateTicket, onDeleteTicket, on
                     </Button>
                   </TableCell>
                   <TableCell className="text-center font-bold text-gray-400 text-xs">#{ticket.id}</TableCell>
+                  <TableCell className="bg-gray-50/30">
+                    <AliasEditor ticket={ticket} />
+                  </TableCell>
                   <TableCell className="font-mono font-bold text-starbucks-green border-r">
                     {ticket.codigo_barra}
                   </TableCell>
@@ -507,7 +553,7 @@ export function SewingTicketsTable({ tickets, onUpdateTicket, onDeleteTicket, on
               ))
             ) : (
               <TableRow>
-                <TableCell colSpan={26} className="text-center py-20 text-gray-400 bg-gray-50">
+                <TableCell colSpan={27} className="text-center py-20 text-gray-400 bg-gray-50">
                   <div className="flex flex-col items-center gap-2">
                     <Package className="h-12 w-12 opacity-10" />
                     <p className="text-lg">No hay tickets en este bloque.</p>
@@ -565,7 +611,12 @@ function CardItem({
 
         <div className="space-y-1">
             <p className="text-[11px] font-bold text-starbucks-dark uppercase">{ticket.nombre_producto || 'NO MAPEADO'}</p>
-            <div className="flex items-center justify-between">
+            {ticket.alias && (
+              <Badge variant="secondary" className="bg-amber-50 text-amber-800 text-[9px] font-black px-2 py-0">
+                <Tag className="h-2 w-2 mr-1" /> {ticket.alias.toUpperCase()}
+              </Badge>
+            )}
+            <div className="flex items-center justify-between mt-2">
                 <div className="flex items-center gap-3">
                     <span className="text-lg font-black text-blue-600">{ticket.cantidad || 0} <span className="text-[10px] font-bold text-gray-400">PZS</span></span>
                     <div className="h-4 w-[1px] bg-gray-200" />
@@ -584,6 +635,26 @@ function CardItem({
       <Collapsible open={expanded} onOpenChange={onToggle}>
         <CollapsibleContent className="border-t border-gray-100 bg-gray-50/50 rounded-b-xl overflow-hidden animate-in slide-in-from-top-2 duration-300">
             <div className="p-4 space-y-6">
+                {/* Seccion 0: Identificación Operativa */}
+                <div className="space-y-3">
+                    <div className="flex items-center gap-2 text-amber-600 border-b border-amber-100 pb-1">
+                        <Tag className="h-3.5 w-3.5" />
+                        <h4 className="text-[10px] font-black uppercase tracking-wider">Identificación Operativa</h4>
+                    </div>
+                    <div className="space-y-2">
+                        <Label className="text-[9px] font-bold text-gray-400 uppercase">Alias del Ticket</Label>
+                        <div className="flex gap-2">
+                            <Input 
+                                placeholder="Ej. Mesa negra, Costco..."
+                                defaultValue={ticket.alias || ''}
+                                onBlur={(e) => onUpdate?.(ticket.id, { alias: e.target.value.trim() || null })}
+                                className="h-10 text-xs font-black uppercase bg-white"
+                                maxLength={50}
+                            />
+                        </div>
+                    </div>
+                </div>
+
                 {/* Seccion 1: Producción */}
                 <div className="space-y-3">
                     <div className="flex items-center gap-2 text-blue-800 border-b border-blue-100 pb-1">

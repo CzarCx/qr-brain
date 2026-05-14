@@ -170,7 +170,8 @@ export function useSewingTickets() {
         perforado: false,
         ojillado: false,
         empaquetado: false,
-        lista_para_recoleccion: false
+        lista_para_recoleccion: false,
+        alias: null
       } : {
         codigo_barra: finalBarcode,
         responsable_vaciado: responsable,
@@ -182,7 +183,8 @@ export function useSewingTickets() {
         perforado: false,
         ojillado: false,
         empaquetado: false,
-        lista_para_recoleccion: false
+        lista_para_recoleccion: false,
+        alias: null
       };
 
       // 3. Insertar en sewing_tickets

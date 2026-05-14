@@ -1,3 +1,4 @@
+// ... (imports remain same)
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
@@ -169,7 +170,7 @@ export default function SewingTicketsHistoryPage() {
     doc.text(`Registros: ${tickets.length} | Unidades: ${totalUnits}`, 14, 20);
 
     const headers = [
-      'Cód. Barra', 'Producto', 'SKU', 'Cant',
+      'Cód. Barra', 'Alias', 'Producto', 'SKU', 'Cant',
       'Vaciado Por', 'H. Vaciado', 'Cuenta', 'Venta', 'Pack ID',
       'Confecc', 'Perfor', 'Ojill',
       'Impresa', 'Resp Imp', 'F Imp', 'Asignada',
@@ -193,6 +194,7 @@ export default function SewingTicketsHistoryPage() {
 
     const body = tickets.map(t => [
       t.codigo_barra,
+      t.alias || '---',
       t.nombre_producto || '---',
       t.sku || '---',
       t.cantidad || 0,
@@ -222,11 +224,12 @@ export default function SewingTicketsHistoryPage() {
       headStyles: { fillColor: [0, 98, 65], fontSize: 5, halign: 'center' },
       bodyStyles: { fontSize: 4.8, valign: 'middle' },
       columnStyles: {
-        1: { cellWidth: 35 },
-        2: { fontStyle: 'bold' },
-        3: { fontStyle: 'bold', halign: 'center' },
-        18: { fontStyle: 'bold' },
+        1: { cellWidth: 15 },
+        2: { cellWidth: 35 },
+        3: { fontStyle: 'bold' },
+        4: { fontStyle: 'bold', halign: 'center' },
         19: { fontStyle: 'bold' },
+        20: { fontStyle: 'bold' },
       },
       didParseCell: (data) => {
         if (data.section === 'body') {
