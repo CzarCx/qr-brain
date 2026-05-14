@@ -22,18 +22,20 @@ import {
   History,
   PackageCheck,
   ClipboardList,
-  PlusCircle
+  PlusCircle,
+  AlertTriangle
 } from 'lucide-react';
 import Link from 'next/link';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
+import { useToast } from '@/hooks/use-toast';
 
 type ScanLog = {
   id: string;
   code: string;
   status: 'PPC' | 'ENTREGADO';
-  result: 'success' | 'error';
+  result: 'success' | 'error' | 'warning';
   message: string;
   time: string;
 };
@@ -52,6 +54,7 @@ export default function SewingStatusScannerPage() {
   const [cameraCapabilities, setCameraCapabilities] = useState<any>(null);
   
   const isMobile = useIsMobile();
+  const { toast } = useToast();
   const readerRef = useRef<HTMLDivElement>(null);
   const html5QrCodeRef = useRef<Html5Qrcode | null>(null);
   const lastScanTimeRef = useRef(0);
@@ -103,10 +106,37 @@ export default function SewingStatusScannerPage() {
     const time = new Date().toLocaleTimeString('es-MX', { hour12: false });
 
     try {
+      // 1. VALIDACIÓN CRÍTICA: Verificar si ya pasó por impresión
+      const { data: ticketRecord, error: ticketError } = await supabaseEtiquetas
+        .from('sewing_tickets')
+        .select('impreso, nombre_producto')
+        .eq('codigo_barra', finalCode)
+        .maybeSingle();
+
+      if (ticketError) throw ticketError;
+
+      if (!ticketRecord) {
+        toast({
+          variant: 'destructive',
+          title: 'Código No Encontrado',
+          description: `El bulto ${finalCode} no está registrado en la bitácora de costura.`,
+        });
+        throw new Error('Código no encontrado en la bitácora');
+      }
+
+      if (ticketRecord.impreso !== true) {
+        toast({
+          variant: 'destructive',
+          title: 'Error de Flujo Operativo',
+          description: 'Este bulto aún no ha sido marcado como impreso. Debes imprimirlo antes de actualizar su status.',
+        });
+        throw new Error('Bulto pendiente de impresión');
+      }
+
+      // 2. Si la impresión es válida, proceder con la actualización de PRODUCCIÓN (Main DB)
       const numericCode = parseFloat(finalCode);
       if (isNaN(numericCode)) throw new Error('Código no es numérico');
 
-      // 1. Validar y Actualizar tabla PERSONAL (Main DB)
       const personalUpdate: any = { status: targetStatus };
       if (targetStatus === 'PPC') personalUpdate.date_ppc = new Date().toISOString();
       if (targetStatus === 'ENTREGADO') personalUpdate.date_entre = new Date().toISOString();
@@ -120,10 +150,10 @@ export default function SewingStatusScannerPage() {
       if (personalError) throw personalError;
       
       if (!personalData || personalData.length === 0) {
-        throw new Error('Código no encontrado en producción');
+        throw new Error('No encontrado en producción (Personal)');
       }
 
-      // 2. Intentar actualizar SEWING_TICKETS (Labels DB) para registro histórico
+      // 3. Actualizar fecha de modificación en SEWING_TICKETS (Labels DB)
       await supabaseEtiquetas
         .from('sewing_tickets')
         .update({ updated_at: new Date().toISOString() })
@@ -135,7 +165,7 @@ export default function SewingStatusScannerPage() {
         code: finalCode,
         status: targetStatus,
         result: 'success',
-        message: personalData[0].product || 'Actualizado correctamente',
+        message: personalData[0].product || 'Status actualizado correctamente',
         time
       }, ...prev]);
 
@@ -145,14 +175,14 @@ export default function SewingStatusScannerPage() {
         id: logId,
         code: finalCode,
         status: targetStatus,
-        result: 'error',
+        result: error.message.includes('impresión') ? 'warning' : 'error',
         message: error.message || 'Error desconocido',
         time
       }, ...prev]);
     } finally {
       setLoading(false);
     }
-  }, [targetStatus]);
+  }, [targetStatus, toast]);
 
   const handleManualSubmit = () => {
     if (!manualCode.trim()) return;
@@ -247,7 +277,7 @@ export default function SewingStatusScannerPage() {
               <History className="h-6 w-6" />
               Actualización de Status
             </h1>
-            <p className="text-sm text-gray-500 font-medium">Actualiza masivamente bultos de costura</p>
+            <p className="text-sm text-gray-500 font-medium">Flujo: Impresión → PPC → Entregado</p>
           </div>
         </header>
 
@@ -453,12 +483,15 @@ export default function SewingStatusScannerPage() {
                           <div className="flex items-center gap-2">
                             {log.result === 'success' ? (
                               <CheckCircle2 className="h-4 w-4 text-green-500" />
+                            ) : log.result === 'warning' ? (
+                              <AlertTriangle className="h-4 w-4 text-amber-500" />
                             ) : (
                               <XCircle className="h-4 w-4 text-red-500" />
                             )}
                             <span className={cn(
                               "text-xs font-medium",
-                              log.result === 'success' ? "text-green-700" : "text-red-700"
+                              log.result === 'success' ? "text-green-700" : 
+                              log.result === 'warning' ? "text-amber-700 font-bold" : "text-red-700"
                             )}>{log.message}</span>
                           </div>
                         </td>
