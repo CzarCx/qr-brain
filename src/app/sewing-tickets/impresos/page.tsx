@@ -206,23 +206,18 @@ export default function SewingTicketsHistoryPage() {
     return result;
   }, [tickets, deliveryFilter, prodStatusFilter, prodStatusMap]);
 
-  // Traceability Metrics (Calculadas sobre el set filtrado por entrega)
+  // Traceability Metrics: DINÁMICAS (Solo cuenta lo que está en grupos expandidos)
   const traceabilityMetrics = useMemo(() => {
-    const deliveryFiltered = tickets.filter(t => {
-        if (deliveryFilter === 'all') return true;
-        if (!t.fecha_entrega_paquete) return false;
-        const dDate = parseLocalDate(t.fecha_entrega_paquete);
-        const today = startOfDay(new Date());
-        const tomorrow = new Date(today);
-        tomorrow.setDate(tomorrow.getDate() + 1);
-        if (deliveryFilter === 'today') return dDate.getTime() === today.getTime();
-        if (deliveryFilter === 'tomorrow') return dDate.getTime() === tomorrow.getTime();
-        if (deliveryFilter === 'week') return isThisWeek(dDate, { weekStartsOn: 1 });
-        return true;
+    const activeTickets = filteredTickets.filter(t => {
+      if (!t.created_at) return false;
+      const dateObj = new Date(t.created_at);
+      const dateKey = format(dateObj, 'yyyy-MM-dd');
+      const groupKey = isToday(dateObj) ? 'group-today' : `group-${dateKey}`;
+      return expandedGroups.includes(groupKey);
     });
 
-    const total = deliveryFiltered.length;
-    const finished = deliveryFiltered.filter(t => {
+    const total = activeTickets.length;
+    const finished = activeTickets.filter(t => {
         const st = prodStatusMap[t.codigo_barra];
         return st === 'PPC' || st === 'ENTREGADO';
     }).length;
@@ -230,9 +225,9 @@ export default function SewingTicketsHistoryPage() {
     const percent = total > 0 ? Math.round((finished / total) * 100) : 0;
 
     return { total, finished, pending, percent };
-  }, [tickets, deliveryFilter, prodStatusMap]);
+  }, [filteredTickets, expandedGroups, prodStatusMap]);
 
-  // Metrics for categories: Reactivas a filtros y expansión
+  // Metrics for categories: DINÁMICAS (Solo cuenta lo que está en grupos expandidos)
   const categoryMetrics = useMemo(() => {
     const groups = {
       LIENZOS: { total: 0, totalTime: 0 },
@@ -257,7 +252,8 @@ export default function SewingTicketsHistoryPage() {
       const upper = catMdr.toUpperCase();
       const qty = t.cantidad || 0;
 
-      if (upper.includes('MALLA SOMBRA CONFECCIONADA') || upper.includes('MS FABRICACION')) {
+      // Prioridad: Si contiene "CONFECCIONADA" o "FABRICACION" va a MALLAS COSTURA primero
+      if (upper.includes('CONFECCIONADA') || upper.includes('MS FABRICACION')) {
         groups['MALLAS COSTURA'].total += qty;
         groups['MALLAS COSTURA'].totalTime += (estTime * qty);
       } else if (upper === 'MALLA SOMBRA BOLSA') {
@@ -395,7 +391,7 @@ export default function SewingTicketsHistoryPage() {
               icon={Package} 
               color="text-gray-600" 
               bgColor="bg-gray-100"
-              sub="SEGÚN FILTROS"
+              sub="EN SECCIONES ABIERTAS"
             />
             <TraceabilityCard 
               label="Avance" 
@@ -486,7 +482,8 @@ export default function SewingTicketsHistoryPage() {
                   const estTime = meta.time || 0;
                   const qty = t.cantidad || 0;
 
-                  if (upper.includes('MALLA SOMBRA CONFECCIONADA') || upper.includes('MS FABRICACION')) {
+                  // Prioridad: Si contiene "CONFECCIONADA" o "FABRICACION" va a MALLAS COSTURA primero
+                  if (upper.includes('CONFECCIONADA') || upper.includes('MS FABRICACION')) {
                     subCategorized.COSTURA.tickets.push(t);
                     subCategorized.COSTURA.total += qty;
                     subCategorized.COSTURA.totalTime += (estTime * qty);
