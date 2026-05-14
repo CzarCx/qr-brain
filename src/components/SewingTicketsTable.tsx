@@ -1,4 +1,3 @@
-
 'use client';
 
 import { SewingTicket } from '@/types/sewing';
@@ -62,6 +61,7 @@ interface SewingTicketsTableProps {
   onDeleteTicket?: (id: number) => Promise<void>;
   onGenerateLabel?: (ticket: SewingTicket) => void;
   skuMetadata?: Record<string, { cat: string, time: number }>;
+  isMuted?: boolean;
 }
 
 const RECOLECTORES_OPTIONS = [
@@ -81,7 +81,7 @@ const RECOLECTORES_OPTIONS = [
   "N/A"
 ];
 
-export function SewingTicketsTable({ tickets, onUpdateTicket, onDeleteTicket, onGenerateLabel, skuMetadata }: SewingTicketsTableProps) {
+export function SewingTicketsTable({ tickets, onUpdateTicket, onDeleteTicket, onGenerateLabel, skuMetadata, isMuted }: SewingTicketsTableProps) {
   const { toast } = useToast();
   const isMobile = useIsMobile();
   const [expandedCards, setExpandedCards] = useState<Record<number, boolean>>({});
@@ -156,7 +156,7 @@ export function SewingTicketsTable({ tickets, onUpdateTicket, onDeleteTicket, on
           !ticket.alias && "text-gray-300 italic"
         )}
       >
-        <span className="text-[10px] font-black uppercase truncate max-w-[120px]">
+        <span className="text-[10px] font-black uppercase break-all">
           {ticket.alias || "Sin alias"}
         </span>
         <PencilLine className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity" />
@@ -281,7 +281,7 @@ export function SewingTicketsTable({ tickets, onUpdateTicket, onDeleteTicket, on
   if (isMobile) {
     return (
       <TooltipProvider>
-        <div className="space-y-4 px-2 pb-10">
+        <div className={cn("space-y-4 px-2 pb-10 transition-all", isMuted && "opacity-80 grayscale-[0.3]")}>
           {tickets.length > 0 ? (
             tickets.map((ticket) => (
               <CardItem 
@@ -325,7 +325,7 @@ export function SewingTicketsTable({ tickets, onUpdateTicket, onDeleteTicket, on
 
   return (
     <TooltipProvider>
-      <div className="border rounded-b-lg overflow-x-auto bg-white shadow-sm">
+      <div className={cn("border rounded-b-lg overflow-x-auto bg-white shadow-sm transition-all", isMuted && "opacity-80 grayscale-[0.3]")}>
         <Table className="min-w-[2800px] table-fixed">
           <TableHeader className="bg-gray-50 sticky top-0 z-30">
             <TableRow>
@@ -404,7 +404,7 @@ export function SewingTicketsTable({ tickets, onUpdateTicket, onDeleteTicket, on
                           className="flex items-center gap-1 group cursor-pointer truncate"
                           onClick={() => ticket.sku && handleCopy(ticket.sku, "SKU")}
                         >
-                          <span className="text-xs font-mono text-gray-600 group-hover:text-starbucks-green group-hover:underline transition-colors truncate">
+                          <span className="text-xs font-mono text-gray-600 group-hover:text-starbucks-green group-hover:underline transition-colors break-all">
                             {ticket.sku || '---'}
                           </span>
                           {ticket.sku && skuCounts[ticket.sku] > 1 && (
