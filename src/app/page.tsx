@@ -1,3 +1,4 @@
+
 'use client';
 import React, {useEffect, useRef, useState, useCallback, useMemo} from 'react';
 import Head from 'next/head';
@@ -459,47 +460,40 @@ export default function Home() {
         timerStartedRef.current = true;
     }
 
-    let estimatedTime: number | null = null;
-    let subcategoria: string | null = null;
+    let totalEstimatedTime = 0;
+    let subcategories: string[] = [];
+
     if (details.sku) {
-        try {
-            const { data: skuAlternoData, error: skuAlternoError } = await supabaseEtiquetas
-                .from('sku_alterno')
-                .select('sku_mdr')
-                .eq('sku', details.sku)
-                .limit(1)
-                .single();
-
-            if (skuAlternoError && skuAlternoError.code !== 'PGRST116') {
-                console.error("Error fetching sku_mdr from sku_alterno:", skuAlternoError.message);
-            }
-
-            if (skuAlternoData && skuAlternoData.sku_mdr) {
-                const skuMdr = skuAlternoData.sku_mdr;
-                const { data: skuMData, error: skuMError } = await supabaseEtiquetas
-                    .from('sku_m')
-                    .select('esti_time, sub_cat')
-                    .eq('sku_mdr', skuMdr)
+        const skusToProcess = details.sku.split(' | ');
+        for (const singleSku of skusToProcess) {
+            try {
+                const { data: skuAlternoData } = await supabaseEtiquetas
+                    .from('sku_alterno')
+                    .select('sku_mdr')
+                    .eq('sku', singleSku)
                     .limit(1)
                     .single();
-                
-                if (skuMError && skuMError.code !== 'PGRST116') {
-                    console.error("Error fetching data from sku_m:", skuMError.message);
-                }
 
-                if (skuMData) {
-                    estimatedTime = skuMData.esti_time;
-                    subcategoria = skuMData.sub_cat || details.sku; 
+                if (skuAlternoData?.sku_mdr) {
+                    const { data: skuMData } = await supabaseEtiquetas
+                        .from('sku_m')
+                        .select('esti_time, sub_cat')
+                        .eq('sku_mdr', skuAlternoData.sku_mdr)
+                        .limit(1)
+                        .single();
+                    
+                    if (skuMData) {
+                        totalEstimatedTime += skuMData.esti_time || 0;
+                        subcategories.push(skuMData.sub_cat || singleSku);
+                    } else {
+                        subcategories.push(singleSku);
+                    }
                 } else {
-                    subcategoria = details.sku; 
+                    subcategories.push(singleSku);
                 }
-            } else {
-                 subcategoria = details.sku; 
+            } catch (e: any) {
+                subcategories.push(singleSku);
             }
-
-        } catch (e: any) {
-             console.error("Exception fetching estimated time:", e.message);
-             subcategoria = details.sku; 
         }
     }
 
@@ -544,12 +538,12 @@ export default function Home() {
       encargado: encargado.trim(),
       area: selectedArea,
       sku: details.sku,
-      subcategoria: subcategoria,
+      subcategoria: subcategories.length > 0 ? Array.from(new Set(subcategories)).join(' | ') : details.sku,
       cantidad: details.cantidad,
       producto: details.producto,
       empresa: details.empresa,
       venta: details.venta,
-      esti_time: estimatedTime,
+      esti_time: totalEstimatedTime > 0 ? totalEstimatedTime : null,
       deli_date: details.deli_date,
     };
 
@@ -600,7 +594,7 @@ export default function Home() {
                 place: skipAreaSelection ? null : selectedArea,
                 product: item.producto,
                 quantity: item.cantidad,
-                organization: item.organization,
+                organization: item.empresa,
                 sales_num: item.venta ? Number(item.venta) : null,
                 date: associationTimestamp.toISOString(),
                 status: 'ASIGNADO',
@@ -794,39 +788,49 @@ export default function Home() {
         }
 
 
-        // Strict validation flow
-        const { data: etiquetaInfo, error: etiquetaInfoError } = await supabaseEtiquetas
+        // Strict validation flow (Handling multiple records for the same code)
+        const { data: etiquetaRows, error: etiquetaInfoError } = await supabaseEtiquetas
             .from('etiquetas_i')
-            .select('code_i')
-            .eq('code', finalCode)
-            .single();
+            .select('code_i, sku, quantity, product, organization, sales_num, deli_date')
+            .eq('code', finalCode);
         
-        if (etiquetaInfoError && etiquetaInfoError.code !== 'PGRST116') {
+        if (etiquetaInfoError) {
             throw new Error(`Error al buscar en 'etiquetas_i': ${etiquetaInfoError.message}`);
         }
 
-        if (!etiquetaInfo || !etiquetaInfo.code_i) {
-            showModalNotification('Error de Etiqueta', `La etiqueta ${finalCode} no tiene un código de corte asociado.`, 'destructive');
+        if (!etiquetaRows || etiquetaRows.length === 0) {
+            showModalNotification('Error de Etiqueta', `Este código no existe en etiquetas_i. Verifica que haya sido generado correctamente antes de escanearlo.`, 'destructive');
             playErrorSound();
             setLoading(false);
             return;
         }
 
-        const { data: vCodeInfo, error: vCodeInfoError } = await supabaseEtiquetas
-            .from('v_code')
-            .select('corte_etiquetas')
-            .eq('code_i', etiquetaInfo.code_i)
-            .single();
-
-        if (vCodeInfoError && vCodeInfoError.code !== 'PGRST116') {
-             throw new Error(`Error al verificar el corte en 'v_code': ${vCodeInfoError.message}`);
+        // Validate all cutting codes associated with this package code
+        const uniqueCodeIs = Array.from(new Set(etiquetaRows.map(r => r.code_i).filter(Boolean)));
+        if (uniqueCodeIs.length === 0) {
+             showModalNotification('Error de Etiqueta', `La etiqueta ${finalCode} no tiene un código de corte asociado.`, 'destructive');
+             playErrorSound();
+             setLoading(false);
+             return;
         }
-        
-        if (!vCodeInfo || vCodeInfo.corte_etiquetas === null) {
-            showModalNotification('Corte no Realizado', `La etiqueta ${finalCode} no puede ser asignada porque el corte aún no ha sido realizado.`, 'destructive');
-            playErrorSound();
-            setLoading(false);
-            return;
+
+        for (const codeI of uniqueCodeIs) {
+            const { data: vCodeInfo, error: vCodeInfoError } = await supabaseEtiquetas
+                .from('v_code')
+                .select('corte_etiquetas')
+                .eq('code_i', codeI)
+                .maybeSingle();
+
+            if (vCodeInfoError) {
+                 throw new Error(`Error al verificar el corte en 'v_code': ${vCodeInfoError.message}`);
+            }
+            
+            if (!vCodeInfo || vCodeInfo.corte_etiquetas === null) {
+                showModalNotification('Corte no Realizado', `La etiqueta ${finalCode} no puede ser asignada porque el corte (${codeI}) aún no ha sido realizado.`, 'destructive');
+                playErrorSound();
+                setLoading(false);
+                return;
+            }
         }
 
 
@@ -834,9 +838,9 @@ export default function Home() {
             .from('personal')
             .select('code, name, name_inc')
             .eq('code', finalCode)
-            .single();
+            .maybeSingle();
 
-        if (personalError && personalError.code !== 'PGRST116') {
+        if (personalError) {
             throw new Error(`Error al verificar en 'personal': ${personalError.message}`);
         }
 
@@ -850,23 +854,19 @@ export default function Home() {
             return;
         }
 
-        const { data: fullEtiquetaData, error: fullEtiquetaError } = await supabaseEtiquetas
-            .from('etiquetas_i')
-            .select('code, sku, quantity, product, organization, sales_num, deli_date')
-            .eq('code', finalCode)
-            .single();
-        
-        if (fullEtiquetaError && fullEtiquetaError.code !== 'PGRST116') {
-            throw new Error(`Error al buscar detalles en 'etiquetas_i': ${fullEtiquetaError.message}`);
-        }
+        // Aggregate details for all records sharing this code
+        const allSkus = etiquetaRows.map(r => r.sku).filter(Boolean).join(' | ');
+        const totalQuantity = etiquetaRows.reduce((acc, curr) => acc + (curr.quantity || 0), 0);
+        const firstRow = etiquetaRows[0];
 
-        if (fullEtiquetaData) {
-            const { sku, quantity, product, organization, sales_num, deli_date } = fullEtiquetaData;
-            await addCodeAndUpdateCounters(finalCode, { sku, cantidad: quantity, producto: product, empresa: organization, venta: sales_num ? String(sales_num) : null, deli_date });
-        } else {
-            playErrorSound();
-            showAppMessage(`Código ${finalCode} no encontrado en la base de datos de etiquetas.`, 'duplicate');
-        }
+        await addCodeAndUpdateCounters(finalCode, { 
+            sku: allSkus, 
+            cantidad: totalQuantity, 
+            producto: firstRow.product, 
+            empresa: firstRow.organization, 
+            venta: firstRow.sales_num ? String(firstRow.sales_num) : null, 
+            deli_date: firstRow.deli_date 
+        });
 
     } catch (error: any) {
         playErrorSound();
@@ -1281,7 +1281,7 @@ const deleteRow = (codeToDelete: string) => {
                 place: skipAreaSelection ? null : selectedArea,
                 product: item.producto,
                 quantity: item.cantidad,
-                organization: item.organization,
+                organization: item.empresa,
                 sales_num: item.venta && !isNaN(Number(item.venta)) ? Number(item.venta) : null,
                 date: new Date().toISOString(),
                 esti_time: item.esti_time,

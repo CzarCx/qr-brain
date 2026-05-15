@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useCallback } from 'react';
@@ -67,19 +68,18 @@ export function useSewingTickets() {
 
     setLoading(true);
     try {
-      // 1. Consultar en etiquetas_i para validación y mapeo automático
-      const { data: tagData, error: tagError } = await supabaseEtiquetas
+      // 1. Consultar en etiquetas_i para validación y mapeo automático (Soportando múltiples registros)
+      const { data: tagDataArray, error: tagError } = await supabaseEtiquetas
         .from('etiquetas_i')
         .select('product, pack_id, sales_num, sku, personal_inc, organization, created_at, quantity, deli_date')
-        .eq('code', finalBarcode)
-        .maybeSingle();
+        .eq('code', finalBarcode);
 
       if (tagError) {
         throw new Error(`Error al consultar etiquetas_i: ${tagError.message}`);
       }
 
       // VALIDACIÓN CRÍTICA: El código DEBE existir en etiquetas_i
-      if (!tagData) {
+      if (!tagDataArray || tagDataArray.length === 0) {
         toast({
           variant: 'destructive',
           title: 'Código Inválido',
@@ -89,12 +89,15 @@ export function useSewingTickets() {
         return false;
       }
 
+      // Agregar lógica de concatenación y suma de bultos multiregistro
+      const firstRow = tagDataArray[0];
+      const allSkus = tagDataArray.map(item => item.sku).filter(Boolean).join(' | ');
+      const totalQuantity = tagDataArray.reduce((acc, curr) => acc + (curr.quantity || 0), 0);
+
       // --- SINCRONIZACIÓN AUTOMÁTICA CON TABLA 'PERSONAL' (Main DB) ---
-      // Intentar convertir a número para el campo 'code' que es numeric en Postgres
       const numericCode = parseFloat(finalBarcode);
 
       if (!isNaN(numericCode)) {
-        // Verificar si ya existe el registro en la tabla de producción
         const { data: existingInPersonal } = await supabase
             .from('personal')
             .select('code')
@@ -102,13 +105,15 @@ export function useSewingTickets() {
             .maybeSingle();
 
         if (!existingInPersonal) {
-            // Replicar lógica de obtención de tiempo estimado (esti_time)
-            let estimatedTime = null;
-            if (tagData.sku) {
+            // Replicar lógica de obtención de tiempo estimado (Sumando tiempos para múltiples SKUs)
+            let totalEstimatedTime = 0;
+            const skusToProcess = allSkus.split(' | ');
+
+            for (const singleSku of skusToProcess) {
                 const { data: skuAlt } = await supabaseEtiquetas
                     .from('sku_alterno')
                     .select('sku_mdr')
-                    .eq('sku', tagData.sku)
+                    .eq('sku', singleSku)
                     .maybeSingle();
                 
                 if (skuAlt) {
@@ -117,29 +122,29 @@ export function useSewingTickets() {
                         .select('esti_time')
                         .eq('sku_mdr', skuAlt.sku_mdr)
                         .maybeSingle();
-                    if (skuM) estimatedTime = skuM.esti_time;
+                    if (skuM) totalEstimatedTime += skuM.esti_time || 0;
                 }
             }
 
             const now = new Date();
             const dateEsti = new Date(now.getTime());
-            if (estimatedTime) {
-                dateEsti.setMinutes(dateEsti.getMinutes() + estimatedTime);
+            if (totalEstimatedTime > 0) {
+                dateEsti.setMinutes(dateEsti.getMinutes() + totalEstimatedTime);
             }
 
             const personalPayload = {
                 code: numericCode,
-                sku: tagData.sku,
-                name: responsable, // NOT NULL en esquema
+                sku: allSkus,
+                name: responsable,
                 name_inc: responsable,
-                product: tagData.product,
-                quantity: tagData.quantity,
-                organization: tagData.organization,
-                sales_num: tagData.sales_num,
+                product: firstRow.product,
+                quantity: totalQuantity,
+                organization: firstRow.organization,
+                sales_num: firstRow.sales_num,
                 date: now.toISOString(),
                 status: 'EN PRODUCCION',
-                esti_time: estimatedTime,
-                deli_date: tagData.deli_date,
+                esti_time: totalEstimatedTime > 0 ? totalEstimatedTime : null,
+                deli_date: firstRow.deli_date,
                 date_ini: now.toISOString(),
                 date_esti: dateEsti.toISOString(),
                 rea_details: 'Sin reasignar'
@@ -153,8 +158,6 @@ export function useSewingTickets() {
                 console.warn("Fallo el registro en la tabla 'personal':", personalError.message);
             }
         }
-      } else {
-          console.warn("El código no es un número válido, se omite registro en 'personal':", finalBarcode);
       }
       // --- FIN SINCRONIZACIÓN ---
 
@@ -162,18 +165,18 @@ export function useSewingTickets() {
       const insertPayload = {
         codigo_barra: finalBarcode,
         responsable_vaciado: responsable,
-        nombre_producto: tagData.product,
-        pack_id: tagData.pack_id,
-        sales_num: tagData.sales_num,
-        sku: tagData.sku,
-        responsable_impresion: tagData.personal_inc,
-        cuenta: tagData.organization,
-        fecha_impresion: tagData.created_at ? new Date(tagData.created_at).toISOString().split('T')[0] : null,
-        cantidad: tagData.quantity,
+        nombre_producto: firstRow.product,
+        pack_id: firstRow.pack_id,
+        sales_num: firstRow.sales_num,
+        sku: allSkus,
+        responsable_impresion: firstRow.personal_inc,
+        cuenta: firstRow.organization,
+        fecha_impresion: firstRow.created_at ? new Date(firstRow.created_at).toISOString().split('T')[0] : null,
+        cantidad: totalQuantity,
         impreso: false,
         impresa: false,
         hora_vaciado: new Date().toLocaleTimeString('es-MX', { hour12: false }),
-        fecha_entrega_paquete: tagData.deli_date,
+        fecha_entrega_paquete: firstRow.deli_date,
         cortada: false,
         confeccion: false,
         perforado: false,
@@ -193,7 +196,7 @@ export function useSewingTickets() {
       toast({
         variant: 'success',
         title: 'Ticket Mapeado y Sincronizado',
-        description: `Se importaron datos y se inició el seguimiento en 'Personal'.`,
+        description: `Se detectaron ${tagDataArray.length} registros para este bulto.`,
       });
 
       await fetchTickets(false);
