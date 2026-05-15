@@ -39,7 +39,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
   AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
+} from "@/AlertDialog";
 import { Checkbox } from '@/components/ui/checkbox';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useReactToPrint } from "react-to-print";
@@ -558,21 +558,20 @@ export default function Home() {
       showAppMessage('Guardando asignación...', 'info');
 
       try {
-          const { data: lastRecord, error: lastRecordError } = await supabase
+          const { data: lastRecords, error: lastRecordError } = await supabase
               .from('personal')
               .select('date_esti')
               .eq('name', personName)
               .not('date_esti', 'is', null)
               .order('date_esti', { ascending: false })
-              .limit(1)
-              .single();
+              .limit(1);
 
-          if (lastRecordError && lastRecordError.code !== 'PGRST116') {
+          if (lastRecordError) {
               throw new Error(`Error al buscar último registro: ${lastRecordError.message}`);
           }
           
           const associationTimestamp = new Date();
-          let lastFinishTime = lastRecord?.date_esti ? new Date(lastRecord.date_esti) : associationTimestamp;
+          let lastFinishTime = lastRecords && lastRecords.length > 0 ? new Date(lastRecords[0].date_esti) : associationTimestamp;
           
           if (lastFinishTime < associationTimestamp) {
               lastFinishTime = associationTimestamp;
@@ -681,15 +680,14 @@ export default function Home() {
 
     if (scanMode === 'unassign') {
         try {
-            const { data: existing, error: findError } = await supabase
+            const { data: existingRows, error: findError } = await supabase
                 .from('personal')
                 .select('code')
-                .eq('code', finalCode)
-                .single();
+                .eq('code', finalCode);
 
-            if (findError && findError.code !== 'PGRST116') throw findError;
+            if (findError) throw findError;
 
-            if (!existing) {
+            if (!existingRows || existingRows.length === 0) {
                 showModalNotification('No Encontrado', `El código ${finalCode} no está asignado a nadie.`, 'destructive');
                 playErrorSound();
                 return;
@@ -716,15 +714,14 @@ export default function Home() {
 
     if (scanMode === 'update_date') {
         try {
-            const { data, error } = await supabaseEtiquetas
+            const { data: etiquetaRows, error } = await supabaseEtiquetas
                 .from('etiquetas_i')
                 .select('code')
-                .eq('code', finalCode)
-                .single();
+                .eq('code', finalCode);
 
-            if (error && error.code !== 'PGRST116') throw error;
+            if (error) throw error;
 
-            if (!data) {
+            if (!etiquetaRows || etiquetaRows.length === 0) {
                 showModalNotification('No Encontrado', `El código ${finalCode} no existe en la base de datos de etiquetas.`, 'destructive');
                 playErrorSound();
                 return;
@@ -815,17 +812,16 @@ export default function Home() {
         }
 
         for (const codeI of uniqueCodeIs) {
-            const { data: vCodeInfo, error: vCodeInfoError } = await supabaseEtiquetas
+            const { data: vCodeRows, error: vCodeInfoError } = await supabaseEtiquetas
                 .from('v_code')
                 .select('corte_etiquetas')
-                .eq('code_i', codeI)
-                .maybeSingle();
+                .eq('code_i', codeI);
 
             if (vCodeInfoError) {
                  throw new Error(`Error al verificar el corte en 'v_code': ${vCodeInfoError.message}`);
             }
             
-            if (!vCodeInfo || vCodeInfo.corte_etiquetas === null) {
+            if (!vCodeRows || vCodeRows.length === 0 || vCodeRows[0].corte_etiquetas === null) {
                 showModalNotification('Corte no Realizado', `La etiqueta ${finalCode} no puede ser asignada porque el corte (${codeI}) aún no ha sido realizado.`, 'destructive');
                 playErrorSound();
                 setLoading(false);
@@ -834,17 +830,17 @@ export default function Home() {
         }
 
 
-        const { data: personalData, error: personalError } = await supabase
+        const { data: personalRows, error: personalError } = await supabase
             .from('personal')
             .select('code, name, name_inc')
-            .eq('code', finalCode)
-            .maybeSingle();
+            .eq('code', finalCode);
 
         if (personalError) {
             throw new Error(`Error al verificar en 'personal': ${personalError.message}`);
         }
 
-        if (personalData) {
+        if (personalRows && personalRows.length > 0) {
+            const personalData = personalRows[0];
             playErrorSound();
             showAppMessage(
                 <>El código {finalCode} ya fue asignado a <strong className="font-bold">{personalData.name}</strong> por <strong className="font-bold">{personalData.name_inc}</strong>.</>,
@@ -1385,21 +1381,20 @@ const deleteRow = (codeToDelete: string) => {
     setLoading(true);
 
     try {
-        const { data: lastRecord, error: lastRecordError } = await supabase
+        const { data: lastRecords, error: lastRecordError } = await supabase
             .from('personal')
             .select('date_esti')
             .eq('name', personToAssign)
             .not('date_esti', 'is', null)
             .order('date_esti', { ascending: false })
-            .limit(1)
-            .single();
+            .limit(1);
 
-        if (lastRecordError && lastRecordError.code !== 'PGRST116') {
+        if (lastRecordError) {
             throw new Error(`Error al buscar último registro: ${lastRecordError.message}`);
         }
         
         const associationTimestamp = new Date();
-        let lastFinishTime = lastRecord?.date_esti ? new Date(lastRecord.date_esti) : associationTimestamp;
+        let lastFinishTime = lastRecords && lastRecords.length > 0 ? new Date(lastRecords[0].date_esti) : associationTimestamp;
 
         if (lastFinishTime < associationTimestamp) {
             lastFinishTime = associationTimestamp;
@@ -1487,22 +1482,22 @@ const deleteRow = (codeToDelete: string) => {
     setIsVerifying(true);
     setVerificationResult({ status: 'pending', message: 'Verificando código...' });
     try {
-        const { data: vCode, error: fetchError } = await supabaseEtiquetas
+        const { data: vCodeRows, error: fetchError } = await supabaseEtiquetas
             .from('v_code')
             .select('corte_etiquetas, personal_bar')
-            .eq('code_i', verificationCode)
-            .single();
+            .eq('code_i', verificationCode);
 
-        if (fetchError && fetchError.code !== 'PGRST116') { 
+        if (fetchError) { 
              throw new Error(`Error al verificar el código: ${fetchError.message}`);
         }
 
-        if (!vCode) {
+        if (!vCodeRows || vCodeRows.length === 0) {
             setVerificationResult({ status: 'not-found', message: 'Código de corte no encontrado o inválido.' });
             setIsVerifying(false);
             return;
         }
 
+        const vCode = vCodeRows[0];
         if (vCode.corte_etiquetas) {
             const registeredTime = new Date(vCode.corte_etiquetas).toLocaleString('es-MX', {
                 dateStyle: 'short',

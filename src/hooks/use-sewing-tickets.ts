@@ -98,31 +98,28 @@ export function useSewingTickets() {
       const numericCode = parseFloat(finalBarcode);
 
       if (!isNaN(numericCode)) {
-        const { data: existingInPersonal } = await supabase
+        const { data: personalCheckRows } = await supabase
             .from('personal')
             .select('code')
-            .eq('code', numericCode)
-            .maybeSingle();
+            .eq('code', numericCode);
 
-        if (!existingInPersonal) {
+        if (!personalCheckRows || personalCheckRows.length === 0) {
             // Replicar lógica de obtención de tiempo estimado (Sumando tiempos para múltiples SKUs)
             let totalEstimatedTime = 0;
             const skusToProcess = allSkus.split(' | ');
 
             for (const singleSku of skusToProcess) {
-                const { data: skuAlt } = await supabaseEtiquetas
+                const { data: skuAltRows } = await supabaseEtiquetas
                     .from('sku_alterno')
                     .select('sku_mdr')
-                    .eq('sku', singleSku)
-                    .maybeSingle();
+                    .eq('sku', singleSku);
                 
-                if (skuAlt) {
-                    const { data: skuM } = await supabaseEtiquetas
+                if (skuAltRows && skuAltRows.length > 0) {
+                    const { data: skuMRows } = await supabaseEtiquetas
                         .from('sku_m')
                         .select('esti_time')
-                        .eq('sku_mdr', skuAlt.sku_mdr)
-                        .maybeSingle();
-                    if (skuM) totalEstimatedTime += skuM.esti_time || 0;
+                        .eq('sku_mdr', skuAltRows[0].sku_mdr);
+                    if (skuMRows && skuMRows.length > 0) totalEstimatedTime += skuMRows[0].esti_time || 0;
                 }
             }
 
@@ -174,7 +171,6 @@ export function useSewingTickets() {
         fecha_impresion: firstRow.created_at ? new Date(firstRow.created_at).toISOString().split('T')[0] : null,
         cantidad: totalQuantity,
         impreso: false,
-        impresa: false,
         hora_vaciado: new Date().toLocaleTimeString('es-MX', { hour12: false }),
         fecha_entrega_paquete: firstRow.deli_date,
         cortada: false,
@@ -245,7 +241,6 @@ export function useSewingTickets() {
         .from('sewing_tickets')
         .update({ 
           impreso: true,
-          impresa: true,
           responsable_impresion: localStorage.getItem('sewing_responsable') || 'SISTEMA'
         })
         .in('id', ids);
