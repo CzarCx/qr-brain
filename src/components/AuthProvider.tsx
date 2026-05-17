@@ -52,7 +52,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
 
   useEffect(() => {
-    // Carga inicial de sesión
     const initAuth = async () => {
       const { data: { session: initialSession } } = await supabaseEtiquetas.auth.getSession();
       setSession(initialSession);
@@ -67,7 +66,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     initAuth();
 
-    // Listener para cambios de estado de autenticación
     const { data: { subscription } } = supabaseEtiquetas.auth.onAuthStateChange(async (_event, session) => {
       setSession(session);
       setUser(session?.user ?? null);
@@ -87,7 +85,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const syncProfileAndRoles = async (currentUser: User) => {
     try {
-      // 1. Obtener/Sincronizar Perfil Básico
       const { data: profileData, error: profileError } = await supabaseEtiquetas
         .from('table_profiles')
         .select('*')
@@ -120,7 +117,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (!insertError) setProfile(inserted as Profile);
       }
 
-      // 2. Obtener Roles RBAC (JOIN user_roles -> roles)
       const { data: roleRecords, error: roleError } = await supabaseEtiquetas
         .from('user_roles')
         .select(`
@@ -133,7 +129,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (roleError) {
         console.error("Error al obtener roles del usuario:", roleError.message);
       } else if (roleRecords) {
-        // Extraer los códigos de los roles (un usuario puede tener múltiples)
         const codes = roleRecords
           .map((r: any) => r.roles?.code)
           .filter(Boolean);
@@ -146,7 +141,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   /**
    * Helper para verificar si el usuario tiene un rol específico.
-   * El rol ADMIN siempre devuelve true.
+   * El rol ADMIN es un superusuario con acceso total.
    */
   const hasRole = (code: string) => {
     return roles.includes('ADMIN') || roles.includes(code);
@@ -157,7 +152,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     router.push('/login');
   };
 
-  // Protección de Rutas y RBAC Guard
   useEffect(() => {
     if (!loading) {
       const isPublicRoute = pathname === '/login';
@@ -174,12 +168,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           // Lógica de Validación RBAC por Path
           const requiredRoles = ROUTE_PERMISSIONS[pathname];
           
-          // Si la ruta requiere roles y el usuario no es ADMIN
+          // REGLA DE ORO: Si el usuario es ADMIN, tiene acceso a TODAS las páginas
           if (requiredRoles && !roles.includes('ADMIN')) {
             const hasPermission = requiredRoles.some(r => roles.includes(r));
             if (!hasPermission) {
-              console.warn(`Acceso denegado para ${user?.email} en ${pathname}. Roles actuales: ${roles.join(', ')}`);
-              // Redirigir al dashboard principal si no tiene permiso
+              console.warn(`Acceso denegado para ${user?.email} en ${pathname}. Se requiere uno de: ${requiredRoles.join(', ')}`);
               router.push('/main');
             }
           }

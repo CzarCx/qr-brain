@@ -91,6 +91,7 @@ export default function MainPage() {
   const { hasRole } = useAuth();
 
   // Filtrar los items del menú según el rol del usuario (RBAC)
+  // hasRole ya incluye la lógica de que ADMIN ve todo
   const visibleItems = navItems.filter(item => 
     !item.requiredRole || hasRole(item.requiredRole)
   );
