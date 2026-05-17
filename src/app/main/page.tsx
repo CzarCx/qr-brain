@@ -1,4 +1,3 @@
-
 'use client';
 
 import Link from 'next/link';
@@ -6,7 +5,11 @@ import Head from 'next/head';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { UserCog, UserCheck, ClipboardList, ScanLine, PackageCheck, UserPlus, Undo2, Boxes, Scissors } from 'lucide-react';
+import { useAuth } from '@/components/AuthProvider';
 
+/**
+ * Definición de módulos del sistema con sus respectivos requisitos de rol.
+ */
 const navItems = [
   {
     href: '/',
@@ -14,6 +17,7 @@ const navItems = [
     description: 'Asigna etiquetas de productos a los operarios.',
     icon: <UserCheck className="h-8 w-8 text-starbucks-green" />,
     cta: 'Ir a Asignar',
+    requiredRole: 'BAR_MANAGER',
   },
   {
     href: '/almacen',
@@ -21,6 +25,7 @@ const navItems = [
     description: 'Valida y marca bultos como surtidos para producción.',
     icon: <Boxes className="h-8 w-8 text-starbucks-green" />,
     cta: 'Ir a Almacén',
+    requiredRole: 'WAREHOUSE_MANAGER',
   },
   {
     href: '/sewing-tickets',
@@ -28,6 +33,7 @@ const navItems = [
     description: 'Registro automático de tickets de producción.',
     icon: <Scissors className="h-8 w-8 text-starbucks-green" />,
     cta: 'Ir a Costura',
+    requiredRole: 'SEWING_MANAGER',
   },
   {
     href: '/ppc',
@@ -35,6 +41,7 @@ const navItems = [
     description: 'Marca etiquetas como "Producción Por Calificar".',
     icon: <ClipboardList className="h-8 w-8 text-starbucks-green" />,
     cta: 'Ir a PPC',
+    requiredRole: 'USER',
   },
   {
     href: '/calificar',
@@ -42,6 +49,7 @@ const navItems = [
     description: 'Escanea y califica la calidad del empaquetado.',
     icon: <ScanLine className="h-8 w-8 text-starbucks-green" />,
     cta: 'Ir a Calificar',
+    requiredRole: 'QUALITY_CONTROL',
   },
   {
     href: '/entrega',
@@ -49,6 +57,7 @@ const navItems = [
     description: 'Registra los paquetes que salen a entrega.',
     icon: <PackageCheck className="h-8 w-8 text-starbucks-green" />,
     cta: 'Ir a Entrega',
+    requiredRole: 'DELIVERY_MANAGER',
   },
   {
     href: '/devoluciones',
@@ -56,6 +65,7 @@ const navItems = [
     description: 'Registra las devoluciones de paquetes.',
     icon: <Undo2 className="h-8 w-8 text-starbucks-green" />,
     cta: 'Ir a Devoluciones',
+    requiredRole: 'DELIVERY_MANAGER',
   },
   {
     href: '/registro-personal',
@@ -63,6 +73,7 @@ const navItems = [
     description: 'Añade y gestiona los miembros del equipo.',
     icon: <UserPlus className="h-8 w-8 text-starbucks-green" />,
     cta: 'Ir a Registro',
+    requiredRole: 'ADMIN',
   },
   {
     href: 'https://admin-mod-cerebro-jphk.vercel.app/',
@@ -71,11 +82,19 @@ const navItems = [
     icon: <UserCog className="h-8 w-8 text-starbucks-green" />,
     cta: 'Ir al Panel',
     isExternal: true,
+    requiredRole: 'ADMIN',
   },
 ];
 
 
 export default function MainPage() {
+  const { hasRole } = useAuth();
+
+  // Filtrar los items del menú según el rol del usuario (RBAC)
+  const visibleItems = navItems.filter(item => 
+    !item.requiredRole || hasRole(item.requiredRole)
+  );
+
   return (
     <>
       <Head>
@@ -89,7 +108,7 @@ export default function MainPage() {
           </CardHeader>
           <CardContent className="p-6 md:p-8 bg-white">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              {navItems.map((item) => {
+              {visibleItems.map((item) => {
                 const CardLink = item.isExternal ? 'a' : Link;
                 const linkProps = item.isExternal 
                     ? { href: item.href, target: '_blank', rel: 'noopener noreferrer' } 
@@ -111,6 +130,12 @@ export default function MainPage() {
                 );
               })}
             </div>
+            {visibleItems.length === 0 && (
+              <div className="text-center py-10 text-gray-500">
+                <p className="font-bold">No tienes módulos asignados.</p>
+                <p className="text-sm">Contacta a un administrador para obtener permisos.</p>
+              </div>
+            )}
           </CardContent>
         </Card>
       </main>

@@ -27,7 +27,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
-import { useAuth } from '@/components/AuthProvider';
+import { useAuth, ROUTE_PERMISSIONS } from '@/components/AuthProvider';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -52,10 +52,19 @@ const mainNavLinks = [
 export default function Navbar() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
-  const { session, profile, signOut } = useAuth();
+  const { session, profile, roles, hasRole, signOut } = useAuth();
 
   // Si estamos en la página de login, no mostramos la navbar
   if (pathname === '/login') return null;
+
+  // Filtrar links de navegación según roles del usuario (RBAC)
+  const visibleLinks = mainNavLinks.filter(link => {
+    const requiredRoles = ROUTE_PERMISSIONS[link.href];
+    if (!requiredRoles) return true; // Rutas sin restricción explícita
+    
+    // El usuario debe tener al menos uno de los roles requeridos o ser ADMIN
+    return roles.includes('ADMIN') || requiredRoles.some(r => roles.includes(r));
+  });
 
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 bg-starbucks-white shadow-md">
@@ -71,7 +80,7 @@ export default function Navbar() {
           {/* Desktop Navigation */}
           <div className="hidden lg:flex flex-1 justify-center px-4">
             <div className="flex space-x-1">
-              {mainNavLinks.map((link) => {
+              {visibleLinks.map((link) => {
                 const isActive = pathname === link.href;
                 return (
                   <Link
@@ -110,17 +119,19 @@ export default function Navbar() {
                       <div className="flex flex-col space-y-1">
                         <p className="text-sm font-black leading-none text-starbucks-dark">{profile?.email}</p>
                         <p className="text-[10px] font-bold leading-none text-muted-foreground uppercase tracking-widest mt-1">
-                          Rol: {profile?.role}
+                          Roles: {roles.length > 0 ? roles.join(', ') : 'SIN ROLES'}
                         </p>
                       </div>
                     </DropdownMenuLabel>
                     <DropdownMenuSeparator />
-                    <DropdownMenuItem asChild>
-                       <Link href="/registro-personal" className="cursor-pointer">
-                          <UserPlus className="mr-2 h-4 w-4" />
-                          <span>Registrar Personal</span>
-                       </Link>
-                    </DropdownMenuItem>
+                    {hasRole('ADMIN') && (
+                      <DropdownMenuItem asChild>
+                         <Link href="/registro-personal" className="cursor-pointer font-bold">
+                            <UserPlus className="mr-2 h-4 w-4" />
+                            <span>Registrar Personal</span>
+                         </Link>
+                      </DropdownMenuItem>
+                    )}
                     <DropdownMenuSeparator />
                     <DropdownMenuItem onClick={signOut} className="text-red-600 cursor-pointer focus:text-red-600 focus:bg-red-50">
                       <LogOut className="mr-2 h-4 w-4" />
@@ -146,7 +157,7 @@ export default function Navbar() {
                     </SheetTitle>
                   </SheetHeader>
                   <div className="flex flex-col space-y-2">
-                    {mainNavLinks.map((link) => {
+                    {visibleLinks.map((link) => {
                       const isActive = pathname === link.href;
                       return (
                         <Link
@@ -169,21 +180,23 @@ export default function Navbar() {
                     })}
                   </div>
                   <div className="mt-8 pt-4 border-t space-y-2">
-                    <Link
-                      href="/registro-personal"
-                      onClick={() => setOpen(false)}
-                      className={cn(
-                        'flex items-center gap-4 px-4 py-3 rounded-lg text-sm font-bold transition-colors',
-                        pathname === '/registro-personal'
-                          ? 'bg-starbucks-green text-white'
-                          : 'text-starbucks-dark hover:bg-starbucks-cream'
-                      )}
-                    >
-                      <div className="p-2 rounded-md bg-gray-100">
-                        <UserPlus className="h-5 w-5" />
-                      </div>
-                      Registrar Personal
-                    </Link>
+                    {hasRole('ADMIN') && (
+                      <Link
+                        href="/registro-personal"
+                        onClick={() => setOpen(false)}
+                        className={cn(
+                          'flex items-center gap-4 px-4 py-3 rounded-lg text-sm font-bold transition-colors',
+                          pathname === '/registro-personal'
+                            ? 'bg-starbucks-green text-white'
+                            : 'text-starbucks-dark hover:bg-starbucks-cream'
+                        )}
+                      >
+                        <div className="p-2 rounded-md bg-gray-100">
+                          <UserPlus className="h-5 w-5" />
+                        </div>
+                        Registrar Personal
+                      </Link>
+                    )}
                     <Button 
                       variant="ghost" 
                       onClick={signOut}
