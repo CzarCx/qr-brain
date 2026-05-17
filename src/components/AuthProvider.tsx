@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
@@ -21,6 +22,7 @@ export const ROUTE_PERMISSIONS: Record<string, string[]> = {
   '/sewing-tickets/impresos': ['SEWING_MANAGER'],
   '/sewing-tickets/status': ['SEWING_MANAGER'],
   '/registro-personal': ['ADMIN'],
+  '/main': [], // Panel principal accesible para todos los usuarios logueados
 };
 
 type Profile = {
@@ -53,31 +55,40 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const initAuth = async () => {
-      const { data: { session: initialSession } } = await supabaseEtiquetas.auth.getSession();
-      setSession(initialSession);
-      setUser(initialSession?.user ?? null);
-      
-      if (initialSession?.user) {
-        await syncProfileAndRoles(initialSession.user);
+      try {
+        const { data: { session: initialSession } } = await supabaseEtiquetas.auth.getSession();
+        setSession(initialSession);
+        setUser(initialSession?.user ?? null);
+        
+        if (initialSession?.user) {
+          await syncProfileAndRoles(initialSession.user);
+        }
+      } catch (error) {
+        console.error("Error inicializando sesión:", error);
+      } finally {
+        setLoading(false);
       }
-      
-      setLoading(false);
     };
 
     initAuth();
 
     const { data: { subscription } } = supabaseEtiquetas.auth.onAuthStateChange(async (_event, session) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      
-      if (session?.user) {
-        await syncProfileAndRoles(session.user);
-      } else {
-        setProfile(null);
-        setRoles([]);
+      try {
+        setSession(session);
+        setUser(session?.user ?? null);
+        
+        if (session?.user) {
+          await syncProfileAndRoles(session.user);
+        } else {
+          setProfile(null);
+          setRoles([]);
+        }
+      } catch (error) {
+        console.error("Error en cambio de estado de auth:", error);
+      } finally {
+        // Aseguramos que loading sea false incluso si hay errores
+        setLoading(false);
       }
-      
-      setLoading(false);
     });
 
     return () => subscription.unsubscribe();
@@ -153,30 +164,44 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   useEffect(() => {
-    if (!loading) {
-      const isPublicRoute = pathname === '/login';
-      
-      if (!session && !isPublicRoute) {
+    // Solo actuamos cuando la carga inicial ha terminado
+    if (loading) return;
+
+    const isPublicRoute = pathname === '/login';
+    
+    // 1. Manejo de usuarios NO autenticados
+    if (!session) {
+      if (!isPublicRoute) {
         router.push('/login');
+      }
+      return;
+    }
+
+    // 2. Manejo de usuarios autenticados
+    if (session) {
+      // Evitar que el usuario logueado entre al login
+      if (isPublicRoute) {
+        router.push('/main');
         return;
       }
 
-      if (session) {
-        if (isPublicRoute) {
+      // Regla de Oro: ADMIN tiene acceso total
+      if (roles.includes('ADMIN')) return;
+
+      // Validación RBAC por ruta mapeada
+      const requiredRoles = ROUTE_PERMISSIONS[pathname];
+      
+      // Si la ruta está en la lista de permisos y requiere roles específicos
+      if (requiredRoles && requiredRoles.length > 0) {
+        const hasPermission = requiredRoles.some(r => roles.includes(r));
+        if (!hasPermission) {
+          console.warn(`Acceso denegado: ${user?.email} en ${pathname}. Falta rol.`);
           router.push('/main');
-        } else {
-          // Lógica de Validación RBAC por Path
-          const requiredRoles = ROUTE_PERMISSIONS[pathname];
-          
-          // REGLA DE ORO: Si el usuario es ADMIN, tiene acceso a TODAS las páginas
-          if (requiredRoles && !roles.includes('ADMIN')) {
-            const hasPermission = requiredRoles.some(r => roles.includes(r));
-            if (!hasPermission) {
-              console.warn(`Acceso denegado para ${user?.email} en ${pathname}. Se requiere uno de: ${requiredRoles.join(', ')}`);
-              router.push('/main');
-            }
-          }
         }
+      } else if (requiredRoles === undefined) {
+        // Para rutas no mapeadas (incluyendo typos como /mai), permitimos que Next.js maneje el 404
+        // o podríamos redirigir a /main si preferimos una experiencia más cerrada
+        // router.push('/main');
       }
     }
   }, [session, loading, pathname, router, roles, user]);
@@ -185,8 +210,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     <AuthContext.Provider value={{ session, user, profile, roles, loading, signOut, hasRole }}>
       {loading ? (
         <div className="fixed inset-0 flex flex-col items-center justify-center bg-background z-[9999]">
-          <Loader2 className="h-10 w-10 text-starbucks-green animate-spin mb-4" />
-          <p className="text-sm font-bold text-gray-500 uppercase tracking-widest animate-pulse">Validando Permisos...</p>
+          <div className="flex flex-col items-center gap-4 animate-in fade-in duration-500">
+            <Loader2 className="h-12 w-12 text-starbucks-green animate-spin" />
+            <p className="text-sm font-black text-gray-500 uppercase tracking-[0.2em]">Validando Permisos...</p>
+          </div>
         </div>
       ) : children}
     </AuthContext.Provider>
