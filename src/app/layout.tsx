@@ -21,6 +21,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { AuthProvider } from '@/components/AuthProvider';
 
 type UnassignedLabel = {
   code: string;
@@ -188,97 +189,99 @@ export default function RootLayout({
         <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0" />
       </head>
       <body className="font-body antialiased bg-starbucks-light-gray">
-        <TooltipProvider>
-           <Dialog open={isFeedbackDialogOpen} onOpenChange={setIsFeedbackDialogOpen}>
-            <DialogTrigger asChild>
-                <div className="fixed bottom-6 right-4 z-[100] cursor-pointer md:top-20 md:bottom-auto">
-                    <Tooltip>
-                        <TooltipTrigger asChild>
-                            <div className="p-3 bg-yellow-400 text-yellow-900 rounded-full shadow-xl transition-transform hover:scale-110 active:scale-95">
-                                <Cog className="h-6 w-6 md:h-5 md:w-5" />
-                            </div>
-                        </TooltipTrigger>
-                        <TooltipContent side="left">
-                            <p>Ajustes</p>
-                        </TooltipContent>
-                    </Tooltip>
-                </div>
-            </DialogTrigger>
-            <DialogContent className="max-w-[90vw] sm:max-w-md rounded-xl">
-                <DialogHeader>
-                    <DialogTitle>Ajustes</DialogTitle>
-                </DialogHeader>
-                <div className="space-y-6 pt-4">
-                    <div>
-                        <Label htmlFor="report-time">Hora del Reporte Diario</Label>
-                        <Input id="report-time" type="time" value={reportTime} onChange={handleTimeChange} className="mt-2" />
-                    </div>
-                    <div className="space-y-4 pt-4 border-t">
-                        <Label>Enviar Ticket de Retroalimentación</Label>
-                        <Input id="title" value={feedbackTitle} onChange={(e) => setFeedbackTitle(e.target.value)} placeholder="Título" />
-                        <Select onValueChange={setFeedbackCategory} value={feedbackCategory}>
-                            <SelectTrigger>
-                                <SelectValue placeholder="Categoría" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="Observacion">Observación</SelectItem>
-                                <SelectItem value="Reporte de error">Error</SelectItem>
-                                <SelectItem value="Sugerencia">Sugerencia</SelectItem>
-                            </SelectContent>
-                        </Select>
-                        <Textarea id="description" value={feedbackDescription} onChange={(e) => setFeedbackDescription(e.target.value)} placeholder="Descripción" />
-                    </div>
-                </div>
-                <DialogFooter>
-                    <Button onClick={handleFeedbackSubmit} disabled={isSubmitting} className="w-full">
-                        {isSubmitting ? 'Enviando...' : <><Send className="mr-2 h-4 w-4" /> Enviar</>}
-                    </Button>
-                </DialogFooter>
-            </DialogContent>
-            </Dialog>
-
-            <Dialog open={isUnassignedDialogOpen} onOpenChange={setIsUnassignedDialogOpen}>
-              <DialogContent className="max-w-[95vw] sm:max-w-2xl rounded-xl">
+        <AuthProvider>
+          <TooltipProvider>
+            <Dialog open={isFeedbackDialogOpen} onOpenChange={setIsFeedbackDialogOpen}>
+              <DialogTrigger asChild>
+                  <div className="fixed bottom-6 right-4 z-[100] cursor-pointer md:top-20 md:bottom-auto">
+                      <Tooltip>
+                          <TooltipTrigger asChild>
+                              <div className="p-3 bg-yellow-400 text-yellow-900 rounded-full shadow-xl transition-transform hover:scale-110 active:scale-95">
+                                  <Cog className="h-6 w-6 md:h-5 md:w-5" />
+                              </div>
+                          </TooltipTrigger>
+                          <TooltipContent side="left">
+                              <p>Ajustes</p>
+                          </TooltipContent>
+                      </Tooltip>
+                  </div>
+              </DialogTrigger>
+              <DialogContent className="max-w-[90vw] sm:max-w-md rounded-xl">
                   <DialogHeader>
-                      <DialogTitle className="text-destructive flex items-center gap-2">
-                         <AlertTriangle className="h-6 w-6" />
-                         Etiquetas No Asignadas
-                      </DialogTitle>
+                      <DialogTitle>Ajustes</DialogTitle>
                   </DialogHeader>
-                  <div className="max-h-[60vh] overflow-auto border rounded-md">
-                      {unassignedLabels.length > 0 ? (
-                          <Table>
-                            <TableHeader className="bg-gray-100">
-                                <TableRow>
-                                    <TableHead>Código</TableHead>
-                                    <TableHead>Lote</TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                               {unassignedLabels.map(label => (
-                                  <TableRow key={label.code}>
-                                      <TableCell className="font-mono text-xs">{label.code}</TableCell>
-                                      <TableCell className="text-xs">{label.code_i || 'N/A'}</TableCell>
-                                  </TableRow>
-                              ))}
-                            </TableBody>
-                          </Table>
-                      ) : (
-                          <p className="text-sm text-gray-500 text-center py-4">Todo asignado.</p>
-                      )}
+                  <div className="space-y-6 pt-4">
+                      <div>
+                          <Label htmlFor="report-time">Hora del Reporte Diario</Label>
+                          <Input id="report-time" type="time" value={reportTime} onChange={handleTimeChange} className="mt-2" />
+                      </div>
+                      <div className="space-y-4 pt-4 border-t">
+                          <Label>Enviar Ticket de Retroalimentación</Label>
+                          <Input id="title" value={feedbackTitle} onChange={(e) => setFeedbackTitle(e.target.value)} placeholder="Título" />
+                          <Select onValueChange={setFeedbackCategory} value={feedbackCategory}>
+                              <SelectTrigger>
+                                  <SelectValue placeholder="Categoría" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                  <SelectItem value="Observacion">Observación</SelectItem>
+                                  <SelectItem value="Reporte de error">Error</SelectItem>
+                                  <SelectItem value="Sugerencia">Sugerencia</SelectItem>
+                              </SelectContent>
+                          </Select>
+                          <Textarea id="description" value={feedbackDescription} onChange={(e) => setFeedbackDescription(e.target.value)} placeholder="Descripción" />
+                      </div>
                   </div>
                   <DialogFooter>
-                      <Button variant="outline" onClick={() => setIsUnassignedDialogOpen(false)} className="w-full">Cerrar</Button>
+                      <Button onClick={handleFeedbackSubmit} disabled={isSubmitting} className="w-full">
+                          {isSubmitting ? 'Enviando...' : <><Send className="mr-2 h-4 w-4" /> Enviar</>}
+                      </Button>
                   </DialogFooter>
               </DialogContent>
-          </Dialog>
+              </Dialog>
 
-            <Navbar />
-            <main className="pt-20 pb-20 md:pb-0">
-                {children}
-            </main>
-            <Toaster />
-        </TooltipProvider>
+              <Dialog open={isUnassignedDialogOpen} onOpenChange={setIsUnassignedDialogOpen}>
+                <DialogContent className="max-w-[95vw] sm:max-w-2xl rounded-xl">
+                    <DialogHeader>
+                        <DialogTitle className="text-destructive flex items-center gap-2">
+                          <AlertTriangle className="h-6 w-6" />
+                          Etiquetas No Asignadas
+                        </DialogTitle>
+                    </DialogHeader>
+                    <div className="max-h-[60vh] overflow-auto border rounded-md">
+                        {unassignedLabels.length > 0 ? (
+                            <Table>
+                              <TableHeader className="bg-gray-100">
+                                  <TableRow>
+                                      <TableHead>Código</TableHead>
+                                      <TableHead>Lote</TableHead>
+                                  </TableRow>
+                              </TableHeader>
+                              <TableBody>
+                                {unassignedLabels.map(label => (
+                                    <TableRow key={label.code}>
+                                        <TableCell className="font-mono text-xs">{label.code}</TableCell>
+                                        <TableCell className="text-xs">{label.code_i || 'N/A'}</TableCell>
+                                    </TableRow>
+                                ))}
+                              </TableBody>
+                            </Table>
+                        ) : (
+                            <p className="text-sm text-gray-500 text-center py-4">Todo asignado.</p>
+                        )}
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setIsUnassignedDialogOpen(false)} className="w-full">Cerrar</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+              <Navbar />
+              <main className="pt-20 pb-20 md:pb-0">
+                  {children}
+              </main>
+              <Toaster />
+          </TooltipProvider>
+        </AuthProvider>
       </body>
     </html>
   );

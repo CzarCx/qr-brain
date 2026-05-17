@@ -14,7 +14,9 @@ import {
   Boxes, 
   Scissors,
   Menu,
-  Settings2
+  Settings2,
+  LogOut,
+  User as UserIcon
 } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
@@ -25,6 +27,16 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
+import { useAuth } from '@/components/AuthProvider';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 
 const mainNavLinks = [
   { href: '/', label: 'Asignar', icon: <UserCheck className="h-5 w-5" /> },
@@ -40,6 +52,10 @@ const mainNavLinks = [
 export default function Navbar() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
+  const { session, profile, signOut } = useAuth();
+
+  // Si estamos en la página de login, no mostramos la navbar
+  if (pathname === '/login') return null;
 
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 bg-starbucks-white shadow-md">
@@ -77,16 +93,42 @@ export default function Navbar() {
           </div>
 
           {/* User Actions & Mobile Toggle */}
-          <div className="flex items-center gap-2">
-             <Link href="/registro-personal" className={cn(
-                 "p-2 rounded-full transition-colors",
-                 pathname === '/registro-personal'
-                 ? 'bg-starbucks-green text-white'
-                 : 'text-gray-500 hover:bg-starbucks-cream hover:text-starbucks-dark'
-             )}>
-                <UserPlus className="h-6 w-6" />
-                <span className="sr-only">Registrar Personal</span>
-            </Link>
+          <div className="flex items-center gap-3">
+             {session && (
+               <DropdownMenu>
+                 <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" className="relative h-10 w-10 rounded-full">
+                      <Avatar className="h-9 w-9 border-2 border-starbucks-green/20">
+                        <AvatarFallback className="bg-starbucks-cream text-starbucks-green font-black">
+                          {profile?.email?.[0].toUpperCase() ?? 'U'}
+                        </AvatarFallback>
+                      </Avatar>
+                    </Button>
+                 </DropdownMenuTrigger>
+                 <DropdownMenuContent className="w-56" align="end" forceMount>
+                    <DropdownMenuLabel className="font-normal">
+                      <div className="flex flex-col space-y-1">
+                        <p className="text-sm font-black leading-none text-starbucks-dark">{profile?.email}</p>
+                        <p className="text-[10px] font-bold leading-none text-muted-foreground uppercase tracking-widest mt-1">
+                          Rol: {profile?.role}
+                        </p>
+                      </div>
+                    </DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem asChild>
+                       <Link href="/registro-personal" className="cursor-pointer">
+                          <UserPlus className="mr-2 h-4 w-4" />
+                          <span>Registrar Personal</span>
+                       </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={signOut} className="text-red-600 cursor-pointer focus:text-red-600 focus:bg-red-50">
+                      <LogOut className="mr-2 h-4 w-4" />
+                      <span>Cerrar Sesión</span>
+                    </DropdownMenuItem>
+                 </DropdownMenuContent>
+               </DropdownMenu>
+             )}
 
             {/* Mobile Menu Trigger */}
             <div className="lg:hidden">
@@ -126,7 +168,7 @@ export default function Navbar() {
                       );
                     })}
                   </div>
-                  <div className="mt-8 pt-4 border-t">
+                  <div className="mt-8 pt-4 border-t space-y-2">
                     <Link
                       href="/registro-personal"
                       onClick={() => setOpen(false)}
@@ -142,6 +184,16 @@ export default function Navbar() {
                       </div>
                       Registrar Personal
                     </Link>
+                    <Button 
+                      variant="ghost" 
+                      onClick={signOut}
+                      className="w-full justify-start gap-4 px-4 py-6 rounded-lg text-sm font-bold text-red-600 hover:bg-red-50 hover:text-red-700"
+                    >
+                      <div className="p-2 rounded-md bg-red-100">
+                        <LogOut className="h-5 w-5" />
+                      </div>
+                      Cerrar Sesión
+                    </Button>
                   </div>
                 </SheetContent>
               </Sheet>
