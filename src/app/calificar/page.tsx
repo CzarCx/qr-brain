@@ -33,12 +33,26 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertTriangle, Trash2, Zap, ZoomIn, PlusCircle, Download, Clock, FileWarning, Search, Loader2 } from 'lucide-react';
+import { 
+    AlertTriangle, 
+    Trash2, 
+    Zap, 
+    ZoomIn, 
+    PlusCircle, 
+    Download, 
+    Clock, 
+    FileWarning, 
+    Search, 
+    Loader2,
+    Check
+} from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Switch } from '@/components/ui/switch';
 import { Combobox } from '@/components/ui/combobox';
 import { useAuth } from '@/components/AuthProvider';
 import { Textarea } from '@/components/ui/textarea';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Command, CommandEmpty, CommandGroup, CommandItem, CommandList } from '@/components/ui/command';
 
 type ScanResult = {
     name: string | null;
@@ -111,6 +125,8 @@ export default function CalificarPage() {
   const [itemToReport, setItemToReport] = useState<ScanResult | null>(null);
   const [idProductoSolicitado, setIdProductoSolicitado] = useState<number | null>(null);
   const [idProductoDespachado, setIdProductoDespachado] = useState<string>('');
+  const [searchQueryDespachado, setSearchQueryDespachado] = useState('');
+  const [isInventoryPopoverOpen, setIsInventoryPopoverOpen] = useState(false);
   const [piezasDespachadas, setPiezasDespachadas] = useState('');
   const [observacionesIncidencia, setObservacionesIncidencia] = useState('');
   const [inventoryList, setInventoryList] = useState<InventoryItem[]>([]);
@@ -192,12 +208,14 @@ export default function CalificarPage() {
     }));
   }, [encargadosList, profile]);
 
-  const inventoryOptions = useMemo(() => {
-    return inventoryList.map(item => ({
-        value: String(item.id),
-        label: `[${item.sku}] ${item.name}`
-    }));
-  }, [inventoryList]);
+  const filteredInventory = useMemo(() => {
+    if (!searchQueryDespachado) return inventoryList.slice(0, 50);
+    const query = searchQueryDespachado.toLowerCase();
+    return inventoryList.filter(item => 
+        item.name.toLowerCase().includes(query) || 
+        item.sku.toLowerCase().includes(query)
+    ).slice(0, 50);
+  }, [inventoryList, searchQueryDespachado]);
 
   useEffect(() => {
     let interval: NodeJS.Timeout | null = null;
@@ -490,6 +508,7 @@ export default function CalificarPage() {
   const handleOpenDiscrepancyModal = async (item: ScanResult) => {
       setItemToReport(item);
       setIdProductoDespachado('');
+      setSearchQueryDespachado('');
       setPiezasDespachadas('');
       setObservacionesIncidencia('');
       setIdProductoSolicitado(null);
@@ -497,7 +516,7 @@ export default function CalificarPage() {
       
       if (item.sku) {
         const skuPart = item.sku.split(' | ')[0].trim();
-        const { data } = await supabase.from('inventory_master').select('id').eq('sku', skuPart).maybeSingle();
+        const { data } = await supabase.from('inventory_master').select('id').ilike('sku', `%${skuPart}%`).maybeSingle();
         if (data) setIdProductoSolicitado(data.id);
       }
   };
@@ -519,6 +538,12 @@ export default function CalificarPage() {
         alert('Reporte enviado correctamente.');
         handleOpenRatingModal(false);
     } catch (e: any) { alert(`Error al enviar el reporte: ${e.message}`); } finally { setLoading(false); }
+  };
+
+  const handleSelectProduct = (item: InventoryItem) => {
+      setIdProductoDespachado(String(item.id));
+      setSearchQueryDespachado(`[${item.sku}] ${item.name}`);
+      setIsInventoryPopoverOpen(false);
   };
 
   const handleSendDiscrepancyReport = async () => {
@@ -1017,17 +1042,49 @@ const triggerMassQualify = async () => {
                        </div>
                    </div>
 
-                   <div className="space-y-2">
+                   <div className="space-y-2 relative">
                        <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">PRODUCTO DESPACHADO (REAL):</Label>
-                       <Combobox
-                          options={inventoryOptions}
-                          value={idProductoDespachado}
-                          onValueChange={setIdProductoDespachado}
-                          placeholder="Busca el producto real..."
-                          emptyMessage="No se encontró producto en inventory_master."
-                          buttonClassName="w-full h-12 rounded-xl text-xs font-bold"
-                          disabled={loadingInventory}
-                       />
+                       <Popover open={isInventoryPopoverOpen} onOpenChange={setIsInventoryPopoverOpen}>
+                           <PopoverTrigger asChild>
+                               <div className="relative">
+                                   <Input 
+                                       placeholder="Escribe el SKU o nombre del producto..."
+                                       value={searchQueryDespachado}
+                                       onChange={(e) => {
+                                           setSearchQueryDespachado(e.target.value);
+                                           if (!isInventoryPopoverOpen) setIsInventoryPopoverOpen(true);
+                                       }}
+                                       onFocus={() => setIsInventoryPopoverOpen(true)}
+                                       className="h-12 rounded-xl text-xs font-bold pr-10"
+                                       disabled={loadingInventory}
+                                   />
+                                   <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                               </div>
+                           </PopoverTrigger>
+                           <PopoverContent className="w-[--radix-popover-trigger-width] p-0 z-[110]" align="start">
+                               <Command>
+                                   <CommandList className="max-h-[300px]">
+                                       <CommandEmpty>No se encontró el producto.</CommandEmpty>
+                                       <CommandGroup heading="Productos en inventario">
+                                           {filteredInventory.map((item) => (
+                                               <CommandItem
+                                                   key={item.id}
+                                                   value={`${item.sku} ${item.name}`}
+                                                   onSelect={() => handleSelectProduct(item)}
+                                                   className="cursor-pointer"
+                                               >
+                                                   <div className="flex flex-col">
+                                                       <span className="font-bold text-[10px] text-starbucks-green">{item.sku}</span>
+                                                       <span className="text-xs font-medium">{item.name}</span>
+                                                   </div>
+                                                   {String(idProductoDespachado) === String(item.id) && <Check className="ml-auto h-4 w-4 text-starbucks-green" />}
+                                               </CommandItem>
+                                           ))}
+                                       </CommandGroup>
+                                   </CommandList>
+                               </Command>
+                           </PopoverContent>
+                       </Popover>
                    </div>
 
                    <div className="space-y-2">
