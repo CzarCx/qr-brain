@@ -1,4 +1,3 @@
-
 'use client';
 import {useEffect, useRef, useState, useCallback} from 'react';
 import Head from 'next/head';
@@ -34,6 +33,7 @@ import {
 } from "@/components/ui/table";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertTriangle, Trash2 } from 'lucide-react';
+import { useAuth } from '@/components/AuthProvider';
 
 
 type ScanResult = {
@@ -56,6 +56,7 @@ type Encargado = {
 };
 
 export default function ScannerPage() {
+  const { profile } = useAuth();
   const [message, setMessage] = useState({ text: 'Apunte la cámara a un código QR.', type: 'info', show: false });
   const [lastScannedResult, setLastScannedResult] = useState<ScanResult | null>(null);
   const [scannerActive, setScannerActive] = useState(false);
@@ -103,6 +104,13 @@ export default function ScannerPage() {
     };
     fetchEncargados();
   }, []);
+
+  // Vincular encargado con el perfil de usuario logueado
+  useEffect(() => {
+    if (profile?.name) {
+      setEncargado(profile.name);
+    }
+  }, [profile]);
 
   const onScanSuccess = useCallback(async (decodedText: string) => {
     if (loading || Date.now() - lastScanTimeRef.current < MIN_SCAN_INTERVAL) return;

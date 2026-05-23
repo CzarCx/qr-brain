@@ -1,4 +1,3 @@
-
 'use client';
 import React, {useEffect, useRef, useState, useCallback, useMemo} from 'react';
 import Head from 'next/head';
@@ -47,6 +46,7 @@ import TicketPreview from "@/components/TicketPreview";
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { Textarea } from '@/components/ui/textarea';
+import { useAuth } from '@/components/AuthProvider';
 
 
 type ScannedItem = {
@@ -111,6 +111,7 @@ type VerificationResult = {
 
 
 export default function Home() {
+  const { profile } = useAuth();
   const [isMounted, setIsMounted] = useState(false);
   const [message, setMessage] = useState<{text: React.ReactNode, type: 'info' | 'success' | 'duplicate', show: boolean}>({text: 'Esperando para escanear...', type: 'info', show: false});
   const [lastScannedCode, setLastScannedCode] = useState<string | null>(null);
@@ -314,6 +315,13 @@ export default function Home() {
       supabase.removeChannel(channel);
     };
   }, [fetchCreatedLotes]);
+
+  // Vincular encargado con el perfil de usuario logueado
+  useEffect(() => {
+    if (profile?.name) {
+      setEncargado(profile.name);
+    }
+  }, [profile]);
 
   // Guardar cambios en LocalStorage automáticamente
   useEffect(() => {

@@ -1,4 +1,3 @@
-
 'use client';
 import {useEffect, useRef, useState, useCallback} from 'react';
 import Head from 'next/head';
@@ -34,6 +33,7 @@ import {
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertTriangle, Trash2, Zap, ZoomIn } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { useAuth } from '@/components/AuthProvider';
 
 
 type ScanResult = {
@@ -57,6 +57,7 @@ type Encargado = {
 };
 
 export default function ImpresionesBarraPage() {
+  const { profile } = useAuth();
   const [isMounted, setIsMounted] = useState(false);
   const [message, setMessage] = useState({ text: 'Apunte la cámara a un código QR.', type: 'info', show: false });
   const [lastScannedResult, setLastScannedResult] = useState<ScanResult | null>(null);
@@ -120,6 +121,13 @@ export default function ImpresionesBarraPage() {
     };
     fetchEncargados();
   }, []);
+
+  // Vincular encargado con el perfil de usuario logueado
+  useEffect(() => {
+    if (profile?.name) {
+      setEncargado(profile.name);
+    }
+  }, [profile]);
 
   const playBeep = () => {
     const context = new (window.AudioContext || (window as any).webkitAudioContext)();

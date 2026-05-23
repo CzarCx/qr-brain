@@ -34,6 +34,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertTriangle, Trash2, Zap, ZoomIn } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Combobox } from '@/components/ui/combobox';
+import { useAuth } from '@/components/AuthProvider';
 
 
 type ScanResult = {
@@ -58,6 +59,7 @@ type Encargado = {
 };
 
 export default function PpcPage() {
+  const { profile } = useAuth();
   const [isMounted, setIsMounted] = useState(false);
   const [message, setMessage] = useState({ text: 'Apunte la cámara a un código QR.', type: 'info', show: false });
   const [lastScannedResult, setLastScannedResult] = useState<ScanResult | null>(null);
@@ -121,6 +123,13 @@ export default function PpcPage() {
     };
     fetchEncargados();
   }, []);
+
+  // Vincular encargado con el perfil de usuario logueado
+  useEffect(() => {
+    if (profile?.name) {
+      setEncargado(profile.name);
+    }
+  }, [profile]);
 
   const groupedEncargadoOptions = useMemo(() => {
     if (encargadosList.length === 0) return [];

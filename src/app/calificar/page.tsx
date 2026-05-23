@@ -37,6 +37,7 @@ import { AlertTriangle, Trash2, Zap, ZoomIn, PlusCircle, Download, Clock } from 
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Switch } from '@/components/ui/switch';
 import { Combobox } from '@/components/ui/combobox';
+import { useAuth } from '@/components/AuthProvider';
 
 
 type ScanResult = {
@@ -72,6 +73,7 @@ type LoteConfirmationState = {
 };
 
 export default function CalificarPage() {
+  const { profile } = useAuth();
   const [isMounted, setIsMounted] = useState(false);
   const [message, setMessage] = useState({ text: 'Apunte la cámara a un código QR.', type: 'info', show: false });
   const [lastScannedResult, setLastScannedResult] = useState<ScanResult | null>(null);
@@ -138,6 +140,13 @@ export default function CalificarPage() {
     };
     fetchEncargados();
   }, []);
+
+  // Vincular encargado con el perfil de usuario logueado
+  useEffect(() => {
+    if (profile?.name) {
+      setEncargado(profile.name);
+    }
+  }, [profile]);
 
   const groupedEncargadoOptions = useMemo(() => {
     if (encargadosList.length === 0) return [];

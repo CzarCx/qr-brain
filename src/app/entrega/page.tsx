@@ -22,6 +22,7 @@ import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import Papa from 'papaparse';
 import { Combobox } from '@/components/ui/combobox';
+import { useAuth } from '@/components/AuthProvider';
 
 
 type DeliveryItem = {
@@ -36,6 +37,7 @@ type Encargado = {
 };
 
 export default function Home() {
+  const { profile } = useAuth();
   const [isMounted, setIsMounted] = useState(false);
   const [message, setMessage] = useState({text: 'Esperando para escanear...', type: 'info' as 'info' | 'success' | 'error' | 'warning', show: false});
   const [lastScanned, setLastScanned] = useState<string | null>(null);
@@ -95,6 +97,13 @@ export default function Home() {
     };
     fetchEncargados();
   }, []);
+
+  // Vincular encargado con el perfil de usuario logueado
+  useEffect(() => {
+    if (profile?.name) {
+      setEncargado(profile.name);
+    }
+  }, [profile]);
 
   const groupedEncargadoOptions = useMemo(() => {
     if (encargadosList.length === 0) return [];
@@ -1000,7 +1009,7 @@ export default function Home() {
             
             {showNotification && (
                 <div id="qr-confirmation-overlay" className="p-4" style={{display: 'flex'}}>
-                     <div className="bg-starbucks-white rounded-lg shadow-xl p-6 w-full max-w-sm text-center space-y-4">
+                     <div className="bg-starbucks-white rounded-lg shadow-xl p-6 w-full max-sm text-center space-y-4">
                         <Alert variant={notification.variant as any}>
                             {notification.variant === 'destructive' ? <XCircle className="h-5 w-5" /> : <AlertTriangle className="h-5 w-5" />}
                             <AlertTitle>{notification.title}</AlertTitle>

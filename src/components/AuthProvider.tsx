@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
@@ -28,6 +27,7 @@ export const ROUTE_PERMISSIONS: Record<string, string[]> = {
 type Profile = {
   id: string;
   email: string | null;
+  name: string | null;
   role: 'ADMIN' | 'USER';
   last_seen: string | null;
 };
@@ -86,7 +86,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } catch (error) {
         console.error("Error en cambio de estado de auth:", error);
       } finally {
-        // Aseguramos que loading sea false incluso si hay errores
         setLoading(false);
       }
     });
@@ -164,12 +163,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   useEffect(() => {
-    // Solo actuamos cuando la carga inicial ha terminado
     if (loading) return;
 
     const isPublicRoute = pathname === '/login';
     
-    // 1. Manejo de usuarios NO autenticados
     if (!session) {
       if (!isPublicRoute) {
         router.push('/login');
@@ -177,34 +174,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    // 2. Manejo de usuarios autenticados
     if (session) {
-      // Evitar que el usuario logueado entre al login
       if (isPublicRoute) {
         router.push('/main');
         return;
       }
 
-      // Regla de Oro: ADMIN tiene acceso total
       if (roles.includes('ADMIN')) return;
 
-      // Validación RBAC por ruta mapeada
       const requiredRoles = ROUTE_PERMISSIONS[pathname];
       
-      // Si la ruta está en la lista de permisos y requiere roles específicos
       if (requiredRoles && requiredRoles.length > 0) {
         const hasPermission = requiredRoles.some(r => roles.includes(r));
         if (!hasPermission) {
-          console.warn(`Acceso denegado: ${user?.email} en ${pathname}. Falta rol.`);
           router.push('/main');
         }
-      } else if (requiredRoles === undefined) {
-        // Para rutas no mapeadas (incluyendo typos como /mai), permitimos que Next.js maneje el 404
-        // o podríamos redirigir a /main si preferimos una experiencia más cerrada
-        // router.push('/main');
       }
     }
-  }, [session, loading, pathname, router, roles, user]);
+  }, [session, loading, pathname, router, roles]);
 
   return (
     <AuthContext.Provider value={{ session, user, profile, roles, loading, signOut, hasRole }}>

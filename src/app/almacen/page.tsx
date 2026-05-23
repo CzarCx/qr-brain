@@ -33,6 +33,7 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { Combobox } from '@/components/ui/combobox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { useAuth } from '@/components/AuthProvider';
 
 type ScanResult = {
     name: string | null;
@@ -52,6 +53,7 @@ type Encargado = {
 };
 
 export default function AlmacenPage() {
+  const { profile } = useAuth();
   const [isMounted, setIsMounted] = useState(false);
   const [message, setMessage] = useState({ text: 'Apunte la cámara a un código QR.', type: 'info' as 'info' | 'success' | 'error' | 'warning', show: false });
   const [lastScannedResult, setLastScannedResult] = useState<ScanResult | null>(null);
@@ -89,7 +91,6 @@ export default function AlmacenPage() {
 
    useEffect(() => {
     setIsMounted(true);
-    setEncargado('Almacenista');
     
     const fetchEncargados = async () => {
         const { data, error } = await supabase
@@ -111,6 +112,15 @@ export default function AlmacenPage() {
     };
     fetchEncargados();
   }, []);
+
+  // Vincular encargado con el perfil de usuario logueado
+  useEffect(() => {
+    if (profile?.name) {
+      setEncargado(profile.name);
+    } else if (isMounted && !encargado) {
+       setEncargado('Almacenista');
+    }
+  }, [profile, isMounted]);
 
   const groupedEncargadoOptions = useMemo(() => {
     if (encargadosList.length === 0) return [];

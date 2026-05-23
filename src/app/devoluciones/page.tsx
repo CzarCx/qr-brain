@@ -37,6 +37,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { useAuth } from '@/components/AuthProvider';
 
 type Encargado = {
   name: string;
@@ -51,6 +52,7 @@ type ReturnItem = {
 };
 
 export default function DevolucionesPage() {
+  const { profile } = useAuth();
   const [isMounted, setIsMounted] = useState(false);
   const [message, setMessage] = useState({ text: 'Apunte la cámara a un código QR.', type: 'info' as 'info' | 'success' | 'error' | 'warning', show: false });
   const [scannerActive, setScannerActive] = useState(false);
@@ -117,6 +119,13 @@ export default function DevolucionesPage() {
     fetchEncargados();
   }, []);
 
+  // Vincular encargado con el perfil de usuario logueado
+  useEffect(() => {
+    if (profile?.name) {
+      setEncargado(profile.name);
+    }
+  }, [profile]);
+
   const groupedEncargadoOptions = useMemo(() => {
     if (encargadosList.length === 0) return [];
     
@@ -157,8 +166,8 @@ export default function DevolucionesPage() {
     const oscillator = context.createOscillator();
     const gainNode = context.createGain();
     oscillator.type = 'sawtooth';
-    oscillator.frequency.setValueAtTime(440, context.currentTime);
-    gainNode.gain.setValueAtTime(1.5, context.currentTime);
+    oscillator.frequency.setValueAtTime(440, context.currentTime); // A4
+    gainNode.gain.setValueAtTime(1.5, context.currentTime); // Increased Volume
     gainNode.gain.exponentialRampToValueAtTime(0.00001, context.currentTime + 0.2);
     oscillator.connect(gainNode);
     gainNode.connect(context.destination);
