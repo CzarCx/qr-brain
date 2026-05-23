@@ -465,7 +465,7 @@ export default function CalificarPage() {
       }
     } else cleanup();
     return () => { cleanup(); };
-  }, [scannerActive, selectedScannerMode, isMobile, isMounted]);
+  }, [scannerActive, selectedScannerMode, isMobile, isMounted, onScanSuccess]);
 
   useEffect(() => {
       setMassScannedCodes([]);
@@ -495,7 +495,6 @@ export default function CalificarPage() {
       setIdProductoSolicitado(null);
       setIsDiscrepancyModalOpen(true);
       
-      // Buscamos el id del producto solicitado en inventory_master
       if (item.sku) {
         const skuPart = item.sku.split(' | ')[0].trim();
         const { data } = await supabase.from('inventory_master').select('id').eq('sku', skuPart).maybeSingle();
@@ -523,10 +522,12 @@ export default function CalificarPage() {
   };
 
   const handleSendDiscrepancyReport = async () => {
-      if (!itemToReport || !idProductoDespachado || !piezasDespachadas) { alert("Por favor, completa los campos obligatorios."); return; }
+      if (!itemToReport || !idProductoDespachado || !piezasDespachadas) { 
+          alert("Por favor, selecciona el producto despachado y la cantidad real."); 
+          return; 
+      }
       setLoading(true);
       try {
-          // 1. Obtener ID del empleado (operario) basado en el nombre del registro de producción
           let idEmpleado = null;
           if (itemToReport.name) {
               const { data: empData } = await supabase.from('empleados').select('id').eq('name', itemToReport.name).maybeSingle();
@@ -550,13 +551,19 @@ export default function CalificarPage() {
           const { error: insError } = await supabase.from('registro_incidencias_en_paquetes_listos_para_entrega').insert([record]);
           if (insError) throw insError;
 
-          // 2. Marcar como reportado en producción
-          await supabase.from('personal').update({ details: `Discrepancia registrada: Detectado por QC`, status: 'REPORTADO' }).eq('code', itemToReport.code);
+          await supabase.from('personal').update({ 
+              details: `Discrepancia detectada en QC. Real: ${piezasDespachadas} pzas.`, 
+              status: 'REPORTADO' 
+          }).eq('code', itemToReport.code);
 
-          alert('Incidencia de discrepancia registrada correctamente.');
+          alert('Incidencia registrada exitosamente.');
           setIsDiscrepancyModalOpen(false);
           setMassScannedCodes(prev => prev.map(i => i.code === itemToReport.code ? { ...i, status: 'REPORTADO' } : i));
-      } catch (e: any) { alert(`Error: ${e.message}`); } finally { setLoading(false); }
+      } catch (e: any) { 
+          alert(`Error al guardar: ${e.message}`); 
+      } finally { 
+          setLoading(false); 
+      }
   };
 
   const handleAccept = async () => {
@@ -659,12 +666,12 @@ const triggerMassQualify = async () => {
 
   return (
     <>
-      <Head><title>Calificar Empaquetado</title></Head>
+      <Head><title>Calificar Calidad</title></Head>
       <main className="text-starbucks-dark flex items-center justify-center p-4">
         <div className="w-full max-w-2xl mx-auto bg-starbucks-white rounded-xl shadow-2xl p-4 md:p-6 space-y-4">
           <header className="text-center">
-            <h1 className="text-xl md:text-2xl font-bold text-starbucks-green">Calificar Empaquetado</h1>
-            <p className="text-gray-600 text-sm mt-1">Escanea el QR para calificar la calidad.</p>
+            <h1 className="text-xl md:text-2xl font-bold text-starbucks-green">Calificar Calidad</h1>
+            <p className="text-gray-600 text-sm mt-1">Escanea el QR para validar el empaquetado.</p>
           </header>
 
           {dbError && (
@@ -981,57 +988,82 @@ const triggerMassQualify = async () => {
         </div>
       </main>
 
-       {/* Modal Discrepancia */}
+       {/* Modal Reportar Discrepancia */}
        <Dialog open={isDiscrepancyModalOpen} onOpenChange={setIsDiscrepancyModalOpen}>
-           <DialogContent className="sm:max-w-md">
+           <DialogContent className="sm:max-w-lg">
                <DialogHeader>
-                   <DialogTitle className="flex items-center gap-2 text-amber-600">
-                       <AlertTriangle className="h-5 w-5" />
+                   <DialogTitle className="flex items-center gap-2 text-amber-600 text-lg">
+                       <AlertTriangle className="h-6 w-6" />
                        Reportar Discrepancia
                    </DialogTitle>
-                   <DialogDescription>
+                   <DialogDescription className="text-gray-500 font-medium pt-2">
                        Detectar diferencias entre lo solicitado por sistema y lo despachado físicamente.
                    </DialogDescription>
                </DialogHeader>
-               <div className="grid gap-4 py-4">
-                   <div className="grid grid-cols-2 gap-4">
-                       <div className="space-y-1">
-                           <Label className="text-[10px] uppercase font-bold text-gray-400">Producto Solicitado (ID: {idProductoSolicitado || 'No encontrado'})</Label>
-                           <p className="text-xs font-bold border p-2 rounded bg-gray-50 truncate">{itemToReport?.sku || 'S/N'}</p>
+               
+               <div className="grid gap-6 py-6 border-y border-gray-100 mt-2">
+                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                       <div className="space-y-2">
+                           <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">PRODUCTO SOLICITADO (ID: {idProductoSolicitado || 'NO ENCONTRADO'})</Label>
+                           <div className="p-3 border rounded-xl bg-gray-50 font-mono text-[11px] font-black break-all line-clamp-2">
+                               {itemToReport?.sku || 'S/N'}
+                           </div>
                        </div>
-                       <div className="space-y-1">
-                           <Label className="text-[10px] uppercase font-bold text-gray-400">Piezas Solicitadas</Label>
-                           <p className="text-xs font-bold border p-2 rounded bg-gray-50">{itemToReport?.quantity || 0}</p>
+                       <div className="space-y-2">
+                           <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">PIEZAS SOLICITADAS</Label>
+                           <div className="p-3 border rounded-xl bg-gray-50 font-black text-lg">
+                               {itemToReport?.quantity || 0}
+                           </div>
                        </div>
                    </div>
 
                    <div className="space-y-2">
-                       <Label className="font-bold text-xs uppercase">Producto Despachado (Real):</Label>
+                       <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">PRODUCTO DESPACHADO (REAL):</Label>
                        <Combobox
                           options={inventoryOptions}
                           value={idProductoDespachado}
                           onValueChange={setIdProductoDespachado}
                           placeholder="Busca el producto real..."
                           emptyMessage="No se encontró producto en inventory_master."
-                          buttonClassName="w-full"
+                          buttonClassName="w-full h-12 rounded-xl text-xs font-bold"
                           disabled={loadingInventory}
                        />
                    </div>
 
                    <div className="space-y-2">
-                       <Label htmlFor="disp-qty" className="font-bold text-xs uppercase">Piezas Despachadas (Real):</Label>
-                       <Input id="disp-qty" type="number" value={piezasDespachadas} onChange={(e) => setPiezasDespachadas(e.target.value)} placeholder="0" className="bg-transparent" />
+                       <Label htmlFor="disp-qty" className="text-[10px] font-black text-gray-400 uppercase tracking-widest">PIEZAS DESPACHADAS (REAL):</Label>
+                       <Input 
+                            id="disp-qty" 
+                            type="number" 
+                            value={piezasDespachadas} 
+                            onChange={(e) => setPiezasDespachadas(e.target.value)} 
+                            placeholder="0" 
+                            className="bg-transparent h-12 rounded-xl font-black text-lg" 
+                        />
                    </div>
 
                    <div className="space-y-2">
-                       <Label htmlFor="obs" className="font-bold text-xs uppercase">Observaciones:</Label>
-                       <Textarea id="obs" value={observacionesIncidencia} onChange={(e) => setObservacionesIncidencia(e.target.value)} placeholder="Ej. El paquete venía con menos piezas..." className="min-h-[60px]" />
+                       <Label htmlFor="obs" className="text-[10px] font-black text-gray-400 uppercase tracking-widest">OBSERVACIONES:</Label>
+                       <Textarea 
+                            id="obs" 
+                            value={observacionesIncidencia} 
+                            onChange={(e) => setObservacionesIncidencia(e.target.value)} 
+                            placeholder="Ej. El paquete venía con menos piezas..." 
+                            className="min-h-[100px] rounded-xl text-sm" 
+                        />
                    </div>
                </div>
-               <DialogFooter>
-                   <Button variant="outline" onClick={() => setIsDiscrepancyModalOpen(false)}>Cancelar</Button>
-                   <Button onClick={handleSendDiscrepancyReport} disabled={loading || !idProductoDespachado || !piezasDespachadas} className="bg-amber-600 hover:bg-amber-700 text-white">
-                       {loading ? 'Enviando...' : 'Enviar Reporte'}
+
+               <DialogFooter className="flex flex-row gap-3 sm:justify-end">
+                   <Button variant="outline" onClick={() => setIsDiscrepancyModalOpen(false)} className="h-12 px-6 rounded-xl font-bold flex-1 sm:flex-none">
+                       Cancelar
+                   </Button>
+                   <Button 
+                        onClick={handleSendDiscrepancyReport} 
+                        disabled={loading || !idProductoDespachado || !piezasDespachadas} 
+                        className="bg-amber-600 hover:bg-amber-700 text-white h-12 px-8 rounded-xl font-black flex-1 sm:flex-none transition-all shadow-lg shadow-amber-200"
+                    >
+                       {loading ? <Loader2 className="animate-spin h-5 w-5" /> : 'Enviar Reporte'}
                    </Button>
                </DialogFooter>
            </DialogContent>
