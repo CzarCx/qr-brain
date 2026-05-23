@@ -33,12 +33,12 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertTriangle, Trash2, Zap, ZoomIn, PlusCircle, Download, Clock, FileWarning } from 'lucide-react';
+import { AlertTriangle, Trash2, Zap, ZoomIn, PlusCircle, Download, Clock, FileWarning, Search, Loader2 } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Switch } from '@/components/ui/switch';
 import { Combobox } from '@/components/ui/combobox';
 import { useAuth } from '@/components/AuthProvider';
-
+import { Textarea } from '@/components/ui/textarea';
 
 type ScanResult = {
     name: string | null;
@@ -72,8 +72,14 @@ type LoteConfirmationState = {
   newCount: number;
 };
 
+type InventoryItem = {
+    id: number;
+    name: string;
+    sku: string;
+};
+
 export default function CalificarPage() {
-  const { profile } = useAuth();
+  const { profile, user } = useAuth();
   const [isMounted, setIsMounted] = useState(false);
   const [message, setMessage] = useState({ text: 'Apunte la cámara a un código QR.', type: 'info', show: false });
   const [lastScannedResult, setLastScannedResult] = useState<ScanResult | null>(null);
@@ -103,15 +109,19 @@ export default function CalificarPage() {
   // States for Discrepancy Report
   const [isDiscrepancyModalOpen, setIsDiscrepancyModalOpen] = useState(false);
   const [itemToReport, setItemToReport] = useState<ScanResult | null>(null);
-  const [dispatchedProduct, setDispatchedProduct] = useState('');
-  const [dispatchedQuantity, setDispatchedQuantity] = useState('');
+  const [idProductoSolicitado, setIdProductoSolicitado] = useState<number | null>(null);
+  const [idProductoDespachado, setIdProductoDespachado] = useState<string>('');
+  const [piezasDespachadas, setPiezasDespachadas] = useState('');
+  const [observacionesIncidencia, setObservacionesIncidencia] = useState('');
+  const [inventoryList, setInventoryList] = useState<InventoryItem[]>([]);
+  const [loadingInventory, setLoadingInventory] = useState(false);
 
   const messageTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const html5QrCodeRef = useRef<Html5Qrcode | null>(null);
   const readerRef = useRef<HTMLDivElement>(null);
   const lastScanTimeRef = useRef(Date.now());
-  const MIN_SCAN_INTERVAL = 2000; // 2 seconds between scans
+  const MIN_SCAN_INTERVAL = 2000;
   const massScannedCodesRef = useRef(new Set<string>());
   const physicalScannerInputRef = useRef<HTMLInputElement | null>(null);
   const bufferRef = useRef('');
@@ -144,10 +154,20 @@ export default function CalificarPage() {
              setDbError('No se encontraron encargados con el rol "Control de calidad". Revisa los datos o los permisos RLS.');
         }
     };
+    const fetchInventory = async () => {
+        setLoadingInventory(true);
+        const { data, error } = await supabase
+            .from('inventory_master')
+            .select('id, name, sku')
+            .order('name', { ascending: true });
+        if (data) setInventoryList(data);
+        setLoadingInventory(false);
+    };
+
     fetchEncargados();
+    fetchInventory();
   }, []);
 
-  // Vincular encargado con el perfil de usuario logueado
   useEffect(() => {
     if (profile?.name) {
       setEncargado(profile.name);
@@ -156,32 +176,31 @@ export default function CalificarPage() {
 
   const groupedEncargadoOptions = useMemo(() => {
     let list = [...encargadosList];
-    
-    // Asegurar que el usuario logueado esté en las opciones
     if (profile?.name && !list.some(e => e.name === profile.name)) {
         list.push({ name: profile.name, rol: 'Control de calidad', organization: 'Usuario Actual' });
     }
-
     if (list.length === 0) return [];
-    
     const grouped = list.reduce((acc, person) => {
         const org = person.organization || 'Sin Empresa';
-        if (!acc[org]) {
-            acc[org] = [];
-        }
+        if (!acc[org]) acc[org] = [];
         acc[org].push({ value: person.name, label: person.name });
         return acc;
     }, {} as Record<string, { value: string; label: string }[]>);
-
     return Object.keys(grouped).sort().map(org => ({
         label: org,
         options: grouped[org].sort((a, b) => a.label.localeCompare(b.label))
     }));
   }, [encargadosList, profile]);
 
+  const inventoryOptions = useMemo(() => {
+    return inventoryList.map(item => ({
+        value: String(item.id),
+        label: `[${item.sku}] ${item.name}`
+    }));
+  }, [inventoryList]);
+
   useEffect(() => {
     let interval: NodeJS.Timeout | null = null;
-
     if (timerStartTime) {
       interval = setInterval(() => {
         const now = new Date();
@@ -191,12 +210,7 @@ export default function CalificarPage() {
     } else {
         setElapsedTime(0);
     }
-
-    return () => {
-      if (interval) {
-        clearInterval(interval);
-      }
-    };
+    return () => { if (interval) clearInterval(interval); };
   }, [timerStartTime]);
 
   useEffect(() => {
@@ -206,11 +220,8 @@ export default function CalificarPage() {
         event.returnValue = '¿Estás seguro de refrescar la página? Si refrescas se perderá el progreso de etiquetas escaneadas.';
       }
     };
-
     window.addEventListener('beforeunload', handleBeforeUnload);
-    return () => {
-      window.removeEventListener('beforeunload', handleBeforeUnload);
-    };
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [massScannedCodes]);
 
   const playBeep = () => {
@@ -219,8 +230,8 @@ export default function CalificarPage() {
     const oscillator = context.createOscillator();
     const gainNode = context.createGain();
     oscillator.type = 'square';
-    oscillator.frequency.setValueAtTime(880, context.currentTime); // A5 note
-    gainNode.gain.setValueAtTime(1, context.currentTime); // Further increased Volume
+    oscillator.frequency.setValueAtTime(880, context.currentTime);
+    gainNode.gain.setValueAtTime(1, context.currentTime);
     gainNode.gain.exponentialRampToValueAtTime(0.00001, context.currentTime + 0.1);
     oscillator.connect(gainNode);
     gainNode.connect(context.destination);
@@ -234,8 +245,8 @@ export default function CalificarPage() {
     const oscillator = context.createOscillator();
     const gainNode = context.createGain();
     oscillator.type = 'sawtooth';
-    oscillator.frequency.setValueAtTime(440, context.currentTime); // A4
-    gainNode.gain.setValueAtTime(1.5, context.currentTime); // Increased Volume
+    oscillator.frequency.setValueAtTime(440, context.currentTime);
+    gainNode.gain.setValueAtTime(1.5, context.currentTime);
     gainNode.gain.exponentialRampToValueAtTime(0.00001, context.currentTime + 0.2);
     oscillator.connect(gainNode);
     gainNode.connect(context.destination);
@@ -245,7 +256,6 @@ export default function CalificarPage() {
 
   const onScanSuccess = useCallback(async (decodedText: string) => {
     if (loading || Date.now() - lastScanTimeRef.current < MIN_SCAN_INTERVAL) return;
-    
     lastScanTimeRef.current = Date.now();
     setLoading(true);
     showAppMessage('Procesando código...', 'info');
@@ -254,15 +264,10 @@ export default function CalificarPage() {
     let finalCode = decodedText;
     try {
         const parsed = JSON.parse(decodedText);
-        if (parsed && parsed.id) {
-            finalCode = String(parsed.id);
-        }
-    } catch (e) {
-        // Not a JSON, proceed with the original decodedText
-    }
+        if (parsed && parsed.id) finalCode = String(parsed.id);
+    } catch (e) {}
     
     finalCode = String(finalCode).trim();
-    
     if (scanMode === 'masivo' && massScannedCodesRef.current.has(finalCode)) {
         showAppMessage(`Código duplicado: ${finalCode}`, 'warning');
         setLoading(false);
@@ -276,9 +281,7 @@ export default function CalificarPage() {
             .eq('code', finalCode)
             .single();
 
-        if (personalError && personalError.code !== 'PGRST116') { // PGRST116 means no rows found
-            throw personalError;
-        }
+        if (personalError && personalError.code !== 'PGRST116') throw personalError;
 
         if (personalData) {
             playBeep();
@@ -305,27 +308,21 @@ export default function CalificarPage() {
                     setLastScannedResult(result);
                     showAppMessage('Etiqueta confirmada correctamente.', 'success');
                     setIsRatingModalOpen(true);
-                } else { // Mass scanning mode
-                    if (personalData.status === 'REPORTADO') {
-                       showAppMessage(`Añadido (Reportado): ${finalCode}`, 'info');
-                    } else {
-                       showAppMessage(`Añadido a la lista: ${finalCode}`, 'success');
-                    }
+                } else {
+                    if (personalData.status === 'REPORTADO') showAppMessage(`Añadido (Reportado): ${finalCode}`, 'info');
+                    else showAppMessage(`Añadido a la lista: ${finalCode}`, 'success');
                     setMassScannedCodes(prev => [result, ...prev]);
                     massScannedCodesRef.current.add(finalCode);
                 }
             }
         } else {
-            // Not in 'personal' table, check 'etiquetas_i'
             const { data: etiquetaData, error: etiquetaError } = await supabaseEtiquetas
                 .from('etiquetas_i')
                 .select('code, sku, product, quantity, organization, sales_num')
                 .eq('code', finalCode)
                 .single();
 
-            if (etiquetaError && etiquetaError.code !== 'PGRST116') {
-                throw etiquetaError;
-            }
+            if (etiquetaError && etiquetaError.code !== 'PGRST116') throw etiquetaError;
 
             if (etiquetaData) {
                 playBeep();
@@ -344,14 +341,12 @@ export default function CalificarPage() {
                     found: true,
                     status: 'CALIFICADO',
                     details: "Esta etiqueta fue asignada y calificada al mismo tiempo",
-                    isNew: true, // Mark as new record
+                    isNew: true,
                 };
                 
                 if (scanMode === 'individual') {
                      const qualificationTimestamp = new Date();
-                     if (isNextDayDelivery) {
-                        qualificationTimestamp.setDate(qualificationTimestamp.getDate() + 1);
-                     }
+                     if (isNextDayDelivery) qualificationTimestamp.setDate(qualificationTimestamp.getDate() + 1);
                      const newPersonalRecord = {
                         code: result.code,
                         name: result.name,
@@ -368,11 +363,9 @@ export default function CalificarPage() {
                     };
                     const { error: insertError } = await supabase.from('personal').insert(newPersonalRecord);
                     if (insertError) throw insertError;
-                    
                     setLastScannedResult(result);
                     showAppMessage('Etiqueta no asignada, calificada automáticamente.', 'success');
-
-                } else { // Mass mode
+                } else {
                     showAppMessage(`Añadido (Auto-Calificado): ${finalCode}`, 'success');
                     setMassScannedCodes(prev => [result, ...prev]);
                     massScannedCodesRef.current.add(finalCode);
@@ -386,34 +379,22 @@ export default function CalificarPage() {
         }
     } catch (e: any) {
         playWarningSound();
-        const result: ScanResult = {
-            name: null,
-            product: null,
-            code: finalCode,
-            found: false,
-            error: e.message,
-        };
+        const result: ScanResult = { name: null, product: null, code: finalCode, found: false, error: e.message };
         setLastScannedResult(result);
         showAppMessage(`Error al consultar la base de datos: ${e.message}`, 'error');
     } finally {
         setLoading(false);
     }
-  }, [loading, scanMode, encargado, isNextDayDelivery, massScannedCodes]);
+  }, [loading, scanMode, encargado, isNextDayDelivery]);
   
     const formatElapsedTime = (totalSeconds: number) => {
         if (totalSeconds < 0) return '00:00';
         const hours = Math.floor(totalSeconds / 3600);
         const minutes = Math.floor((totalSeconds % 3600) / 60);
         const seconds = totalSeconds % 60;
-
         const paddedMinutes = String(minutes).padStart(2, '0');
         const paddedSeconds = String(seconds).padStart(2, '0');
-
-        if (hours > 0) {
-            const paddedHours = String(hours).padStart(2, '0');
-            return `${paddedHours}:${paddedMinutes}:${paddedSeconds}`;
-        }
-        
+        if (hours > 0) return `${String(hours).padStart(2, '0')}:${paddedMinutes}:${paddedSeconds}`;
         return `${paddedMinutes}:${paddedSeconds}`;
     };
 
@@ -429,26 +410,16 @@ export default function CalificarPage() {
                 bufferRef.current += event.key;
             }
         };
-
         const input = physicalScannerInputRef.current;
         if (selectedScannerMode === 'fisico' && scannerActive && input) {
             input.addEventListener('keydown', handlePhysicalScannerInput);
             input.focus();
         }
-        return () => {
-            if (input) {
-                input.removeEventListener('keydown', handlePhysicalScannerInput);
-            }
-        };
+        return () => { if (input) input.removeEventListener('keydown', handlePhysicalScannerInput); };
     }, [scannerActive, selectedScannerMode, onScanSuccess]);
 
   const applyCameraConstraints = useCallback((track: MediaStreamTrack) => {
-    track.applyConstraints({
-      advanced: [{
-        zoom: zoom,
-        torch: isFlashOn
-      }]
-    }).catch(e => console.error("Failed to apply constraints", e));
+    track.applyConstraints({ advanced: [{ zoom: zoom, torch: isFlashOn }] }).catch(e => console.error("Failed to apply constraints", e));
   }, [zoom, isFlashOn]);
   
   useEffect(() => {
@@ -457,79 +428,46 @@ export default function CalificarPage() {
       if (videoElement && videoElement.srcObject) {
         const stream = videoElement.srcObject as MediaStream;
         const track = stream.getVideoTracks()[0];
-        if (track) {
-          applyCameraConstraints(track);
-        }
+        if (track) applyCameraConstraints(track);
       }
     }
-  }, [zoom, isFlashOn, scannerActive, selectedScannerMode, isMobile, applyCameraConstraints, massScannedCodes]);
+  }, [zoom, isFlashOn, scannerActive, selectedScannerMode, isMobile, applyCameraConstraints]);
   
   useEffect(() => {
     if (!isMounted || !readerRef.current) return;
-
-    if (!html5QrCodeRef.current) {
-      html5QrCodeRef.current = new Html5Qrcode(readerRef.current.id, false);
-    }
+    if (!html5QrCodeRef.current) html5QrCodeRef.current = new Html5Qrcode(readerRef.current.id, false);
     const qrCode = html5QrCodeRef.current;
-
     const cleanup = () => {
         if (qrCode && qrCode.isScanning) {
-            return qrCode.stop().catch(err => {
-                if (!String(err).includes('not started')) {
-                    console.error("Fallo al detener el escáner:", err);
-                }
-            }).finally(() => {
-              if (isMobile) {
-                setCameraCapabilities(null);
-                setIsFlashOn(false);
-                setZoom(1);
-              }
+            return qrCode.stop().catch(err => { if (!String(err).includes('not started')) console.error("Fallo al detener el escáner:", err); }).finally(() => {
+              if (isMobile) { setCameraCapabilities(null); setIsFlashOn(false); setZoom(1); }
             });
         }
         return Promise.resolve();
     };
-
     if (scannerActive && selectedScannerMode === 'camara') {
       if (qrCode.getState() !== Html5QrcodeScannerState.SCANNING) {
-        const config = {
-          fps: 5,
-          qrbox: { width: 250, height: 250 },
-        };
-        qrCode.start({ facingMode: "environment" }, config, onScanSuccess, (e: any) => {})
+        qrCode.start({ facingMode: "environment" }, { fps: 5, qrbox: { width: 250, height: 250 } }, onScanSuccess, (e: any) => {})
         .then(() => {
             if (isMobile) {
               const videoElement = document.getElementById('reader')?.querySelector('video');
               const stream = videoElement?.srcObject as MediaStream;
               const track = stream?.getVideoTracks()[0];
-              if (track) {
-                const capabilities = track.getCapabilities();
-                setCameraCapabilities(capabilities);
-              }
+              if (track) setCameraCapabilities(track.getCapabilities());
             }
         })
         .catch(err => {
             console.error("Error al iniciar camara:", err);
-             // Si el error es el de transición, manejalo de forma controlada.
-            if (String(err).includes('Cannot transition to a new state')) {
-                showAppMessage('Error al iniciar la cámara. Por favor, intenta de nuevo.', 'error');
-            } else {
-                showAppMessage('Error al iniciar la cámara. Revisa los permisos.', 'error');
-            }
-            setScannerActive(false); // Forzar el estado a "detenido"
+            if (String(err).includes('Cannot transition to a new state')) showAppMessage('Error al iniciar la cámara. Por favor, intenta de nuevo.', 'error');
+            else showAppMessage('Error al iniciar la cámara. Revisa los permisos.', 'error');
+            setScannerActive(false);
         });
       }
-    } else {
-      cleanup();
-    }
-
-    return () => {
-      cleanup();
-    };
+    } else cleanup();
+    return () => { cleanup(); };
   }, [scannerActive, selectedScannerMode, isMobile, isMounted]);
 
-
   useEffect(() => {
-      // Clear list when switching modes
       setMassScannedCodes([]);
       massScannedCodesRef.current.clear();
       setLastScannedResult(null);
@@ -540,7 +478,6 @@ export default function CalificarPage() {
   const handleOpenRatingModal = (isOpen: boolean) => {
     setIsRatingModalOpen(isOpen);
     if (!isOpen) {
-        // Reset state when modal closes
         setShowReportSelect(false);
         setSelectedReport('');
         setLastScannedResult(null);
@@ -550,88 +487,76 @@ export default function CalificarPage() {
     }
   }
 
-  const handleOpenDiscrepancyModal = (item: ScanResult) => {
+  const handleOpenDiscrepancyModal = async (item: ScanResult) => {
       setItemToReport(item);
-      setDispatchedProduct('');
-      setDispatchedQuantity('');
+      setIdProductoDespachado('');
+      setPiezasDespachadas('');
+      setObservacionesIncidencia('');
+      setIdProductoSolicitado(null);
       setIsDiscrepancyModalOpen(true);
+      
+      // Buscamos el id del producto solicitado en inventory_master
+      if (item.sku) {
+        const skuPart = item.sku.split(' | ')[0].trim();
+        const { data } = await supabase.from('inventory_master').select('id').eq('sku', skuPart).maybeSingle();
+        if (data) setIdProductoSolicitado(data.id);
+      }
   };
   
   const saveKpiData = async (name: string, quantity: number, timeInSeconds: number) => {
     if (quantity === 0 || !name) return;
-
     try {
-      const { error } = await supabase.from('kpis').insert({
-        name: name,
-        quantity: quantity,
-        time: formatElapsedTime(timeInSeconds),
-        rol: 'Control de calidad',
-      });
-
-      if (error) {
-        console.error('Error saving KPI data:', error.message);
-      }
-    } catch (e: any) {
-      console.error('Exception while saving KPI data:', e.message);
-    }
+      await supabase.from('kpis').insert({ name: name, quantity: quantity, time: formatElapsedTime(timeInSeconds), rol: 'Control de calidad' });
+    } catch (e: any) { console.error('Exception while saving KPI data:', e.message); }
   };
 
-
   const handleSendReport = async () => {
-    if (!selectedReport || !lastScannedResult?.code) {
-        alert("Por favor, selecciona un motivo de reporte.");
-        return;
-    }
+    if (!selectedReport || !lastScannedResult?.code) { alert("Por favor, selecciona un motivo de reporte."); return; }
     setLoading(true);
     try {
-        const { error } = await supabase
-            .from('personal')
-            .update({ details: selectedReport, status: 'REPORTADO' })
-            .eq('code', lastScannedResult.code);
-
-        if (error) {
-            throw error;
-        }
-
+        const { error } = await supabase.from('personal').update({ details: selectedReport, status: 'REPORTADO' }).eq('code', lastScannedResult.code);
+        if (error) throw error;
         await saveKpiData(encargado, 1, elapsedTime);
         alert('Reporte enviado correctamente.');
-        handleOpenRatingModal(false); // Close and reset
-
-    } catch (e: any) {
-        console.error('Error enviando el reporte:', e);
-        alert(`Error al enviar el reporte: ${e.message}`);
-    } finally {
-        setLoading(false);
-    }
+        handleOpenRatingModal(false);
+    } catch (e: any) { alert(`Error al enviar el reporte: ${e.message}`); } finally { setLoading(false); }
   };
 
   const handleSendDiscrepancyReport = async () => {
-      if (!itemToReport || !dispatchedProduct.trim() || !dispatchedQuantity.trim()) {
-          alert("Por favor, completa todos los campos del reporte.");
-          return;
-      }
-
+      if (!itemToReport || !idProductoDespachado || !piezasDespachadas) { alert("Por favor, completa los campos obligatorios."); return; }
       setLoading(true);
-      const reportDetails = `Discrepancia: Solicitado: ${itemToReport.sku} (${itemToReport.quantity} pzas) | Despachado: ${dispatchedProduct} (${dispatchedQuantity} pzas)`;
-
       try {
-          const { error } = await supabase
-              .from('personal')
-              .update({ details: reportDetails, status: 'REPORTADO' })
-              .eq('code', itemToReport.code);
+          // 1. Obtener ID del empleado (operario) basado en el nombre del registro de producción
+          let idEmpleado = null;
+          if (itemToReport.name) {
+              const { data: empData } = await supabase.from('empleados').select('id').eq('name', itemToReport.name).maybeSingle();
+              if (empData) idEmpleado = empData.id;
+          }
 
-          if (error) throw error;
+          const now = new Date();
+          const record = {
+              fecha: now.toISOString().split('T')[0],
+              hora: now.toTimeString().split(' ')[0],
+              id_producto_solicitado: idProductoSolicitado,
+              id_producto_despachado: parseInt(idProductoDespachado),
+              piezas_solicitadas: itemToReport.quantity || 0,
+              piezas_despachadas: parseInt(piezasDespachadas),
+              observaciones: observacionesIncidencia,
+              id_empleado: idEmpleado,
+              id_capturista: user?.id || null,
+              firma_empleado: false
+          };
 
-          alert('Reporte de discrepancia enviado correctamente. El paquete ha sido marcado como REPORTADO.');
+          const { error: insError } = await supabase.from('registro_incidencias_en_paquetes_listos_para_entrega').insert([record]);
+          if (insError) throw insError;
+
+          // 2. Marcar como reportado en producción
+          await supabase.from('personal').update({ details: `Discrepancia registrada: Detectado por QC`, status: 'REPORTADO' }).eq('code', itemToReport.code);
+
+          alert('Incidencia de discrepancia registrada correctamente.');
           setIsDiscrepancyModalOpen(false);
-          // Remove from list or update local state
-          setMassScannedCodes(prev => prev.map(i => i.code === itemToReport.code ? { ...i, status: 'REPORTADO', details: reportDetails } : i));
-
-      } catch (e: any) {
-          alert(`Error al enviar discrepancia: ${e.message}`);
-      } finally {
-          setLoading(false);
-      }
+          setMassScannedCodes(prev => prev.map(i => i.code === itemToReport.code ? { ...i, status: 'REPORTADO' } : i));
+      } catch (e: any) { alert(`Error: ${e.message}`); } finally { setLoading(false); }
   };
 
   const handleAccept = async () => {
@@ -639,152 +564,53 @@ export default function CalificarPage() {
     setLoading(true);
     try {
         const qualificationTimestamp = new Date();
-        if (isNextDayDelivery) {
-            qualificationTimestamp.setDate(qualificationTimestamp.getDate() + 1);
-        }
-
-        const { error } = await supabase
-            .from('personal')
-            .update({ status: 'CALIFICADO', details: null, date_cal: qualificationTimestamp.toISOString() })
-            .eq('code', lastScannedResult.code);
-
-        if (error) {
-            throw error;
-        }
-
+        if (isNextDayDelivery) qualificationTimestamp.setDate(qualificationTimestamp.getDate() + 1);
+        const { error } = await supabase.from('personal').update({ status: 'CALIFICADO', details: null, date_cal: qualificationTimestamp.toISOString() }).eq('code', lastScannedResult.code);
+        if (error) throw error;
         await saveKpiData(encargado, 1, elapsedTime);
         alert('Calificación guardada correctamente.');
         handleOpenRatingModal(false);
-    } catch (e: any) {
-        console.error('Error guardando la calificación:', e);
-        const errorMessage = e.message || JSON.stringify(e);
-        alert(`Error al guardar la calificación: ${errorMessage}`);
-    } finally {
-        setLoading(false);
-    }
+    } catch (e: any) { alert(`Error al guardar la calificación: ${e.message}`); } finally { setLoading(false); }
   };
 
 const handleMassQualify = async () => {
-    setLoteConfirmation({ isOpen: false, existingCount: 0, newCount: 0 }); // Close modal first
+    setLoteConfirmation({ isOpen: false, existingCount: 0, newCount: 0 });
     setLoading(true);
     try {
         const qualificationTimestamp = new Date();
-        if (isNextDayDelivery) {
-            qualificationTimestamp.setDate(qualificationTimestamp.getDate() + 1);
-        }
-        
+        if (isNextDayDelivery) qualificationTimestamp.setDate(qualificationTimestamp.getDate() + 1);
         const recordsToInsert = massScannedCodes.filter(item => item.isNew);
         const codesToUpdate = massScannedCodes.filter(item => !item.isNew).map(item => item.code);
-
-        let errorCount = 0;
         let successCount = 0;
-
         if (recordsToInsert.length > 0) {
-            const newPersonalRecords = recordsToInsert.map(item => ({
-                code: item.code,
-                name: item.name,
-                name_inc: encargado || 'N/A',
-                sku: item.sku,
-                product: item.product,
-                quantity: item.quantity,
-                organization: item.organization,
-                sales_num: item.sales_num,
-                status: 'CALIFICADO',
-                date: qualificationTimestamp.toISOString(),
-                date_cal: qualificationTimestamp.toISOString(),
-                details: item.details,
-                lote: loteId,
-            }));
-
-            const { error: insertError } = await supabase.from('personal').insert(newPersonalRecords);
-            if (insertError) {
-                console.error('Error en la inserción masiva:', insertError);
-                errorCount += recordsToInsert.length;
-            } else {
-                successCount += recordsToInsert.length;
-            }
+            const payload = recordsToInsert.map(item => ({ code: item.code, name: item.name, name_inc: encargado || 'N/A', sku: item.sku, product: item.product, quantity: item.quantity, organization: item.organization, sales_num: item.sales_num, status: 'CALIFICADO', date: qualificationTimestamp.toISOString(), date_cal: qualificationTimestamp.toISOString(), details: item.details, lote: loteId }));
+            const { error: insErr } = await supabase.from('personal').insert(payload);
+            if (!insErr) successCount += recordsToInsert.length;
         }
-
         if (codesToUpdate.length > 0) {
-            const { error: updateError } = await supabase
-                .from('personal')
-                .update({ 
-                    status: 'CALIFICADO', 
-                    details: null, 
-                    date_cal: qualificationTimestamp.toISOString(),
-                    lote: loteId,
-                 })
-                .in('code', codesToUpdate);
-            
-            if (updateError) {
-                console.error('Error en la actualización masiva:', updateError);
-                errorCount += codesToUpdate.length;
-            } else {
-                successCount += codesToUpdate.length;
-            }
+            const { error: updErr } = await supabase.from('personal').update({ status: 'CALIFICADO', details: null, date_cal: qualificationTimestamp.toISOString(), lote: loteId }).in('code', codesToUpdate);
+            if (!updErr) successCount += codesToUpdate.length;
         }
-
-        if (errorCount > 0) {
-            alert(`Se procesaron ${successCount} etiquetas con éxito, pero ${errorCount} fallaron. Revisa la consola.`);
-        } else {
-            alert(`Se calificaron ${successCount} etiquetas correctamente con el lote ${loteId}.`);
-        }
-
-        if (successCount > 0) {
-            await saveKpiData(encargado, successCount, elapsedTime);
-        }
-
+        alert(`Se procesaron ${successCount} etiquetas correctamente.`);
+        if (successCount > 0) await saveKpiData(encargado, successCount, elapsedTime);
         setMassScannedCodes([]);
         massScannedCodesRef.current.clear();
         setLoteId('');
         setTimerStartTime(null);
         timerStartedRef.current = false;
-
-    } catch (e: any) {
-        console.error('Error en la calificación masiva:', e);
-        const errorMessage = e.message || JSON.stringify(e);
-        alert(`Error al calificar masivamente: ${errorMessage}`);
-    } finally {
-        setLoading(false);
-    }
+    } catch (e: any) { alert(`Error al calificar masivamente: ${e.message}`); } finally { setLoading(false); }
 };
 
 const triggerMassQualify = async () => {
-    if (massScannedCodes.length === 0) {
-        alert("No hay códigos en la lista para calificar.");
-        return;
-    }
-    if (!loteId.trim()) {
-        alert("Por favor, ingresa un identificador de lote/tanda.");
-        return;
-    }
+    if (massScannedCodes.length === 0) { alert("No hay códigos en la lista."); return; }
+    if (!loteId.trim()) { alert("Por favor, ingresa un lote."); return; }
     setLoading(true);
     try {
-        const { count, error } = await supabase
-            .from('personal')
-            .select('code', { count: 'exact', head: true })
-            .eq('lote', loteId.trim());
-
-        if (error) {
-            throw new Error(`Error al verificar el lote: ${error.message}`);
-        }
-
-        if (count && count > 0) {
-            // Lote existe, mostrar modal de confirmación
-            setLoteConfirmation({
-                isOpen: true,
-                existingCount: count,
-                newCount: massScannedCodes.length,
-            });
-        } else {
-            // Lote no existe, proceder directamente
-            await handleMassQualify();
-        }
-    } catch (e: any) {
-        alert(`Error: ${e.message}`);
-    } finally {
-        setLoading(false);
-    }
+        const { count, error } = await supabase.from('personal').select('code', { count: 'exact', head: true }).eq('lote', loteId.trim());
+        if (error) throw error;
+        if (count && count > 0) setLoteConfirmation({ isOpen: true, existingCount: count, newCount: massScannedCodes.length });
+        else await handleMassQualify();
+    } catch (e: any) { alert(`Error: ${e.message}`); } finally { setLoading(false); }
 };
 
   const removeFromMassList = (codeToRemove: string) => {
@@ -793,115 +619,47 @@ const triggerMassQualify = async () => {
     showAppMessage(`Código ${codeToRemove} eliminado de la lista.`, 'info');
   };
 
-
   useEffect(() => {
     if (isRatingModalOpen && showReportSelect && reportReasons.length === 0) {
         const fetchReportReasons = async () => {
-            const { data, error } = await supabase
-                .from('reports')
-                .select('id, t_report');
-            
-            if (error) {
-                console.error('Error fetching report reasons:', error);
-                 setDbError('Error al cargar motivos de reporte. Revisa los permisos RLS de la tabla `reports`.');
-            } else {
-                setReportReasons(data || []);
-            }
+            const { data } = await supabase.from('reports').select('id, t_report');
+            if (data) setReportReasons(data);
         };
-
         fetchReportReasons();
     }
-  }, [isRatingModalOpen, showReportSelect, reportReasons.length]);
+  }, [isRatingModalOpen, showReportSelect]);
 
   const handleManualAdd = async () => {
     const manualCodeInput = document.getElementById('manual-code-input-calificar') as HTMLInputElement;
-    if (!encargado.trim()) {
-      showAppMessage('Por favor, selecciona un encargado.', 'error');
-      return;
-    }
-
+    if (!encargado.trim()) { showAppMessage('Selecciona un encargado.', 'error'); return; }
     const manualCode = manualCodeInput.value.trim();
-    if (!manualCode) {
-      showAppMessage('Por favor, ingresa un código para agregar.', 'error');
-      return;
-    }
-    
+    if (!manualCode) { showAppMessage('Ingresa un código.', 'error'); return; }
     await onScanSuccess(manualCode);
     manualCodeInput.value = '';
     manualCodeInput.focus();
   };
   
     const handleLoadLote = async () => {
-    if (!loteToLoad.trim()) {
-      showAppMessage('Por favor, ingresa un identificador de lote para cargar.', 'info');
-      return;
-    }
+    if (!loteToLoad.trim()) return;
     setLoading(true);
-    showAppMessage(`Cargando paquetes del lote ${loteToLoad}...`, 'info');
-
     try {
-      const { data, error } = await supabase
-        .from('personal')
-        .select('*')
-        .eq('lote', loteToLoad.trim());
-
+      const { data, error } = await supabase.from('personal').select('*').eq('lote', loteToLoad.trim());
       if (error) throw error;
-
-      if (!data || data.length === 0) {
-        showAppMessage(`No se encontraron paquetes para el lote ${loteToLoad}.`, 'warning');
-        return;
-      }
-      
-      const newItems: ScanResult[] = data.map(item => ({
-        code: item.code,
-        name: item.name,
-        product: item.product,
-        status: item.status,
-        details: item.details,
-        sku: item.sku,
-        quantity: item.quantity,
-        organization: item.organization,
-        sales_num: item.sales_num,
-        found: true,
-        isNew: false,
-      }));
-      
-      let addedCount = 0;
+      if (!data || data.length === 0) { showAppMessage(`No se encontraron paquetes.`, 'warning'); return; }
+      const newItems: ScanResult[] = data.map(item => ({ code: item.code, name: item.name, product: item.product, status: item.status, details: item.details, sku: item.sku, quantity: item.quantity, organization: item.organization, sales_num: item.sales_num, found: true, isNew: false }));
       const currentCodes = new Set(massScannedCodes.map(c => c.code));
-
-      const itemsToAdd = newItems.filter(item => {
-        if (!currentCodes.has(item.code)) {
-          addedCount++;
-          massScannedCodesRef.current.add(item.code);
-          return true;
-        }
-        return false;
-      });
-
+      const itemsToAdd = newItems.filter(item => { if (!currentCodes.has(item.code)) { massScannedCodesRef.current.add(item.code); return true; } return false; });
       setMassScannedCodes(prev => [...prev, ...itemsToAdd]);
-      showAppMessage(`Se agregaron ${addedCount} nuevos paquetes del lote ${loteToLoad}.`, 'success');
+      showAppMessage(`Se agregaron ${itemsToAdd.length} paquetes.`, 'success');
       setLoteToLoad('');
-
-    } catch (e: any) {
-      showAppMessage(`Error al cargar el lote: ${e.message}`, 'error');
-    } finally {
-      setLoading(false);
-    }
+    } catch (e: any) { showAppMessage(`Error: ${e.message}`, 'error'); } finally { setLoading(false); }
   };
 
-  const messageClasses: any = {
-      success: 'bg-green-500/80 text-white',
-      error: 'bg-red-500/80 text-white',
-      warning: 'bg-yellow-500/80 text-white',
-      info: 'bg-blue-500/80 text-white'
-  };
-
+  const messageClasses: any = { success: 'bg-green-500/80 text-white', error: 'bg-red-500/80 text-white', warning: 'bg-yellow-500/80 text-white', info: 'bg-blue-500/80 text-white' };
 
   return (
     <>
-      <Head>
-        <title>Calificar Empaquetado</title>
-      </Head>
+      <Head><title>Calificar Empaquetado</title></Head>
       <main className="text-starbucks-dark flex items-center justify-center p-4">
         <div className="w-full max-w-2xl mx-auto bg-starbucks-white rounded-xl shadow-2xl p-4 md:p-6 space-y-4">
           <header className="text-center">
@@ -1010,7 +768,7 @@ const triggerMassQualify = async () => {
 
              {loading && (
                 <div className="flex justify-center items-center mt-4">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-starbucks-green"></div>
+                    <Loader2 className="animate-spin h-8 w-8 text-starbucks-green" />
                     <p className="ml-3">Buscando...</p>
                 </div>
              )}
@@ -1049,14 +807,12 @@ const triggerMassQualify = async () => {
           </div>
 
           <div id="result-container" className="space-y-4">
-            {/* Fallback message display for when scanner is off */}
             {!message.show && (
                 <div className="p-3 rounded-lg text-center font-semibold text-base bg-gray-100 text-gray-800">
                     {lastScannedResult?.found ? `Último escaneo: ${lastScannedResult.code}` : 'Apunte la cámara a un código QR.'}
                 </div>
             )}
 
-            {/* Individual Scan Result */}
             {lastScannedResult && scanMode === 'individual' && (
               <div className="bg-starbucks-cream p-4 rounded-lg text-left space-y-2">
                 <div>
@@ -1143,11 +899,10 @@ const triggerMassQualify = async () => {
                 )}
               </div>
             )}
-             {/* Mass Scan Results */}
              {scanMode === 'masivo' && (
                 <div className="space-y-4">
                      <div className="p-4 bg-starbucks-cream rounded-lg">
-                        <Label htmlFor="lote-id-entrega" className="block text-sm font-bold text-starbucks-dark mb-1">Cargar Lote:</Label>
+                        <Label htmlFor="lote-id-load" className="block text-sm font-bold text-starbucks-dark mb-1">Cargar Lote:</Label>
                         <div className="relative mt-1 flex items-center rounded-lg border border-input bg-background focus-within:ring-2 focus-within:ring-ring">
                             <Input
                                 type="text"
@@ -1161,7 +916,6 @@ const triggerMassQualify = async () => {
                             />
                             <Button
                                 type="button"
-                                id="lote-load-btn"
                                 onClick={handleLoadLote}
                                 size="icon"
                                 className="h-8 w-8 bg-blue-600 hover:bg-blue-700 text-white rounded-md mr-1"
@@ -1206,13 +960,7 @@ const triggerMassQualify = async () => {
                                         <TableCell className="text-xs">{item.name || 'N/A'}</TableCell>
                                         <TableCell className="text-right whitespace-nowrap">
                                             <div className="flex justify-end gap-1">
-                                                <Button 
-                                                    variant="ghost" 
-                                                    size="icon" 
-                                                    onClick={() => handleOpenDiscrepancyModal(item)} 
-                                                    className="text-amber-500 hover:text-amber-700 h-8 w-8"
-                                                    title="Reportar Discrepancia"
-                                                >
+                                                <Button variant="ghost" size="icon" onClick={() => handleOpenDiscrepancyModal(item)} className="text-amber-500 hover:text-amber-700 h-8 w-8" title="Reportar Discrepancia">
                                                     <FileWarning className="h-4 w-4" />
                                                 </Button>
                                                 <Button variant="ghost" size="icon" onClick={() => removeFromMassList(item.code)} className="text-red-500 hover:text-red-700 h-8 w-8">
@@ -1222,11 +970,7 @@ const triggerMassQualify = async () => {
                                         </TableCell>
                                     </TableRow>
                                 )) : (
-                                     <TableRow>
-                                        <TableCell colSpan={4} className="text-center text-gray-500 py-8">
-                                            No hay códigos en la lista.
-                                        </TableCell>
-                                    </TableRow>
+                                     <TableRow><TableCell colSpan={4} className="text-center text-gray-500 py-8">No hay códigos en la lista.</TableCell></TableRow>
                                 )}
                             </TableBody>
                         </Table>
@@ -1246,49 +990,47 @@ const triggerMassQualify = async () => {
                        Reportar Discrepancia
                    </DialogTitle>
                    <DialogDescription>
-                       El paquete con código <span className="font-bold text-black">{itemToReport?.code}</span> se marcará como REPORTADO.
+                       Detectar diferencias entre lo solicitado por sistema y lo despachado físicamente.
                    </DialogDescription>
                </DialogHeader>
                <div className="grid gap-4 py-4">
                    <div className="grid grid-cols-2 gap-4">
                        <div className="space-y-1">
-                           <Label className="text-[10px] uppercase font-bold text-gray-400">Producto Solicitado</Label>
-                           <p className="text-xs font-bold border p-2 rounded bg-gray-50">{itemToReport?.sku || 'S/N'}</p>
+                           <Label className="text-[10px] uppercase font-bold text-gray-400">Producto Solicitado (ID: {idProductoSolicitado || 'No encontrado'})</Label>
+                           <p className="text-xs font-bold border p-2 rounded bg-gray-50 truncate">{itemToReport?.sku || 'S/N'}</p>
                        </div>
                        <div className="space-y-1">
                            <Label className="text-[10px] uppercase font-bold text-gray-400">Piezas Solicitadas</Label>
                            <p className="text-xs font-bold border p-2 rounded bg-gray-50">{itemToReport?.quantity || 0}</p>
                        </div>
                    </div>
+
                    <div className="space-y-2">
-                       <Label htmlFor="disp-prod" className="font-bold text-xs uppercase">Producto Despachado (Real):</Label>
-                       <Input 
-                        id="disp-prod" 
-                        value={dispatchedProduct} 
-                        onChange={(e) => setDispatchedProduct(e.target.value.toUpperCase())}
-                        placeholder="Ej. MALLA NEGRA 4X5"
-                        className="bg-transparent"
+                       <Label className="font-bold text-xs uppercase">Producto Despachado (Real):</Label>
+                       <Combobox
+                          options={inventoryOptions}
+                          value={idProductoDespachado}
+                          onValueChange={setIdProductoDespachado}
+                          placeholder="Busca el producto real..."
+                          emptyMessage="No se encontró producto en inventory_master."
+                          buttonClassName="w-full"
+                          disabled={loadingInventory}
                        />
                    </div>
+
                    <div className="space-y-2">
                        <Label htmlFor="disp-qty" className="font-bold text-xs uppercase">Piezas Despachadas (Real):</Label>
-                       <Input 
-                        id="disp-qty" 
-                        type="number"
-                        value={dispatchedQuantity} 
-                        onChange={(e) => setDispatchedQuantity(e.target.value)}
-                        placeholder="0"
-                        className="bg-transparent"
-                       />
+                       <Input id="disp-qty" type="number" value={piezasDespachadas} onChange={(e) => setPiezasDespachadas(e.target.value)} placeholder="0" className="bg-transparent" />
+                   </div>
+
+                   <div className="space-y-2">
+                       <Label htmlFor="obs" className="font-bold text-xs uppercase">Observaciones:</Label>
+                       <Textarea id="obs" value={observacionesIncidencia} onChange={(e) => setObservacionesIncidencia(e.target.value)} placeholder="Ej. El paquete venía con menos piezas..." className="min-h-[60px]" />
                    </div>
                </div>
                <DialogFooter>
                    <Button variant="outline" onClick={() => setIsDiscrepancyModalOpen(false)}>Cancelar</Button>
-                   <Button 
-                    onClick={handleSendDiscrepancyReport} 
-                    disabled={loading || !dispatchedProduct || !dispatchedQuantity}
-                    className="bg-amber-600 hover:bg-amber-700 text-white"
-                   >
+                   <Button onClick={handleSendDiscrepancyReport} disabled={loading || !idProductoDespachado || !piezasDespachadas} className="bg-amber-600 hover:bg-amber-700 text-white">
                        {loading ? 'Enviando...' : 'Enviar Reporte'}
                    </Button>
                </DialogFooter>
@@ -1304,9 +1046,7 @@ const triggerMassQualify = async () => {
                         <Alert variant="destructive" className="mb-4">
                             <AlertTriangle className="h-4 w-4" />
                             <AlertTitle>¡Atención!</AlertTitle>
-                            <AlertDescription>
-                                El lote <span className="font-bold">{loteId}</span> ya existe.
-                            </AlertDescription>
+                            <AlertDescription>El lote <span className="font-bold">{loteId}</span> ya existe.</AlertDescription>
                         </Alert>
                         <div>Este lote contiene actualmente <span className="font-bold">{loteConfirmation.existingCount}</span> etiqueta(s).</div>
                         <div>Estás a punto de anexar <span className="font-bold">{loteConfirmation.newCount}</span> nueva(s) etiqueta(s).</div>
