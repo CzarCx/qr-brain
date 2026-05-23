@@ -296,30 +296,30 @@ export default function CalificarPage() {
         const { data: personalData, error: personalError } = await supabase
             .from('personal')
             .select('name, product, status, details, sku, quantity')
-            .eq('code', finalCode)
-            .single();
+            .eq('code', finalCode);
 
-        if (personalError && personalError.code !== 'PGRST116') throw personalError;
+        if (personalError) throw personalError;
 
-        if (personalData) {
+        if (personalData && personalData.length > 0) {
+            const firstP = personalData[0];
             playBeep();
              if (!timerStartedRef.current) {
                 setTimerStartTime(new Date());
                 timerStartedRef.current = true;
             }
             const result: ScanResult = {
-                name: personalData.name,
-                product: personalData.product,
+                name: firstP.name,
+                product: firstP.product,
                 code: finalCode,
                 found: true,
-                status: personalData.status,
-                details: personalData.details,
-                sku: personalData.sku,
-                quantity: personalData.quantity,
+                status: firstP.status,
+                details: firstP.details,
+                sku: firstP.sku,
+                quantity: firstP.quantity,
             };
 
-            if (personalData.status === 'CALIFICADO') {
-                showAppMessage(`Etiqueta ya procesada (Estado: ${personalData.status}).`, 'warning');
+            if (firstP.status === 'CALIFICADO') {
+                showAppMessage(`Etiqueta ya procesada (Estado: ${firstP.status}).`, 'warning');
                 setLastScannedResult(result);
             } else {
                  if (scanMode === 'individual') {
@@ -327,7 +327,7 @@ export default function CalificarPage() {
                     showAppMessage('Etiqueta confirmada correctamente.', 'success');
                     setIsRatingModalOpen(true);
                 } else {
-                    if (personalData.status === 'REPORTADO') showAppMessage(`Añadido (Reportado): ${finalCode}`, 'info');
+                    if (firstP.status === 'REPORTADO') showAppMessage(`Añadido (Reportado): ${finalCode}`, 'info');
                     else showAppMessage(`Añadido a la lista: ${finalCode}`, 'success');
                     setMassScannedCodes(prev => [result, ...prev]);
                     massScannedCodesRef.current.add(finalCode);
@@ -337,25 +337,28 @@ export default function CalificarPage() {
             const { data: etiquetaData, error: etiquetaError } = await supabaseEtiquetas
                 .from('etiquetas_i')
                 .select('code, sku, product, quantity, organization, sales_num')
-                .eq('code', finalCode)
-                .single();
+                .eq('code', finalCode);
 
-            if (etiquetaError && etiquetaError.code !== 'PGRST116') throw etiquetaError;
+            if (etiquetaError) throw etiquetaError;
 
-            if (etiquetaData) {
+            if (etiquetaData && etiquetaData.length > 0) {
+                const firstE = etiquetaData[0];
+                const allSkus = etiquetaData.map(e => e.sku).filter(Boolean).join(' | ');
+                const totalQty = etiquetaData.reduce((acc, curr) => acc + (curr.quantity || 0), 0);
+
                 playBeep();
                  if (!timerStartedRef.current) {
                     setTimerStartTime(new Date());
                     timerStartedRef.current = true;
                 }
                 const result: ScanResult = {
-                    code: etiquetaData.code,
+                    code: firstE.code,
                     name: 'N/A',
-                    product: etiquetaData.product,
-                    sku: etiquetaData.sku,
-                    quantity: etiquetaData.quantity,
-                    organization: etiquetaData.organization,
-                    sales_num: etiquetaData.sales_num,
+                    product: firstE.product,
+                    sku: allSkus,
+                    quantity: totalQty,
+                    organization: firstE.organization,
+                    sales_num: firstE.sales_num,
                     found: true,
                     status: 'CALIFICADO',
                     details: "Esta etiqueta fue asignada y calificada al mismo tiempo",
@@ -515,8 +518,9 @@ export default function CalificarPage() {
       setIsDiscrepancyModalOpen(true);
       
       if (item.sku) {
+        // Limpiar el SKU para buscar coincidencia exacta o parcial limpia
         const skuPart = item.sku.split(' | ')[0].trim();
-        const { data } = await supabase.from('inventory_master').select('id').ilike('sku', `%${skuPart}%`).maybeSingle();
+        const { data } = await supabase.from('inventory_master').select('id').ilike('sku', `${skuPart}`).maybeSingle();
         if (data) setIdProductoSolicitado(data.id);
       }
   };
@@ -547,14 +551,22 @@ export default function CalificarPage() {
   };
 
   const handleSendDiscrepancyReport = async () => {
-      if (!itemToReport || !idProductoDespachado || !piezasDespachadas) { 
-          alert("Por favor, selecciona el producto despachado y la cantidad real."); 
+      // Intentar auto-localizar el producto si no hay ID pero hay texto en la búsqueda
+      let finalIdDespachado = idProductoDespachado;
+      if (!finalIdDespachado && searchQueryDespachado.trim()) {
+          const match = inventoryList.find(i => i.sku.toLowerCase() === searchQueryDespachado.toLowerCase() || i.name.toLowerCase() === searchQueryDespachado.toLowerCase());
+          if (match) finalIdDespachado = String(match.id);
+      }
+
+      if (!itemToReport || !finalIdDespachado || !piezasDespachadas) { 
+          alert("Por favor, selecciona el producto despachado y la cantidad real encontrada."); 
           return; 
       }
+
       setLoading(true);
       try {
           let idEmpleado = null;
-          if (itemToReport.name) {
+          if (itemToReport.name && itemToReport.name !== 'N/A') {
               const { data: empData } = await supabase.from('empleados').select('id').eq('name', itemToReport.name).maybeSingle();
               if (empData) idEmpleado = empData.id;
           }
@@ -564,9 +576,9 @@ export default function CalificarPage() {
               fecha: now.toISOString().split('T')[0],
               hora: now.toTimeString().split(' ')[0],
               id_producto_solicitado: idProductoSolicitado,
-              id_producto_despachado: parseInt(idProductoDespachado),
-              piezas_solicitadas: itemToReport.quantity || 0,
-              piezas_despachadas: parseInt(piezasDespachadas),
+              id_producto_despachado: parseInt(finalIdDespachado),
+              piezas_solicitadas: itemToReport.quantity ? Number(itemToReport.quantity) : 0,
+              piezas_despachadas: Number(piezasDespachadas),
               observaciones: observacionesIncidencia,
               id_empleado: idEmpleado,
               id_capturista: user?.id || null,
@@ -576,15 +588,17 @@ export default function CalificarPage() {
           const { error: insError } = await supabase.from('registro_incidencias_en_paquetes_listos_para_entrega').insert([record]);
           if (insError) throw insError;
 
+          // Actualizar estado del bulto a REPORTADO
           await supabase.from('personal').update({ 
-              details: `Discrepancia detectada en QC. Real: ${piezasDespachadas} pzas.`, 
+              details: `DISCREPANCIA EN QC: Encontrado ${piezas_despachadas} pzas.`, 
               status: 'REPORTADO' 
           }).eq('code', itemToReport.code);
 
-          alert('Incidencia registrada exitosamente.');
+          alert('Incidencia guardada y paquete reportado correctamente.');
           setIsDiscrepancyModalOpen(false);
           setMassScannedCodes(prev => prev.map(i => i.code === itemToReport.code ? { ...i, status: 'REPORTADO' } : i));
       } catch (e: any) { 
+          console.error("Error al enviar reporte:", e);
           alert(`Error al guardar: ${e.message}`); 
       } finally { 
           setLoading(false); 
@@ -1117,7 +1131,7 @@ const triggerMassQualify = async () => {
                    </Button>
                    <Button 
                         onClick={handleSendDiscrepancyReport} 
-                        disabled={loading || !idProductoDespachado || !piezasDespachadas} 
+                        disabled={loading || (!idProductoDespachado && !searchQueryDespachado) || !piezasDespachadas} 
                         className="bg-amber-600 hover:bg-amber-700 text-white h-12 px-8 rounded-xl font-black flex-1 sm:flex-none transition-all shadow-lg shadow-amber-200"
                     >
                        {loading ? <Loader2 className="animate-spin h-5 w-5" /> : 'Enviar Reporte'}
