@@ -33,7 +33,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertTriangle, Trash2, Zap, ZoomIn, PlusCircle, Download, Clock } from 'lucide-react';
+import { AlertTriangle, Trash2, Zap, ZoomIn, PlusCircle, Download, Clock, FileWarning } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Switch } from '@/components/ui/switch';
 import { Combobox } from '@/components/ui/combobox';
@@ -99,6 +99,12 @@ export default function CalificarPage() {
   const [loteConfirmation, setLoteConfirmation] = useState<LoteConfirmationState>({ isOpen: false, existingCount: 0, newCount: 0 });
   const [timerStartTime, setTimerStartTime] = useState<Date | null>(null);
   const [elapsedTime, setElapsedTime] = useState(0);
+
+  // States for Discrepancy Report
+  const [isDiscrepancyModalOpen, setIsDiscrepancyModalOpen] = useState(false);
+  const [itemToReport, setItemToReport] = useState<ScanResult | null>(null);
+  const [dispatchedProduct, setDispatchedProduct] = useState('');
+  const [dispatchedQuantity, setDispatchedQuantity] = useState('');
 
   const messageTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -266,7 +272,7 @@ export default function CalificarPage() {
     try {
         const { data: personalData, error: personalError } = await supabase
             .from('personal')
-            .select('name, product, status, details')
+            .select('name, product, status, details, sku, quantity')
             .eq('code', finalCode)
             .single();
 
@@ -287,6 +293,8 @@ export default function CalificarPage() {
                 found: true,
                 status: personalData.status,
                 details: personalData.details,
+                sku: personalData.sku,
+                quantity: personalData.quantity,
             };
 
             if (personalData.status === 'CALIFICADO') {
@@ -541,6 +549,13 @@ export default function CalificarPage() {
         timerStartedRef.current = false;
     }
   }
+
+  const handleOpenDiscrepancyModal = (item: ScanResult) => {
+      setItemToReport(item);
+      setDispatchedProduct('');
+      setDispatchedQuantity('');
+      setIsDiscrepancyModalOpen(true);
+  };
   
   const saveKpiData = async (name: string, quantity: number, timeInSeconds: number) => {
     if (quantity === 0 || !name) return;
@@ -588,6 +603,35 @@ export default function CalificarPage() {
     } finally {
         setLoading(false);
     }
+  };
+
+  const handleSendDiscrepancyReport = async () => {
+      if (!itemToReport || !dispatchedProduct.trim() || !dispatchedQuantity.trim()) {
+          alert("Por favor, completa todos los campos del reporte.");
+          return;
+      }
+
+      setLoading(true);
+      const reportDetails = `Discrepancia: Solicitado: ${itemToReport.sku} (${itemToReport.quantity} pzas) | Despachado: ${dispatchedProduct} (${dispatchedQuantity} pzas)`;
+
+      try {
+          const { error } = await supabase
+              .from('personal')
+              .update({ details: reportDetails, status: 'REPORTADO' })
+              .eq('code', itemToReport.code);
+
+          if (error) throw error;
+
+          alert('Reporte de discrepancia enviado correctamente. El paquete ha sido marcado como REPORTADO.');
+          setIsDiscrepancyModalOpen(false);
+          // Remove from list or update local state
+          setMassScannedCodes(prev => prev.map(i => i.code === itemToReport.code ? { ...i, status: 'REPORTADO', details: reportDetails } : i));
+
+      } catch (e: any) {
+          alert(`Error al enviar discrepancia: ${e.message}`);
+      } finally {
+          setLoading(false);
+      }
   };
 
   const handleAccept = async () => {
@@ -859,7 +903,7 @@ const triggerMassQualify = async () => {
         <title>Calificar Empaquetado</title>
       </Head>
       <main className="text-starbucks-dark flex items-center justify-center p-4">
-        <div className="w-full max-w-md mx-auto bg-starbucks-white rounded-xl shadow-2xl p-4 md:p-6 space-y-4">
+        <div className="w-full max-w-2xl mx-auto bg-starbucks-white rounded-xl shadow-2xl p-4 md:p-6 space-y-4">
           <header className="text-center">
             <h1 className="text-xl md:text-2xl font-bold text-starbucks-green">Calificar Empaquetado</h1>
             <p className="text-gray-600 text-sm mt-1">Escanea el QR para calificar la calidad.</p>
@@ -1144,7 +1188,7 @@ const triggerMassQualify = async () => {
                             {loading ? 'Calificando...' : 'Calificar Todos'}
                         </Button>
                     </div>
-                    <div className="table-container border border-gray-200 rounded-lg max-h-60 overflow-auto">
+                    <div className="table-container border border-gray-200 rounded-lg max-h-80 overflow-auto">
                         <Table>
                             <TableHeader className="sticky top-0 bg-starbucks-cream">
                                 <TableRow>
@@ -1160,10 +1204,21 @@ const triggerMassQualify = async () => {
                                         <TableCell className="font-mono text-xs">{item.code}</TableCell>
                                         <TableCell className="text-xs">{item.product || 'N/A'}</TableCell>
                                         <TableCell className="text-xs">{item.name || 'N/A'}</TableCell>
-                                        <TableCell className="text-right">
-                                            <Button variant="ghost" size="icon" onClick={() => removeFromMassList(item.code)} className="text-red-500 hover:text-red-700 h-8 w-8">
-                                                <Trash2 className="h-4 w-4" />
-                                            </Button>
+                                        <TableCell className="text-right whitespace-nowrap">
+                                            <div className="flex justify-end gap-1">
+                                                <Button 
+                                                    variant="ghost" 
+                                                    size="icon" 
+                                                    onClick={() => handleOpenDiscrepancyModal(item)} 
+                                                    className="text-amber-500 hover:text-amber-700 h-8 w-8"
+                                                    title="Reportar Discrepancia"
+                                                >
+                                                    <FileWarning className="h-4 w-4" />
+                                                </Button>
+                                                <Button variant="ghost" size="icon" onClick={() => removeFromMassList(item.code)} className="text-red-500 hover:text-red-700 h-8 w-8">
+                                                    <Trash2 className="h-4 w-4" />
+                                                </Button>
+                                            </div>
                                         </TableCell>
                                     </TableRow>
                                 )) : (
@@ -1181,6 +1236,64 @@ const triggerMassQualify = async () => {
           </div>
         </div>
       </main>
+
+       {/* Modal Discrepancia */}
+       <Dialog open={isDiscrepancyModalOpen} onOpenChange={setIsDiscrepancyModalOpen}>
+           <DialogContent className="sm:max-w-md">
+               <DialogHeader>
+                   <DialogTitle className="flex items-center gap-2 text-amber-600">
+                       <AlertTriangle className="h-5 w-5" />
+                       Reportar Discrepancia
+                   </DialogTitle>
+                   <DialogDescription>
+                       El paquete con código <span className="font-bold text-black">{itemToReport?.code}</span> se marcará como REPORTADO.
+                   </DialogDescription>
+               </DialogHeader>
+               <div className="grid gap-4 py-4">
+                   <div className="grid grid-cols-2 gap-4">
+                       <div className="space-y-1">
+                           <Label className="text-[10px] uppercase font-bold text-gray-400">Producto Solicitado</Label>
+                           <p className="text-xs font-bold border p-2 rounded bg-gray-50">{itemToReport?.sku || 'S/N'}</p>
+                       </div>
+                       <div className="space-y-1">
+                           <Label className="text-[10px] uppercase font-bold text-gray-400">Piezas Solicitadas</Label>
+                           <p className="text-xs font-bold border p-2 rounded bg-gray-50">{itemToReport?.quantity || 0}</p>
+                       </div>
+                   </div>
+                   <div className="space-y-2">
+                       <Label htmlFor="disp-prod" className="font-bold text-xs uppercase">Producto Despachado (Real):</Label>
+                       <Input 
+                        id="disp-prod" 
+                        value={dispatchedProduct} 
+                        onChange={(e) => setDispatchedProduct(e.target.value.toUpperCase())}
+                        placeholder="Ej. MALLA NEGRA 4X5"
+                        className="bg-transparent"
+                       />
+                   </div>
+                   <div className="space-y-2">
+                       <Label htmlFor="disp-qty" className="font-bold text-xs uppercase">Piezas Despachadas (Real):</Label>
+                       <Input 
+                        id="disp-qty" 
+                        type="number"
+                        value={dispatchedQuantity} 
+                        onChange={(e) => setDispatchedQuantity(e.target.value)}
+                        placeholder="0"
+                        className="bg-transparent"
+                       />
+                   </div>
+               </div>
+               <DialogFooter>
+                   <Button variant="outline" onClick={() => setIsDiscrepancyModalOpen(false)}>Cancelar</Button>
+                   <Button 
+                    onClick={handleSendDiscrepancyReport} 
+                    disabled={loading || !dispatchedProduct || !dispatchedQuantity}
+                    className="bg-amber-600 hover:bg-amber-700 text-white"
+                   >
+                       {loading ? 'Enviando...' : 'Enviar Reporte'}
+                   </Button>
+               </DialogFooter>
+           </DialogContent>
+       </Dialog>
 
        <Dialog open={loteConfirmation.isOpen} onOpenChange={(isOpen) => setLoteConfirmation(prev => ({...prev, isOpen}))}>
           <DialogContent>
