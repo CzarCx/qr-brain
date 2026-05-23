@@ -518,10 +518,17 @@ export default function CalificarPage() {
       setIsDiscrepancyModalOpen(true);
       
       if (item.sku) {
-        // Limpiar el SKU para buscar coincidencia exacta o parcial limpia
-        const skuPart = item.sku.split(' | ')[0].trim();
-        const { data } = await supabase.from('inventory_master').select('id').ilike('sku', `${skuPart}`).maybeSingle();
-        if (data) setIdProductoSolicitado(data.id);
+        // Buscar ID del producto solicitado en inventory_master de forma robusta
+        const skuPart = String(item.sku).split(' | ')[0].trim();
+        const { data, error } = await supabase
+            .from('inventory_master')
+            .select('id')
+            .ilike('sku', skuPart)
+            .limit(1);
+
+        if (data && data.length > 0) {
+            setIdProductoSolicitado(data[0].id);
+        }
       }
   };
   
@@ -551,10 +558,12 @@ export default function CalificarPage() {
   };
 
   const handleSendDiscrepancyReport = async () => {
-      // Intentar auto-localizar el producto si no hay ID pero hay texto en la búsqueda
       let finalIdDespachado = idProductoDespachado;
+      
+      // Lógica de Auto-Match si no hay ID seleccionado explícitamente pero hay texto
       if (!finalIdDespachado && searchQueryDespachado.trim()) {
-          const match = inventoryList.find(i => i.sku.toLowerCase() === searchQueryDespachado.toLowerCase() || i.name.toLowerCase() === searchQueryDespachado.toLowerCase());
+          const queryLower = searchQueryDespachado.toLowerCase();
+          const match = inventoryList.find(i => i.sku.toLowerCase() === queryLower || i.name.toLowerCase() === queryLower);
           if (match) finalIdDespachado = String(match.id);
       }
 
@@ -565,41 +574,60 @@ export default function CalificarPage() {
 
       setLoading(true);
       try {
+          // Obtener ID del empleado responsable del empaque buscando por nombre
           let idEmpleado = null;
           if (itemToReport.name && itemToReport.name !== 'N/A') {
-              const { data: empData } = await supabase.from('empleados').select('id').eq('name', itemToReport.name).maybeSingle();
+              const { data: empData } = await supabase
+                .from('empleados')
+                .select('id')
+                .eq('name', itemToReport.name)
+                .maybeSingle();
               if (empData) idEmpleado = empData.id;
           }
 
           const now = new Date();
           const record = {
               fecha: now.toISOString().split('T')[0],
-              hora: now.toTimeString().split(' ')[0],
-              id_producto_solicitado: idProductoSolicitado,
-              id_producto_despachado: parseInt(finalIdDespachado),
+              hora: now.toLocaleTimeString('en-GB', { hour12: false }), // HH:MM:SS
+              id_producto_solicitado: idProductoSolicitado ? Number(idProductoSolicitado) : null,
+              id_producto_despachado: Number(finalIdDespachado),
               piezas_solicitadas: itemToReport.quantity ? Number(itemToReport.quantity) : 0,
               piezas_despachadas: Number(piezasDespachadas),
-              observaciones: observacionesIncidencia,
+              observaciones: observacionesIncidencia || '',
               id_empleado: idEmpleado,
-              id_capturista: user?.id || null,
+              id_capturista: profile?.id || user?.id || null,
               firma_empleado: false
           };
 
-          const { error: insError } = await supabase.from('registro_incidencias_en_paquetes_listos_para_entrega').insert([record]);
-          if (insError) throw insError;
+          // INSERTAR EN LA TABLA DE INCIDENCIAS
+          const { error: insError } = await supabase
+            .from('registro_incidencias_en_paquetes_listos_para_entrega')
+            .insert([record])
+            .select();
 
-          // Actualizar estado del bulto a REPORTADO
+          if (insError) {
+              console.error("Supabase Insert Error:", insError);
+              throw new Error(`Fallo al insertar en base de datos: ${insError.message} (Código: ${insError.code})`);
+          }
+
+          // ACTUALIZAR ESTADO DEL BULTO A REPORTADO EN LA TABLA PERSONAL
           await supabase.from('personal').update({ 
-              details: `DISCREPANCIA EN QC: Encontrado ${piezas_despachadas} pzas.`, 
+              details: `DISCREPANCIA EN QC: Encontrado ${piezas_despachadas} pzas de ID ${finalIdDespachado}.`, 
               status: 'REPORTADO' 
           }).eq('code', itemToReport.code);
 
-          alert('Incidencia guardada y paquete reportado correctamente.');
+          alert('Incidencia guardada exitosamente y paquete reportado.');
           setIsDiscrepancyModalOpen(false);
+          
+          // Actualizar estado visual en la lista
           setMassScannedCodes(prev => prev.map(i => i.code === itemToReport.code ? { ...i, status: 'REPORTADO' } : i));
+          if (lastScannedResult?.code === itemToReport.code) {
+              setLastScannedResult(prev => prev ? { ...prev, status: 'REPORTADO' } : null);
+          }
+
       } catch (e: any) { 
           console.error("Error al enviar reporte:", e);
-          alert(`Error al guardar: ${e.message}`); 
+          alert(e.message || 'Ocurrió un error inesperado al intentar guardar la incidencia.'); 
       } finally { 
           setLoading(false); 
       }
