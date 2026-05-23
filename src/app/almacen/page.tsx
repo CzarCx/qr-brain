@@ -61,7 +61,7 @@ export default function AlmacenPage() {
   const [loading, setLoading] = useState(false);
   const [selectedScannerMode, setSelectedScannerMode] = useState('camara');
   const [encargado, setEncargado] = useState(''); 
-  const [encargadosList, setEncargadosList] = useState<Encargado[]>([{ name: 'Almacenista', rol: 'almacenista', organization: 'Almacén' }]);
+  const [encargadosList, setEncargadosList] = useState<Encargado[]>([]);
   const [scanMode, setScanMode] = useState('individual');
   const [massScannedCodes, setMassScannedCodes] = useState<ScanResult[]>([]);
   const [cameraCapabilities, setCameraCapabilities] = useState<any>(null);
@@ -102,9 +102,6 @@ export default function AlmacenPage() {
             console.error('Error fetching data:', error);
         } else if (data && data.length > 0) {
              const uniqueEncargados = Array.from(new Map(data.map(item => [item.name, item])).values());
-             if (!uniqueEncargados.some(e => e.name === 'Almacenista')) {
-                uniqueEncargados.unshift({ name: 'Almacenista', rol: 'almacenista', organization: 'Almacén' });
-             }
              setEncargadosList(uniqueEncargados as Encargado[]);
         } else {
              setEncargadosList([{ name: 'Almacenista', rol: 'almacenista', organization: 'Almacén' }]);
@@ -123,8 +120,16 @@ export default function AlmacenPage() {
   }, [profile, isMounted]);
 
   const groupedEncargadoOptions = useMemo(() => {
-    if (encargadosList.length === 0) return [];
-    const grouped = encargadosList.reduce((acc, person) => {
+    let list = [...encargadosList];
+    
+    // Asegurar que el usuario logueado esté en las opciones
+    if (profile?.name && !list.some(e => e.name === profile.name)) {
+        list.push({ name: profile.name, rol: 'almacenista', organization: 'Usuario Actual' });
+    }
+
+    if (list.length === 0) return [];
+
+    const grouped = list.reduce((acc, person) => {
         const org = person.organization || 'Sin Empresa';
         if (!acc[org]) acc[org] = [];
         acc[org].push({ value: person.name, label: person.name });
@@ -135,7 +140,7 @@ export default function AlmacenPage() {
         label: org,
         options: grouped[org].sort((a, b) => a.label.localeCompare(b.label))
     }));
-  }, [encargadosList]);
+  }, [encargadosList, profile]);
 
   const playBeep = () => {
     const context = new (window.AudioContext || (window as any).webkitAudioContext)();

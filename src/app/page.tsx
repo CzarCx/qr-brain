@@ -316,7 +316,7 @@ export default function Home() {
     };
   }, [fetchCreatedLotes]);
 
-  // Vincular encargado con el perfil de usuario logueado
+  // Vincular encargado con el perfil de usuario logueado (Prioridad)
   useEffect(() => {
     if (profile?.name) {
       setEncargado(profile.name);
@@ -637,32 +637,6 @@ export default function Home() {
       } finally {
           setLoading(false);
       }
-  };
-
-  const handleManualAssociate = () => {
-    if (!selectedPersonal) {
-        showModalNotification('Falta Selección', 'Por favor, selecciona un miembro del personal.', 'destructive');
-        return;
-    }
-    if (scannedData.length === 0) {
-        showModalNotification('Lista Vacía', 'No hay etiquetas pendientes para asociar.', 'info');
-        return;
-    }
-    const missingTimeRows = scannedData
-      .map((item, index) => (item.esti_time === null || item.esti_time === undefined ? index + 1 : null))
-      .filter((rowNum): rowNum is number => rowNum !== null);
-
-    if (missingTimeRows.length > 0) {
-      const message = `Por favor, completa el campo "Tiempo Estimado" en las siguientes filas: ${missingTimeRows.join(', ')}.`;
-      showModalNotification('Faltan Datos', message, 'destructive');
-      return;
-    }
-    if (!selectedArea && !skipAreaSelection) {
-      showModalNotification('Falta Área', 'Por favor, selecciona un área de trabajo o marca la opción para continuar sin una.', 'destructive');
-      return;
-    }
-
-    saveToPersonal(selectedPersonal);
   };
   
   const onScanSuccess = useCallback((decodedText: string, decodedResult: any) => {
@@ -1495,18 +1469,14 @@ const deleteRow = (codeToDelete: string) => {
             .select('corte_etiquetas, personal_bar')
             .eq('code_i', verificationCode);
 
-        if (fetchError) { 
-             throw new Error(`Error al verificar el código: ${fetchError.message}`);
-        }
-
-        if (!vCodeRows || vCodeRows.length === 0) {
+        if (verificationCode && vCodeRows && vCodeRows.length === 0) {
             setVerificationResult({ status: 'not-found', message: 'Código de corte no encontrado o inválido.' });
             setIsVerifying(false);
             return;
         }
 
-        const vCode = vCodeRows[0];
-        if (vCode.corte_etiquetas) {
+        const vCode = vCodeRows ? vCodeRows[0] : null;
+        if (vCode?.corte_etiquetas) {
             const registeredTime = new Date(vCode.corte_etiquetas).toLocaleString('es-MX', {
                 dateStyle: 'short',
                 timeStyle: 'medium',
@@ -1715,9 +1685,16 @@ const deleteRow = (codeToDelete: string) => {
   }, [personalList]);
   
   const groupedEncargadoOptions = useMemo(() => {
-    if (encargadosList.length === 0) return [];
+    let list = [...encargadosList];
     
-    const grouped = encargadosList.reduce((acc, person) => {
+    // Si el usuario logueado no está en la lista, añadirlo dinámicamente para que el Combobox lo muestre
+    if (profile?.name && !list.some(e => e.name === profile.name)) {
+        list.push({ name: profile.name, organization: 'Usuario Actual' });
+    }
+
+    if (list.length === 0) return [];
+    
+    const grouped = list.reduce((acc, person) => {
         const org = person.organization || 'Sin Empresa';
         if (!acc[org]) {
             acc[org] = [];
@@ -1730,7 +1707,7 @@ const deleteRow = (codeToDelete: string) => {
         label: org,
         options: grouped[org].sort((a, b) => a.label.localeCompare(b.label))
     }));
-  }, [encargadosList]);
+  }, [encargadosList, profile]);
 
   const CargarProduccionSection = (
     <div className="w-full mt-4 p-4 border-t-2 border-dashed border-gray-300">

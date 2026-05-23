@@ -149,9 +149,16 @@ export default function CalificarPage() {
   }, [profile]);
 
   const groupedEncargadoOptions = useMemo(() => {
-    if (encargadosList.length === 0) return [];
+    let list = [...encargadosList];
     
-    const grouped = encargadosList.reduce((acc, person) => {
+    // Asegurar que el usuario logueado esté en las opciones
+    if (profile?.name && !list.some(e => e.name === profile.name)) {
+        list.push({ name: profile.name, rol: 'Control de calidad', organization: 'Usuario Actual' });
+    }
+
+    if (list.length === 0) return [];
+    
+    const grouped = list.reduce((acc, person) => {
         const org = person.organization || 'Sin Empresa';
         if (!acc[org]) {
             acc[org] = [];
@@ -164,7 +171,7 @@ export default function CalificarPage() {
         label: org,
         options: grouped[org].sort((a, b) => a.label.localeCompare(b.label))
     }));
-  }, [encargadosList]);
+  }, [encargadosList, profile]);
 
   useEffect(() => {
     let interval: NodeJS.Timeout | null = null;
@@ -1110,6 +1117,7 @@ const triggerMassQualify = async () => {
                             />
                             <Button
                                 type="button"
+                                id="lote-load-btn"
                                 onClick={handleLoadLote}
                                 size="icon"
                                 className="h-8 w-8 bg-blue-600 hover:bg-blue-700 text-white rounded-md mr-1"

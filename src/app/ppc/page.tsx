@@ -112,11 +112,7 @@ export default function PpcPage() {
         } else if (data) {
              const uniqueEncargados = Array.from(new Map(data.map(item => [item.name, item])).values());
              const operativos = uniqueEncargados.filter(enc => enc.rol === 'operativo') as Encargado[];
-             if (operativos.length === 0) {
-                setDbError('No se encontraron encargados con el rol "operativo". Revisa los datos o los permisos RLS.');
-            } else {
-                setEncargadosList(operativos || []);
-            }
+             setEncargadosList(operativos || []);
         } else {
              setDbError('No se encontraron encargados. Revisa los datos o los permisos RLS.');
         }
@@ -132,9 +128,16 @@ export default function PpcPage() {
   }, [profile]);
 
   const groupedEncargadoOptions = useMemo(() => {
-    if (encargadosList.length === 0) return [];
+    let list = [...encargadosList];
     
-    const grouped = encargadosList.reduce((acc, person) => {
+    // Asegurar que el usuario logueado esté en las opciones
+    if (profile?.name && !list.some(e => e.name === profile.name)) {
+        list.push({ name: profile.name, rol: 'operativo', organization: 'Usuario Actual' });
+    }
+
+    if (list.length === 0) return [];
+    
+    const grouped = list.reduce((acc, person) => {
         const org = person.organization || 'Sin Empresa';
         if (!acc[org]) {
             acc[org] = [];
@@ -147,7 +150,7 @@ export default function PpcPage() {
         label: org,
         options: grouped[org].sort((a, b) => a.label.localeCompare(b.label))
     }));
-  }, [encargadosList]);
+  }, [encargadosList, profile]);
 
   useEffect(() => {
     const handleBeforeUnload = (event: BeforeUnloadEvent) => {
