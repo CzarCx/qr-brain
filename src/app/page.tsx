@@ -1075,6 +1075,19 @@ const deleteRow = (codeToDelete: string) => {
     setIsPrintDialogOpen(true);
   };
 
+  const handleManualAssociate = async () => {
+    if (!selectedPersonal) {
+      showModalNotification('Falta Personal', 'Por favor, selecciona al personal para asociar.', 'destructive');
+      return;
+    }
+    await saveToPersonal(selectedPersonal);
+  };
+
+  const handleConfirmation = (choice: boolean) => {
+    confirmation.resolve(choice);
+    setConfirmation(prev => ({ ...prev, isOpen: false }));
+  };
+
   const ticketData = useMemo(() => {
     // 1. Resumen: Agrupar por subcategoría para sumar piezas y contar etiquetas/pedidos
     const resumenMap: Record<string, { pieces: number, orders: number }> = {};
