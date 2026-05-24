@@ -581,22 +581,23 @@ export default function CalificarPage() {
           const record = {
               fecha: now.toISOString().split('T')[0],
               hora: now.toLocaleTimeString('en-GB', { hour12: false }), // HH:MM:SS
-              id_producto_solicitado: null,
-              id_producto_despachado: null,
+              id_producto_solicitado: null, // Seteado a NULL por instrucción del usuario
+              id_producto_despachado: null, // Seteado a NULL por instrucción del usuario
               piezas_solicitadas: isNaN(pSolicitadas) ? 0 : pSolicitadas,
               piezas_despachadas: isNaN(pDespachadas) ? 0 : pDespachadas,
               observaciones: observacionesIncidencia || '',
               id_empleado: idEmpleado,
-              id_capturista: null,
+              id_capturista: null, // Seteado a NULL por instrucción del usuario
               firma_empleado: false
           };
 
-          const { error: insError } = await supabase
+          // Intentamos insertar usando supabaseEtiquetas por si la tabla está en el otro esquema/DB
+          const { error: insError } = await supabaseEtiquetas
             .from('registro_incidencias_en_paquetes_listos_para_entrega')
             .insert([record]);
 
           if (insError) {
-              console.error("Supabase Insert Error Detail:", JSON.stringify(insError, null, 2));
+              console.error("Supabase Etiquetas Insert Error Detail:", JSON.stringify(insError, null, 2));
               throw new Error(`Error de base de datos: ${insError.message || 'Error desconocido'} (Código: ${insError.code || 'N/A'})`);
           }
 
@@ -1059,7 +1060,7 @@ const triggerMassQualify = async () => {
                <div className="grid gap-6 py-6 border-y border-gray-100 mt-2">
                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                        <div className="space-y-2">
-                           <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">PRODUCTO SOLICITADO (ID: {idProductoSolicitado || 'NO ENCONTRADO'})</Label>
+                           <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">PRODUCTO SOLICITADO</Label>
                            <div className="p-3 border rounded-xl bg-gray-50 font-mono text-[11px] font-black break-all line-clamp-2">
                                {itemToReport?.sku || 'S/N'}
                            </div>
