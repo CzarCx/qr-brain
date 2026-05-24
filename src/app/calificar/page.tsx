@@ -123,7 +123,6 @@ export default function CalificarPage() {
   // States for Discrepancy Report
   const [isDiscrepancyModalOpen, setIsDiscrepancyModalOpen] = useState(false);
   const [itemToReport, setItemToReport] = useState<ScanResult | null>(null);
-  const [idProductoSolicitado, setIdProductoSolicitado] = useState<number | null>(null);
   const [idProductoDespachado, setIdProductoDespachado] = useState<string>('');
   const [searchQueryDespachado, setSearchQueryDespachado] = useState('');
   const [isInventoryPopoverOpen, setIsInventoryPopoverOpen] = useState(false);
@@ -514,21 +513,7 @@ export default function CalificarPage() {
       setSearchQueryDespachado('');
       setPiezasDespachadas('');
       setObservacionesIncidencia('');
-      setIdProductoSolicitado(null);
       setIsDiscrepancyModalOpen(true);
-      
-      if (item.sku) {
-        const skuPart = String(item.sku).split(' | ')[0].trim();
-        const { data } = await supabase
-            .from('inventory_master')
-            .select('id')
-            .ilike('sku', skuPart)
-            .limit(1);
-
-        if (data && data.length > 0) {
-            setIdProductoSolicitado(data[0].id);
-        }
-      }
   };
   
   const saveKpiData = async (name: string, quantity: number, timeInSeconds: number) => {
@@ -564,16 +549,6 @@ export default function CalificarPage() {
 
       setLoading(true);
       try {
-          let idEmpleado = null;
-          if (itemToReport.name && itemToReport.name !== 'N/A') {
-              const { data: empData } = await supabase
-                .from('empleados')
-                .select('id')
-                .eq('name', itemToReport.name)
-                .maybeSingle();
-              if (empData) idEmpleado = empData.id;
-          }
-
           const now = new Date();
           const pSolicitadas = Number(itemToReport.quantity);
           const pDespachadas = Number(piezasDespachadas);
@@ -586,12 +561,12 @@ export default function CalificarPage() {
               piezas_solicitadas: isNaN(pSolicitadas) ? 0 : pSolicitadas,
               piezas_despachadas: isNaN(pDespachadas) ? 0 : pDespachadas,
               observaciones: observacionesIncidencia || '',
-              id_empleado: idEmpleado,
+              id_empleado: null, // Seteado a NULL por el momento por seguridad de FK
               id_capturista: null, // Seteado a NULL por instrucción del usuario
               firma_empleado: false
           };
 
-          // Intentamos insertar usando supabaseEtiquetas por si la tabla está en el otro esquema/DB
+          // Inserción en la DB de Etiquetas/Logística
           const { error: insError } = await supabaseEtiquetas
             .from('registro_incidencias_en_paquetes_listos_para_entrega')
             .insert([record]);
@@ -601,6 +576,7 @@ export default function CalificarPage() {
               throw new Error(`Error de base de datos: ${insError.message || 'Error desconocido'} (Código: ${insError.code || 'N/A'})`);
           }
 
+          // Actualización de estado en DB Principal
           await supabase.from('personal').update({ 
               details: `DISCREPANCIA EN QC: Encontrado ${piezasDespachadas} pzas.`, 
               status: 'REPORTADO' 
