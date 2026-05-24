@@ -558,17 +558,8 @@ export default function CalificarPage() {
   };
 
   const handleSendDiscrepancyReport = async () => {
-      let finalIdDespachado = idProductoDespachado;
-      
-      // Lógica de Auto-Match si no hay ID seleccionado explícitamente pero hay texto
-      if (!finalIdDespachado && searchQueryDespachado.trim()) {
-          const queryLower = searchQueryDespachado.toLowerCase();
-          const match = inventoryList.find(i => i.sku.toLowerCase() === queryLower || i.name.toLowerCase() === queryLower);
-          if (match) finalIdDespachado = String(match.id);
-      }
-
-      if (!itemToReport || !finalIdDespachado || !piezasDespachadas) { 
-          alert("Por favor, selecciona el producto despachado y la cantidad real encontrada."); 
+      if (!itemToReport || !piezasDespachadas) { 
+          alert("Por favor, ingresa la cantidad real encontrada."); 
           return; 
       }
 
@@ -589,13 +580,13 @@ export default function CalificarPage() {
           const record = {
               fecha: now.toISOString().split('T')[0],
               hora: now.toLocaleTimeString('en-GB', { hour12: false }), // HH:MM:SS
-              id_producto_solicitado: idProductoSolicitado ? Number(idProductoSolicitado) : null,
-              id_producto_despachado: Number(finalIdDespachado),
+              id_producto_solicitado: null, // Seteado a NULL por ahora
+              id_producto_despachado: null, // Seteado a NULL por ahora
               piezas_solicitadas: itemToReport.quantity ? Number(itemToReport.quantity) : 0,
               piezas_despachadas: Number(piezasDespachadas),
               observaciones: observacionesIncidencia || '',
               id_empleado: idEmpleado,
-              id_capturista: profile?.id || user?.id || null,
+              id_capturista: null, // Seteado a NULL por ahora
               firma_empleado: false
           };
 
@@ -612,7 +603,7 @@ export default function CalificarPage() {
 
           // ACTUALIZAR ESTADO DEL BULTO A REPORTADO EN LA TABLA PERSONAL
           await supabase.from('personal').update({ 
-              details: `DISCREPANCIA EN QC: Encontrado ${piezas_despachadas} pzas de ID ${finalIdDespachado}.`, 
+              details: `DISCREPANCIA EN QC: Encontrado ${piezas_despachadas} pzas.`, 
               status: 'REPORTADO' 
           }).eq('code', itemToReport.code);
 
@@ -1159,7 +1150,7 @@ const triggerMassQualify = async () => {
                    </Button>
                    <Button 
                         onClick={handleSendDiscrepancyReport} 
-                        disabled={loading || (!idProductoDespachado && !searchQueryDespachado) || !piezasDespachadas} 
+                        disabled={loading || !piezasDespachadas} 
                         className="bg-amber-600 hover:bg-amber-700 text-white h-12 px-8 rounded-xl font-black flex-1 sm:flex-none transition-all shadow-lg shadow-amber-200"
                     >
                        {loading ? <Loader2 className="animate-spin h-5 w-5" /> : 'Enviar Reporte'}
