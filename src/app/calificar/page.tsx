@@ -10,7 +10,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from '@/components/ui/input';
@@ -93,7 +92,7 @@ type InventoryItem = {
 };
 
 export default function CalificarPage() {
-  const { profile, user } = useAuth();
+  const { profile } = useAuth();
   const [isMounted, setIsMounted] = useState(false);
   const [message, setMessage] = useState({ text: 'Apunte la cámara a un código QR.', type: 'info', show: false });
   const [lastScannedResult, setLastScannedResult] = useState<ScanResult | null>(null);
@@ -123,6 +122,7 @@ export default function CalificarPage() {
   // States for Discrepancy Report
   const [isDiscrepancyModalOpen, setIsDiscrepancyModalOpen] = useState(false);
   const [itemToReport, setItemToReport] = useState<ScanResult | null>(null);
+  const [idProductoOriginal, setIdProductoOriginal] = useState<string | null>(null);
   const [idProductoDespachado, setIdProductoDespachado] = useState<string>('');
   const [searchQueryDespachado, setSearchQueryDespachado] = useState('');
   const [isInventoryPopoverOpen, setIsInventoryPopoverOpen] = useState(false);
@@ -169,18 +169,41 @@ export default function CalificarPage() {
              setDbError('No se encontraron encargados con el rol "Control de calidad". Revisa los datos o los permisos RLS.');
         }
     };
-    const fetchInventory = async () => {
+    
+    // Fetch products that were previously part of an incidence (as per user request)
+    const fetchIncidencesProducts = async () => {
         setLoadingInventory(true);
-        const { data, error } = await supabase
-            .from('inventory_master')
-            .select('id, name, sku')
-            .order('name', { ascending: true });
-        if (data) setInventoryList(data);
-        setLoadingInventory(false);
+        try {
+            const { data, error } = await supabaseEtiquetas
+                .from('registro_incidencias_en_paquetes_listos_para_entrega')
+                .select(`
+                    id_producto_despachado,
+                    inventory_master:id_producto_despachado (
+                        id,
+                        name,
+                        sku
+                    )
+                `)
+                .not('id_producto_despachado', 'is', null);
+            
+            if (data) {
+                const uniqueItems = new Map<number, InventoryItem>();
+                data.forEach((row: any) => {
+                    if (row.inventory_master) {
+                        uniqueItems.set(row.inventory_master.id, row.inventory_master);
+                    }
+                });
+                setInventoryList(Array.from(uniqueItems.values()));
+            }
+        } catch (e) {
+            console.error("Error fetching incidence products:", e);
+        } finally {
+            setLoadingInventory(false);
+        }
     };
 
     fetchEncargados();
-    fetchInventory();
+    fetchIncidencesProducts();
   }, []);
 
   useEffect(() => {
@@ -510,10 +533,22 @@ export default function CalificarPage() {
   const handleOpenDiscrepancyModal = async (item: ScanResult) => {
       setItemToReport(item);
       setIdProductoDespachado('');
+      setIdProductoOriginal(null);
       setSearchQueryDespachado('');
       setPiezasDespachadas('');
       setObservacionesIncidencia('');
       setIsDiscrepancyModalOpen(true);
+
+      // Look for the requested product ID in inventory_master
+      if (item.sku) {
+          const skuBase = item.sku.split(' | ')[0].trim();
+          const { data } = await supabaseEtiquetas
+            .from('inventory_master')
+            .select('id')
+            .eq('sku', skuBase)
+            .maybeSingle();
+          if (data) setIdProductoOriginal(String(data.id));
+      }
   };
   
   const saveKpiData = async (name: string, quantity: number, timeInSeconds: number) => {
@@ -556,17 +591,17 @@ export default function CalificarPage() {
           const record = {
               fecha: now.toISOString().split('T')[0],
               hora: now.toLocaleTimeString('en-GB', { hour12: false }), // HH:MM:SS
-              id_producto_solicitado: null, // Seteado a NULL por instrucción del usuario
-              id_producto_despachado: null, // Seteado a NULL por instrucción del usuario
+              id_producto_solicitado: idProductoOriginal ? Number(idProductoOriginal) : null,
+              id_producto_despachado: idProductoDespachado ? Number(idProductoDespachado) : null,
               piezas_solicitadas: isNaN(pSolicitadas) ? 0 : pSolicitadas,
               piezas_despachadas: isNaN(pDespachadas) ? 0 : pDespachadas,
               observaciones: observacionesIncidencia || '',
-              id_empleado: null, // Seteado a NULL por el momento por seguridad de FK
-              id_capturista: null, // Seteado a NULL por instrucción del usuario
+              id_empleado: null, // Keep null as per previous turns
+              id_capturista: profile?.id || null, // Capture real user ID now
               firma_empleado: false
           };
 
-          // Inserción en la DB de Etiquetas/Logística
+          // Database Insertion
           const { error: insError } = await supabaseEtiquetas
             .from('registro_incidencias_en_paquetes_listos_para_entrega')
             .insert([record]);
@@ -576,7 +611,7 @@ export default function CalificarPage() {
               throw new Error(`Error de base de datos: ${insError.message || 'Error desconocido'} (Código: ${insError.code || 'N/A'})`);
           }
 
-          // Actualización de estado en DB Principal
+          // Update Status in Production DB
           await supabase.from('personal').update({ 
               details: `DISCREPANCIA EN QC: Encontrado ${piezasDespachadas} pzas.`, 
               status: 'REPORTADO' 
@@ -870,11 +905,6 @@ const triggerMassQualify = async () => {
                         </div>
                         {(lastScannedResult.status !== 'CALIFICADO' || lastScannedResult.status === 'REPORTADO') && (
                              <Dialog open={isRatingModalOpen} onOpenChange={handleOpenRatingModal}>
-                             <DialogTrigger asChild>
-                                 <Button className="w-full mt-4 bg-starbucks-accent hover:bg-starbucks-green text-white">
-                                 Calificar
-                                 </Button>
-                             </DialogTrigger>
                              <DialogContent className="sm:max-w-[425px]">
                                  <DialogHeader>
                                   <DialogTitle>Calificar Empaquetado</DialogTitle>
@@ -1072,7 +1102,7 @@ const triggerMassQualify = async () => {
                                <Command>
                                    <CommandList className="max-h-[300px]">
                                        <CommandEmpty>No se encontró el producto.</CommandEmpty>
-                                       <CommandGroup heading="Productos en inventario">
+                                       <CommandGroup heading="Productos registrados previamente">
                                            {filteredInventory.map((item) => (
                                                <CommandItem
                                                    key={item.id}
