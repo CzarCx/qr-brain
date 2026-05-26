@@ -43,7 +43,8 @@ import {
     FileWarning, 
     Search, 
     Loader2,
-    Check
+    Check,
+    X
 } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Switch } from '@/components/ui/switch';
@@ -51,7 +52,7 @@ import { Combobox } from '@/components/ui/combobox';
 import { useAuth } from '@/components/AuthProvider';
 import { Textarea } from '@/components/ui/textarea';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Command, CommandEmpty, CommandGroup, CommandItem, CommandList } from '@/components/ui/command';
+import { cn } from '@/lib/utils';
 
 type ScanResult = {
     name: string | null;
@@ -180,12 +181,11 @@ export default function CalificarPage() {
             queryBuilder = queryBuilder.ilike('subcategoria', `%${query}%`);
         }
 
-        const { data, error } = await queryBuilder.limit(50);
+        const { data, error } = await queryBuilder.limit(100);
         
         if (error) throw error;
 
         if (data) {
-            // Filtrar duplicados localmente para asegurar subcategorías únicas
             const uniqueSubcategories = Array.from(new Set(data.map(item => item.subcategoria)))
                 .filter(Boolean)
                 .map(sub => ({ subcategoria: sub }));
@@ -199,7 +199,7 @@ export default function CalificarPage() {
     }
   }, []);
 
-  // Carga inicial de subcategorías al abrir el popover
+  // Carga inicial al montar o abrir el popover
   useEffect(() => {
     if (isInventoryPopoverOpen && inventoryList.length === 0) {
         fetchInventoryItems('');
@@ -209,12 +209,12 @@ export default function CalificarPage() {
   // Búsqueda dinámica con debounce
   useEffect(() => {
     const timer = setTimeout(() => {
-        if (searchQueryDespachado) {
+        if (isInventoryPopoverOpen) {
             fetchInventoryItems(searchQueryDespachado);
         }
     }, 400);
     return () => clearTimeout(timer);
-  }, [searchQueryDespachado, fetchInventoryItems]);
+  }, [searchQueryDespachado, fetchInventoryItems, isInventoryPopoverOpen]);
 
   useEffect(() => {
     if (profile?.name) {
@@ -537,7 +537,7 @@ export default function CalificarPage() {
       setPiezasDespachadas('');
       setObservacionesIncidencia('');
       setIsDiscrepancyModalOpen(true);
-      // No limpiamos inventoryList para permitir visualización rápida
+      if (inventoryList.length === 0) fetchInventoryItems('');
   };
   
   const saveKpiData = async (name: string, quantity: number, timeInSeconds: number) => {
@@ -559,8 +559,8 @@ export default function CalificarPage() {
     } catch (e: any) { alert(`Error al enviar el reporte: ${e.message}`); } finally { setLoading(false); }
   };
 
-  const handleSelectProduct = (item: InventoryCategory) => {
-      setSearchQueryDespachado(item.subcategoria);
+  const handleSelectProduct = (sub: string) => {
+      setSearchQueryDespachado(sub);
       setIsInventoryPopoverOpen(false);
   };
 
@@ -589,7 +589,6 @@ export default function CalificarPage() {
               firma_empleado: false
           };
 
-          // Intentar insertar en la tabla de incidencias (DB Etiquetas)
           const { error: insError } = await supabaseEtiquetas
             .from('registro_incidencias_en_paquetes_listos_para_entrega')
             .insert([record]);
@@ -599,7 +598,6 @@ export default function CalificarPage() {
               throw new Error(`Error de base de datos: ${insError.message || 'Error desconocido'}`);
           }
 
-          // Actualizar estado del paquete en la DB Principal
           await supabase.from('personal').update({ 
               details: `DISCREPANCIA EN QC: Encontrado ${piezasDespachadas} pzas. Subcategoría: ${searchQueryDespachado}`, 
               status: 'REPORTADO' 
@@ -1084,31 +1082,38 @@ const triggerMassQualify = async () => {
                                        }}
                                        className="h-12 rounded-xl text-xs font-bold pr-10"
                                    />
+                                   {searchQueryDespachado && (
+                                       <X 
+                                          className="absolute right-10 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 cursor-pointer hover:text-gray-600" 
+                                          onClick={(e) => { e.stopPropagation(); setSearchQueryDespachado(''); }}
+                                       />
+                                   )}
                                    <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                                </div>
                            </PopoverTrigger>
                            <PopoverContent className="w-[--radix-popover-trigger-width] p-0 z-[110]" align="start">
-                               <Command shouldFilter={false}>
-                                   <CommandList className="max-h-[300px]">
-                                       {loadingInventory && <div className="p-4 text-center text-xs text-muted-foreground">Cargando subcategorías...</div>}
-                                       {!loadingInventory && inventoryList.length === 0 && <CommandEmpty>No se encontraron resultados.</CommandEmpty>}
-                                       <CommandGroup heading="Sugerencias de Inventario">
-                                           {inventoryList.map((item, idx) => (
-                                               <CommandItem
-                                                   key={`${item.subcategoria}-${idx}`}
-                                                   value={item.subcategoria}
-                                                   onSelect={() => handleSelectProduct(item)}
-                                                   className="cursor-pointer"
-                                               >
-                                                   <div className="flex flex-col w-full">
-                                                       <span className="font-bold text-xs text-starbucks-green">{item.subcategoria}</span>
-                                                   </div>
-                                                   {searchQueryDespachado === item.subcategoria && <Check className="ml-auto h-4 w-4 text-starbucks-green" />}
-                                               </CommandItem>
-                                           ))}
-                                       </CommandGroup>
-                                   </CommandList>
-                               </Command>
+                               <div className="max-h-[300px] overflow-y-auto flex flex-col p-1 bg-white">
+                                   {loadingInventory && <div className="p-4 text-center text-xs text-muted-foreground">Cargando subcategorías...</div>}
+                                   {!loadingInventory && inventoryList.length === 0 && <div className="p-4 text-center text-xs text-muted-foreground">No se encontraron resultados.</div>}
+                                   {inventoryList.map((item, idx) => (
+                                       <div
+                                           key={`${item.subcategoria}-${idx}`}
+                                           onPointerDown={(e) => {
+                                               e.preventDefault();
+                                               handleSelectProduct(item.subcategoria);
+                                           }}
+                                           className={cn(
+                                               "flex items-center gap-2 px-4 py-3 cursor-pointer rounded-md transition-colors",
+                                               searchQueryDespachado === item.subcategoria ? "bg-starbucks-green/10" : "hover:bg-gray-100"
+                                           )}
+                                       >
+                                           <span className={cn("flex-1 text-xs font-bold", searchQueryDespachado === item.subcategoria ? "text-starbucks-green" : "text-gray-700")}>
+                                               {item.subcategoria}
+                                           </span>
+                                           {searchQueryDespachado === item.subcategoria && <Check className="h-4 w-4 text-starbucks-green" />}
+                                       </div>
+                                   ))}
+                               </div>
                            </PopoverContent>
                        </Popover>
                    </div>
