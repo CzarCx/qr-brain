@@ -120,7 +120,6 @@ export default function CalificarPage() {
   // States for Discrepancy Report
   const [isDiscrepancyModalOpen, setIsDiscrepancyModalOpen] = useState(false);
   const [itemToReport, setItemToReport] = useState<ScanResult | null>(null);
-  const [idProductoDespachado, setIdProductoDespachado] = useState<string | null>(null);
   const [searchQueryDespachado, setSearchQueryDespachado] = useState('');
   const [isInventoryPopoverOpen, setIsInventoryPopoverOpen] = useState(false);
   const [piezasDespachadas, setPiezasDespachadas] = useState('');
@@ -170,7 +169,6 @@ export default function CalificarPage() {
     fetchEncargados();
   }, []);
 
-  // Fetch subcategories from inventory_master when searching
   const fetchInventoryItems = useCallback(async (query: string) => {
     if (!query || query.length < 2) {
       setInventoryList([]);
@@ -178,17 +176,15 @@ export default function CalificarPage() {
     }
     setLoadingInventory(true);
     try {
-        // Obtenemos las subcategorías que coincidan con la búsqueda
         const { data, error } = await supabaseEtiquetas
             .from('inventory_master')
             .select('subcategoria')
             .ilike('subcategoria', `%${query}%`)
-            .limit(50);
+            .limit(100);
         
         if (error) throw error;
 
         if (data) {
-            // Filtramos duplicados en el cliente para mostrar valores únicos de subcategoría
             const uniqueSubcategories = Array.from(new Set(data.map(item => item.subcategoria)))
                 .filter(Boolean)
                 .map(sub => ({ subcategoria: sub }));
@@ -528,7 +524,6 @@ export default function CalificarPage() {
 
   const handleOpenDiscrepancyModal = async (item: ScanResult) => {
       setItemToReport(item);
-      setIdProductoDespachado(null);
       setSearchQueryDespachado('');
       setPiezasDespachadas('');
       setObservacionesIncidencia('');
@@ -556,7 +551,6 @@ export default function CalificarPage() {
   };
 
   const handleSelectProduct = (item: InventoryCategory) => {
-      setIdProductoDespachado(null); // Seteamos a null por el momento según instrucciones previas
       setSearchQueryDespachado(item.subcategoria);
       setIsInventoryPopoverOpen(false);
   };
@@ -573,10 +567,9 @@ export default function CalificarPage() {
           const pSolicitadas = Number(itemToReport.quantity);
           const pDespachadas = Number(piezasDespachadas);
 
-          // Payload con campos de identificación forzados a NULL por instrucciones del usuario
           const record = {
               fecha: now.toISOString().split('T')[0],
-              hora: now.toLocaleTimeString('en-GB', { hour12: false }), // HH:MM:SS
+              hora: now.toLocaleTimeString('en-GB', { hour12: false }),
               id_producto_solicitado: null,
               id_producto_despachado: null,
               piezas_solicitadas: isNaN(pSolicitadas) ? 0 : pSolicitadas,
@@ -587,7 +580,6 @@ export default function CalificarPage() {
               firma_empleado: false
           };
 
-          // Database Insertion usando supabaseEtiquetas (donde reside la tabla)
           const { error: insError } = await supabaseEtiquetas
             .from('registro_incidencias_en_paquetes_listos_para_entrega')
             .insert([record]);
@@ -597,7 +589,6 @@ export default function CalificarPage() {
               throw new Error(`Error de base de datos: ${insError.message || 'Error desconocido'}`);
           }
 
-          // Actualizamos estado en DB de producción
           await supabase.from('personal').update({ 
               details: `DISCREPANCIA EN QC: Encontrado ${piezasDespachadas} pzas. Subcategoría: ${searchQueryDespachado}`, 
               status: 'REPORTADO' 
@@ -1075,7 +1066,6 @@ const triggerMassQualify = async () => {
                                        value={searchQueryDespachado}
                                        onChange={(e) => {
                                            setSearchQueryDespachado(e.target.value);
-                                           setIdProductoDespachado(null); 
                                            if (!isInventoryPopoverOpen) setIsInventoryPopoverOpen(true);
                                        }}
                                        onFocus={() => {
