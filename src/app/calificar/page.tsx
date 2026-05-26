@@ -85,10 +85,8 @@ type LoteConfirmationState = {
   newCount: number;
 };
 
-type InventoryItem = {
-    id: number;
-    name: string;
-    sku: string;
+type InventoryCategory = {
+    subcategoria: string;
 };
 
 export default function CalificarPage() {
@@ -122,12 +120,12 @@ export default function CalificarPage() {
   // States for Discrepancy Report
   const [isDiscrepancyModalOpen, setIsDiscrepancyModalOpen] = useState(false);
   const [itemToReport, setItemToReport] = useState<ScanResult | null>(null);
-  const [idProductoDespachado, setIdProductoDespachado] = useState<string>('');
+  const [idProductoDespachado, setIdProductoDespachado] = useState<string | null>(null);
   const [searchQueryDespachado, setSearchQueryDespachado] = useState('');
   const [isInventoryPopoverOpen, setIsInventoryPopoverOpen] = useState(false);
   const [piezasDespachadas, setPiezasDespachadas] = useState('');
   const [observacionesIncidencia, setObservacionesIncidencia] = useState('');
-  const [inventoryList, setInventoryList] = useState<InventoryItem[]>([]);
+  const [inventoryList, setInventoryList] = useState<InventoryCategory[]>([]);
   const [loadingInventory, setLoadingInventory] = useState(false);
 
   const messageTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -172,7 +170,7 @@ export default function CalificarPage() {
     fetchEncargados();
   }, []);
 
-  // Fetch from inventory_master when searching
+  // Fetch subcategories from inventory_master when searching
   const fetchInventoryItems = useCallback(async (query: string) => {
     if (!query || query.length < 2) {
       setInventoryList([]);
@@ -180,23 +178,25 @@ export default function CalificarPage() {
     }
     setLoadingInventory(true);
     try {
+        // Obtenemos las subcategorías que coincidan con la búsqueda
         const { data, error } = await supabaseEtiquetas
             .from('inventory_master')
-            .select('id, nombre_madre, sku_oficial')
-            .or(`sku_oficial.ilike.%${query}%,nombre_madre.ilike.%${query}%`)
-            .limit(20);
+            .select('subcategoria')
+            .ilike('subcategoria', `%${query}%`)
+            .limit(50);
         
         if (error) throw error;
 
         if (data) {
-            setInventoryList(data.map(item => ({
-                id: Number(item.id),
-                name: item.nombre_madre || 'S/N',
-                sku: item.sku_oficial || 'S/S'
-            })));
+            // Filtramos duplicados en el cliente para mostrar valores únicos de subcategoría
+            const uniqueSubcategories = Array.from(new Set(data.map(item => item.subcategoria)))
+                .filter(Boolean)
+                .map(sub => ({ subcategoria: sub }));
+            
+            setInventoryList(uniqueSubcategories);
         }
     } catch (e) {
-        console.error("Error fetching inventory items:", e);
+        console.error("Error fetching inventory subcategories:", e);
     } finally {
         setLoadingInventory(false);
     }
@@ -204,12 +204,12 @@ export default function CalificarPage() {
 
   useEffect(() => {
     const timer = setTimeout(() => {
-        if (searchQueryDespachado && searchQueryDespachado.length >= 2 && !idProductoDespachado) {
+        if (searchQueryDespachado && searchQueryDespachado.length >= 2) {
             fetchInventoryItems(searchQueryDespachado);
         }
     }, 400);
     return () => clearTimeout(timer);
-  }, [searchQueryDespachado, fetchInventoryItems, idProductoDespachado]);
+  }, [searchQueryDespachado, fetchInventoryItems]);
 
   useEffect(() => {
     if (profile?.name) {
@@ -528,12 +528,12 @@ export default function CalificarPage() {
 
   const handleOpenDiscrepancyModal = async (item: ScanResult) => {
       setItemToReport(item);
-      setIdProductoDespachado('');
+      setIdProductoDespachado(null);
       setSearchQueryDespachado('');
       setPiezasDespachadas('');
       setObservacionesIncidencia('');
       setIsDiscrepancyModalOpen(true);
-      setInventoryList([]); // Reset search list
+      setInventoryList([]); 
   };
   
   const saveKpiData = async (name: string, quantity: number, timeInSeconds: number) => {
@@ -555,9 +555,9 @@ export default function CalificarPage() {
     } catch (e: any) { alert(`Error al enviar el reporte: ${e.message}`); } finally { setLoading(false); }
   };
 
-  const handleSelectProduct = (item: InventoryItem) => {
-      setIdProductoDespachado(String(item.id));
-      setSearchQueryDespachado(`[${item.sku}] ${item.name}`);
+  const handleSelectProduct = (item: InventoryCategory) => {
+      setIdProductoDespachado(null); // Seteamos a null por el momento según instrucciones previas
+      setSearchQueryDespachado(item.subcategoria);
       setIsInventoryPopoverOpen(false);
   };
 
@@ -573,7 +573,7 @@ export default function CalificarPage() {
           const pSolicitadas = Number(itemToReport.quantity);
           const pDespachadas = Number(piezasDespachadas);
 
-          // Payload according to requirements: Identification fields set to NULL
+          // Payload con campos de identificación forzados a NULL por instrucciones del usuario
           const record = {
               fecha: now.toISOString().split('T')[0],
               hora: now.toLocaleTimeString('en-GB', { hour12: false }), // HH:MM:SS
@@ -587,7 +587,7 @@ export default function CalificarPage() {
               firma_empleado: false
           };
 
-          // Database Insertion using supabaseEtiquetas as requested
+          // Database Insertion usando supabaseEtiquetas (donde reside la tabla)
           const { error: insError } = await supabaseEtiquetas
             .from('registro_incidencias_en_paquetes_listos_para_entrega')
             .insert([record]);
@@ -597,9 +597,9 @@ export default function CalificarPage() {
               throw new Error(`Error de base de datos: ${insError.message || 'Error desconocido'}`);
           }
 
-          // Update Status in Production DB
+          // Actualizamos estado en DB de producción
           await supabase.from('personal').update({ 
-              details: `DISCREPANCIA EN QC: Encontrado ${piezasDespachadas} pzas.`, 
+              details: `DISCREPANCIA EN QC: Encontrado ${piezasDespachadas} pzas. Subcategoría: ${searchQueryDespachado}`, 
               status: 'REPORTADO' 
           }).eq('code', itemToReport.code);
 
@@ -1071,11 +1071,11 @@ const triggerMassQualify = async () => {
                            <PopoverTrigger asChild>
                                <div className="relative">
                                    <Input 
-                                       placeholder="Escribe el SKU o nombre del producto..."
+                                       placeholder="Escribe el nombre de la subcategoría..."
                                        value={searchQueryDespachado}
                                        onChange={(e) => {
                                            setSearchQueryDespachado(e.target.value);
-                                           setIdProductoDespachado(''); 
+                                           setIdProductoDespachado(null); 
                                            if (!isInventoryPopoverOpen) setIsInventoryPopoverOpen(true);
                                        }}
                                        onFocus={() => {
@@ -1089,21 +1089,20 @@ const triggerMassQualify = async () => {
                            <PopoverContent className="w-[--radix-popover-trigger-width] p-0 z-[110]" align="start">
                                <Command shouldFilter={false}>
                                    <CommandList className="max-h-[300px]">
-                                       {loadingInventory && <div className="p-4 text-center text-xs text-muted-foreground">Buscando en catálogo...</div>}
-                                       <CommandEmpty>{!loadingInventory && "No se encontró el producto."}</CommandEmpty>
-                                       <CommandGroup heading="Catálogo Maestro (inventory_master)">
-                                           {inventoryList.map((item) => (
+                                       {loadingInventory && <div className="p-4 text-center text-xs text-muted-foreground">Buscando subcategorías...</div>}
+                                       <CommandEmpty>{!loadingInventory && "No se encontró subcategoría."}</CommandEmpty>
+                                       <CommandGroup heading="Catálogo de Subcategorías">
+                                           {inventoryList.map((item, idx) => (
                                                <CommandItem
-                                                   key={item.id}
-                                                   value={`${item.sku} ${item.name}`}
+                                                   key={idx}
+                                                   value={item.subcategoria}
                                                    onSelect={() => handleSelectProduct(item)}
                                                    className="cursor-pointer"
                                                >
                                                    <div className="flex flex-col">
-                                                       <span className="font-bold text-[10px] text-starbucks-green">{item.sku}</span>
-                                                       <span className="text-xs font-medium">{item.name}</span>
+                                                       <span className="font-bold text-xs text-starbucks-green">{item.subcategoria}</span>
                                                    </div>
-                                                   {String(idProductoDespachado) === String(item.id) && <Check className="ml-auto h-4 w-4 text-starbucks-green" />}
+                                                   {searchQueryDespachado === item.subcategoria && <Check className="ml-auto h-4 w-4 text-starbucks-green" />}
                                                </CommandItem>
                                            ))}
                                        </CommandGroup>

@@ -86,8 +86,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } else {
         setProfile(null);
         setRoles([]);
+        setLoading(false);
       }
-      setLoading(false);
     });
 
     return () => subscription.unsubscribe();
@@ -146,6 +146,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     } catch (err) {
       console.error("Error en sincronización de perfil/roles:", err);
+    } finally {
+        setLoading(false);
     }
   };
 
@@ -205,7 +207,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             <p className="text-sm font-black text-gray-500 uppercase tracking-[0.2em]">Validando Permisos...</p>
           </div>
         </div>
-      ) : children}
+      ) : (
+          <>
+            {/* Si no es ruta pública y no hay sesión pero loading es false, Next se encargará vía router.replace en el useEffect */}
+            {children}
+          </>
+      )}
     </AuthContext.Provider>
   );
 }
