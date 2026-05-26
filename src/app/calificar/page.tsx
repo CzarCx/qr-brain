@@ -122,7 +122,6 @@ export default function CalificarPage() {
   // States for Discrepancy Report
   const [isDiscrepancyModalOpen, setIsDiscrepancyModalOpen] = useState(false);
   const [itemToReport, setItemToReport] = useState<ScanResult | null>(null);
-  const [idProductoOriginal, setIdProductoOriginal] = useState<string | null>(null);
   const [idProductoDespachado, setIdProductoDespachado] = useState<string>('');
   const [searchQueryDespachado, setSearchQueryDespachado] = useState('');
   const [isInventoryPopoverOpen, setIsInventoryPopoverOpen] = useState(false);
@@ -175,15 +174,20 @@ export default function CalificarPage() {
 
   // Fetch from inventory_master when searching
   const fetchInventoryItems = useCallback(async (query: string) => {
-    if (!query || query.length < 2) return;
+    if (!query || query.length < 2) {
+      setInventoryList([]);
+      return;
+    }
     setLoadingInventory(true);
     try {
         const { data, error } = await supabaseEtiquetas
             .from('inventory_master')
             .select('id, nombre_madre, sku_oficial')
             .or(`sku_oficial.ilike.%${query}%,nombre_madre.ilike.%${query}%`)
-            .limit(50);
+            .limit(20);
         
+        if (error) throw error;
+
         if (data) {
             setInventoryList(data.map(item => ({
                 id: Number(item.id),
@@ -203,7 +207,7 @@ export default function CalificarPage() {
         if (searchQueryDespachado && searchQueryDespachado.length >= 2 && !idProductoDespachado) {
             fetchInventoryItems(searchQueryDespachado);
         }
-    }, 500);
+    }, 400);
     return () => clearTimeout(timer);
   }, [searchQueryDespachado, fetchInventoryItems, idProductoDespachado]);
 
@@ -230,8 +234,6 @@ export default function CalificarPage() {
         options: grouped[org].sort((a, b) => a.label.localeCompare(b.label))
     }));
   }, [encargadosList, profile]);
-
-  const filteredInventory = inventoryList;
 
   useEffect(() => {
     let interval: NodeJS.Timeout | null = null;
@@ -527,22 +529,11 @@ export default function CalificarPage() {
   const handleOpenDiscrepancyModal = async (item: ScanResult) => {
       setItemToReport(item);
       setIdProductoDespachado('');
-      setIdProductoOriginal(null);
       setSearchQueryDespachado('');
       setPiezasDespachadas('');
       setObservacionesIncidencia('');
       setIsDiscrepancyModalOpen(true);
-
-      // Look for the requested product ID in inventory_master using sku_oficial
-      if (item.sku) {
-          const skuBase = item.sku.split(' | ')[0].trim();
-          const { data } = await supabaseEtiquetas
-            .from('inventory_master')
-            .select('id')
-            .eq('sku_oficial', skuBase)
-            .maybeSingle();
-          if (data) setIdProductoOriginal(String(data.id));
-      }
+      setInventoryList([]); // Reset search list
   };
   
   const saveKpiData = async (name: string, quantity: number, timeInSeconds: number) => {
@@ -582,7 +573,7 @@ export default function CalificarPage() {
           const pSolicitadas = Number(itemToReport.quantity);
           const pDespachadas = Number(piezasDespachadas);
 
-          // As requested: set id_capturista, id_producto_solicitado and id_producto_despachado to NULL for now
+          // Payload according to requirements: Identification fields set to NULL
           const record = {
               fecha: now.toISOString().split('T')[0],
               hora: now.toLocaleTimeString('en-GB', { hour12: false }), // HH:MM:SS
@@ -603,7 +594,7 @@ export default function CalificarPage() {
 
           if (insError) {
               console.error("Supabase Etiquetas Insert Error Detail:", JSON.stringify(insError, null, 2));
-              throw new Error(`Error de base de datos: ${insError.message || 'Error desconocido'} (Código: ${insError.code || 'N/A'})`);
+              throw new Error(`Error de base de datos: ${insError.message || 'Error desconocido'}`);
           }
 
           // Update Status in Production DB
@@ -622,7 +613,7 @@ export default function CalificarPage() {
 
       } catch (e: any) { 
           console.error("Error al enviar reporte:", e);
-          alert(e.message || 'Ocurrió un error inesperado al intentar guardar la incidencia.'); 
+          alert(e.message || 'Ocurrió un error inesperado.'); 
       } finally { 
           setLoading(false); 
       }
@@ -1084,24 +1075,24 @@ const triggerMassQualify = async () => {
                                        value={searchQueryDespachado}
                                        onChange={(e) => {
                                            setSearchQueryDespachado(e.target.value);
-                                           setIdProductoDespachado(''); // Reset ID to force new search if writing
+                                           setIdProductoDespachado(''); 
                                            if (!isInventoryPopoverOpen) setIsInventoryPopoverOpen(true);
                                        }}
                                        onFocus={() => {
                                            if (!isInventoryPopoverOpen) setIsInventoryPopoverOpen(true);
                                        }}
                                        className="h-12 rounded-xl text-xs font-bold pr-10"
-                                       disabled={loadingInventory}
                                    />
                                    <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                                </div>
                            </PopoverTrigger>
                            <PopoverContent className="w-[--radix-popover-trigger-width] p-0 z-[110]" align="start">
-                               <Command>
+                               <Command shouldFilter={false}>
                                    <CommandList className="max-h-[300px]">
-                                       <CommandEmpty>No se encontró el producto.</CommandEmpty>
+                                       {loadingInventory && <div className="p-4 text-center text-xs text-muted-foreground">Buscando en catálogo...</div>}
+                                       <CommandEmpty>{!loadingInventory && "No se encontró el producto."}</CommandEmpty>
                                        <CommandGroup heading="Catálogo Maestro (inventory_master)">
-                                           {filteredInventory.map((item) => (
+                                           {inventoryList.map((item) => (
                                                <CommandItem
                                                    key={item.id}
                                                    value={`${item.sku} ${item.name}`}

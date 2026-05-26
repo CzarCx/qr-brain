@@ -81,6 +81,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(session?.user ?? null);
       
       if (session?.user) {
+        setLoading(true);
         await syncProfileAndRoles(session.user);
       } else {
         setProfile(null);
