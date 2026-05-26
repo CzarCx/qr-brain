@@ -76,14 +76,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     initAuth();
 
-    const { data: { subscription } } = supabaseEtiquetas.auth.onAuthStateChange(async (_event, session) => {
+    const { data: { subscription } } = supabaseEtiquetas.auth.onAuthStateChange(async (event, session) => {
+      const isSignIn = event === 'SIGNED_IN';
+      const isSignOut = event === 'SIGNED_OUT';
+      
       setSession(session);
       setUser(session?.user ?? null);
       
-      if (session?.user) {
+      if (isSignIn && session?.user) {
         setLoading(true);
         await syncProfileAndRoles(session.user);
-      } else {
+        setLoading(false);
+      } else if (isSignOut) {
         setProfile(null);
         setRoles([]);
         setLoading(false);
@@ -146,8 +150,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     } catch (err) {
       console.error("Error en sincronización de perfil/roles:", err);
-    } finally {
-        setLoading(false);
     }
   };
 
@@ -166,10 +168,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   useEffect(() => {
+    // Solo actuamos cuando la carga inicial ha terminado
     if (loading) return;
 
     const isPublicRoute = pathname === '/login';
     
+    // 1. Redirigir a login si no hay sesión y no es ruta pública
     if (!session) {
       if (!isPublicRoute) {
         router.replace('/login');
@@ -177,26 +181,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    if (session) {
-      if (isPublicRoute) {
+    // 2. Redirigir a main si ya hay sesión y estamos en login
+    if (isPublicRoute) {
+      router.replace('/main');
+      return;
+    }
+
+    // 3. Control de Acceso Basado en Roles (RBAC)
+    // Los administradores no tienen restricciones
+    if (roles.includes('ADMIN')) return;
+
+    const requiredRoles = ROUTE_PERMISSIONS[pathname];
+    
+    // Si la ruta tiene restricciones y el usuario no tiene los roles necesarios, redirigir al panel principal
+    if (requiredRoles && requiredRoles.length > 0) {
+      const hasPermission = requiredRoles.some(r => roles.includes(r));
+      if (!hasPermission && pathname !== '/main') {
         router.replace('/main');
-        return;
-      }
-
-      // Los administradores no tienen restricciones
-      if (roles.includes('ADMIN')) return;
-
-      const requiredRoles = ROUTE_PERMISSIONS[pathname];
-      
-      // Si la ruta tiene restricciones y el usuario no tiene los roles necesarios, redirigir al panel principal
-      if (requiredRoles && requiredRoles.length > 0) {
-        const hasPermission = requiredRoles.some(r => roles.includes(r));
-        if (!hasPermission && pathname !== '/main') {
-          router.replace('/main');
-        }
       }
     }
-  }, [session, loading, pathname, router, roles]);
+  }, [session, loading, pathname, roles, router]);
 
   return (
     <AuthContext.Provider value={{ session, user, profile, roles, loading, signOut, hasRole }}>
@@ -204,12 +208,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         <div className="fixed inset-0 flex flex-col items-center justify-center bg-background z-[9999]">
           <div className="flex flex-col items-center gap-4 animate-in fade-in duration-500">
             <Loader2 className="h-12 w-12 text-starbucks-green animate-spin" />
-            <p className="text-sm font-black text-gray-500 uppercase tracking-[0.2em]">Validando Permisos...</p>
+            <p className="text-sm font-black text-gray-500 uppercase tracking-[0.2em]">Validando Sesión...</p>
           </div>
         </div>
       ) : (
           <>
-            {/* Si no es ruta pública y no hay sesión pero loading es false, Next se encargará vía router.replace en el useEffect */}
             {children}
           </>
       )}
