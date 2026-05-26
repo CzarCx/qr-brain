@@ -52,13 +52,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const syncProfileAndRoles = async (currentUser: User) => {
     try {
-      const { data: profileData, error: profileError } = await supabaseEtiquetas
+      const { data: profileData } = await supabaseEtiquetas
         .from('table_profiles')
         .select('*')
         .eq('id', currentUser.id)
         .maybeSingle();
-
-      if (profileError) throw profileError;
 
       const now = new Date().toISOString();
 
@@ -75,16 +73,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           role: 'USER',
           last_seen: now
         };
-        const { data: inserted, error: insertError } = await supabaseEtiquetas
+        const { data: inserted } = await supabaseEtiquetas
           .from('table_profiles')
           .insert([newProfile])
           .select()
           .single();
         
-        if (!insertError) setProfile(inserted as Profile);
+        if (inserted) setProfile(inserted as Profile);
       }
 
-      const { data: roleRecords, error: roleError } = await supabaseEtiquetas
+      const { data: roleRecords } = await supabaseEtiquetas
         .from('user_roles')
         .select(`
           roles (
@@ -93,16 +91,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         `)
         .eq('user_id', currentUser.id);
 
-      if (roleError) {
-        console.error("Error al obtener roles:", roleError.message);
-      } else if (roleRecords) {
+      if (roleRecords) {
         const codes = (roleRecords as any[])
           .map((r: any) => r.roles?.code)
           .filter(Boolean);
         setRoles(codes);
       }
     } catch (err) {
-      console.error("Error en sincronización:", err);
+      console.error("Error en sincronización de perfil:", err);
     }
   };
 
@@ -155,15 +151,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     router.push('/login');
   };
 
+  // Manejo de Redirecciones (Solo después de que loading es false)
   useEffect(() => {
     if (loading) return;
 
     const isPublicRoute = pathname === '/login';
     
     if (!session) {
-      if (!isPublicRoute) {
-        router.replace('/login');
-      }
+      if (!isPublicRoute) router.replace('/login');
       return;
     }
 
@@ -172,8 +167,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
+    // Si es ADMIN, tiene acceso total
     if (roles.includes('ADMIN')) return;
 
+    // Validación de permisos por ruta
     const requiredRoles = ROUTE_PERMISSIONS[pathname];
     if (requiredRoles && requiredRoles.length > 0) {
       const hasPermission = requiredRoles.some(r => roles.includes(r));
@@ -189,7 +186,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         <div className="fixed inset-0 flex flex-col items-center justify-center bg-background z-[9999]">
           <div className="flex flex-col items-center gap-4">
             <Loader2 className="h-12 w-12 text-starbucks-green animate-spin" />
-            <p className="text-sm font-black text-gray-500 uppercase tracking-widest">Validando Sesión...</p>
+            <p className="text-sm font-black text-gray-500 uppercase tracking-widest">Iniciando Sistema...</p>
           </div>
         </div>
       ) : (

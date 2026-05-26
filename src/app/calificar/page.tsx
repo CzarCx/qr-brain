@@ -169,22 +169,23 @@ export default function CalificarPage() {
     fetchEncargados();
   }, []);
 
-  const fetchInventoryItems = useCallback(async (query: string) => {
-    if (!query || query.length < 2) {
-      setInventoryList([]);
-      return;
-    }
+  const fetchInventoryItems = useCallback(async (query: string = '') => {
     setLoadingInventory(true);
     try {
-        const { data, error } = await supabaseEtiquetas
+        let queryBuilder = supabaseEtiquetas
             .from('inventory_master')
-            .select('subcategoria')
-            .ilike('subcategoria', `%${query}%`)
-            .limit(100);
+            .select('subcategoria');
+        
+        if (query) {
+            queryBuilder = queryBuilder.ilike('subcategoria', `%${query}%`);
+        }
+
+        const { data, error } = await queryBuilder.limit(50);
         
         if (error) throw error;
 
         if (data) {
+            // Filtrar duplicados localmente para asegurar subcategorías únicas
             const uniqueSubcategories = Array.from(new Set(data.map(item => item.subcategoria)))
                 .filter(Boolean)
                 .map(sub => ({ subcategoria: sub }));
@@ -198,9 +199,17 @@ export default function CalificarPage() {
     }
   }, []);
 
+  // Carga inicial de subcategorías al abrir el popover
+  useEffect(() => {
+    if (isInventoryPopoverOpen && inventoryList.length === 0) {
+        fetchInventoryItems('');
+    }
+  }, [isInventoryPopoverOpen, inventoryList.length, fetchInventoryItems]);
+
+  // Búsqueda dinámica con debounce
   useEffect(() => {
     const timer = setTimeout(() => {
-        if (searchQueryDespachado && searchQueryDespachado.length >= 2) {
+        if (searchQueryDespachado) {
             fetchInventoryItems(searchQueryDespachado);
         }
     }, 400);
@@ -528,7 +537,7 @@ export default function CalificarPage() {
       setPiezasDespachadas('');
       setObservacionesIncidencia('');
       setIsDiscrepancyModalOpen(true);
-      setInventoryList([]); 
+      // No limpiamos inventoryList para permitir visualización rápida
   };
   
   const saveKpiData = async (name: string, quantity: number, timeInSeconds: number) => {
@@ -580,6 +589,7 @@ export default function CalificarPage() {
               firma_empleado: false
           };
 
+          // Intentar insertar en la tabla de incidencias (DB Etiquetas)
           const { error: insError } = await supabaseEtiquetas
             .from('registro_incidencias_en_paquetes_listos_para_entrega')
             .insert([record]);
@@ -589,6 +599,7 @@ export default function CalificarPage() {
               throw new Error(`Error de base de datos: ${insError.message || 'Error desconocido'}`);
           }
 
+          // Actualizar estado del paquete en la DB Principal
           await supabase.from('personal').update({ 
               details: `DISCREPANCIA EN QC: Encontrado ${piezasDespachadas} pzas. Subcategoría: ${searchQueryDespachado}`, 
               status: 'REPORTADO' 
@@ -1062,7 +1073,7 @@ const triggerMassQualify = async () => {
                            <PopoverTrigger asChild>
                                <div className="relative">
                                    <Input 
-                                       placeholder="Escribe el nombre de la subcategoría..."
+                                       placeholder="Busca o selecciona subcategoría..."
                                        value={searchQueryDespachado}
                                        onChange={(e) => {
                                            setSearchQueryDespachado(e.target.value);
@@ -1079,17 +1090,17 @@ const triggerMassQualify = async () => {
                            <PopoverContent className="w-[--radix-popover-trigger-width] p-0 z-[110]" align="start">
                                <Command shouldFilter={false}>
                                    <CommandList className="max-h-[300px]">
-                                       {loadingInventory && <div className="p-4 text-center text-xs text-muted-foreground">Buscando subcategorías...</div>}
-                                       <CommandEmpty>{!loadingInventory && "No se encontró subcategoría."}</CommandEmpty>
-                                       <CommandGroup heading="Catálogo de Subcategorías">
+                                       {loadingInventory && <div className="p-4 text-center text-xs text-muted-foreground">Cargando subcategorías...</div>}
+                                       {!loadingInventory && inventoryList.length === 0 && <CommandEmpty>No se encontraron resultados.</CommandEmpty>}
+                                       <CommandGroup heading="Sugerencias de Inventario">
                                            {inventoryList.map((item, idx) => (
                                                <CommandItem
-                                                   key={idx}
+                                                   key={`${item.subcategoria}-${idx}`}
                                                    value={item.subcategoria}
                                                    onSelect={() => handleSelectProduct(item)}
                                                    className="cursor-pointer"
                                                >
-                                                   <div className="flex flex-col">
+                                                   <div className="flex flex-col w-full">
                                                        <span className="font-bold text-xs text-starbucks-green">{item.subcategoria}</span>
                                                    </div>
                                                    {searchQueryDespachado === item.subcategoria && <Check className="ml-auto h-4 w-4 text-starbucks-green" />}
