@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { supabaseEtiquetas } from '@/lib/supabaseClient';
 import { Session, User } from '@supabase/supabase-js';
@@ -52,9 +52,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const router = useRouter();
   const pathname = usePathname();
+  const isInitialized = useRef(false);
 
   useEffect(() => {
     const initAuth = async () => {
+      if (isInitialized.current) return;
+      isInitialized.current = true;
+
       try {
         const { data: { session: initialSession } } = await supabaseEtiquetas.auth.getSession();
         setSession(initialSession);
@@ -73,21 +77,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     initAuth();
 
     const { data: { subscription } } = supabaseEtiquetas.auth.onAuthStateChange(async (_event, session) => {
-      try {
-        setSession(session);
-        setUser(session?.user ?? null);
-        
-        if (session?.user) {
-          await syncProfileAndRoles(session.user);
-        } else {
-          setProfile(null);
-          setRoles([]);
-        }
-      } catch (error) {
-        console.error("Error en cambio de estado de auth:", error);
-      } finally {
-        setLoading(false);
+      setSession(session);
+      setUser(session?.user ?? null);
+      
+      if (session?.user) {
+        await syncProfileAndRoles(session.user);
+      } else {
+        setProfile(null);
+        setRoles([]);
       }
+      setLoading(false);
     });
 
     return () => subscription.unsubscribe();
@@ -158,6 +157,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signOut = async () => {
+    setLoading(true);
     await supabaseEtiquetas.auth.signOut();
     router.push('/login');
   };
@@ -169,25 +169,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     
     if (!session) {
       if (!isPublicRoute) {
-        router.push('/login');
+        router.replace('/login');
       }
       return;
     }
 
     if (session) {
       if (isPublicRoute) {
-        router.push('/main');
+        router.replace('/main');
         return;
       }
 
+      // Los administradores no tienen restricciones
       if (roles.includes('ADMIN')) return;
 
       const requiredRoles = ROUTE_PERMISSIONS[pathname];
       
+      // Si la ruta tiene restricciones y el usuario no tiene los roles necesarios, redirigir al panel principal
       if (requiredRoles && requiredRoles.length > 0) {
         const hasPermission = requiredRoles.some(r => roles.includes(r));
-        if (!hasPermission) {
-          router.push('/main');
+        if (!hasPermission && pathname !== '/main') {
+          router.replace('/main');
         }
       }
     }
