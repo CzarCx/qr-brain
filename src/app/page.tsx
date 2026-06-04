@@ -15,7 +15,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Zap, ZoomIn, UserPlus, PlusCircle, Clock, AlertTriangle, Wifi, WifiOff, Search, XCircle, CheckCircle, Trash2, Lock, Unlock, FileText, Printer, Download, FileUp, FileSpreadsheet, Loader2, Copy, ChevronDown, ChevronUp } from 'lucide-react';
+import { Zap, ZoomIn, UserPlus, PlusCircle, Clock, AlertTriangle, Wifi, WifiOff, Search, XCircle, CheckCircle, Trash2, Lock, Unlock, FileText, Printer, Download, FileUp, FileSpreadsheet, Loader2, Copy, ChevronDown, ChevronUp, Users, Info } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Combobox } from '@/components/ui/combobox';
 import {
@@ -37,6 +37,7 @@ import autoTable from 'jspdf-autotable';
 import { Textarea } from '@/components/ui/textarea';
 import { useAuth } from '@/components/AuthProvider';
 import { cn } from '@/lib/utils';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 
 type ScannedItem = {
@@ -141,6 +142,9 @@ export default function Home() {
   const [deleteLoteName, setDeleteLoteName] = useState('');
   const [deleteLoteReason, setDeleteLoteReason] = useState('');
 
+  // Nueva métrica de capacidad
+  const [workForceCapacity, setWorkForceCapacity] = useState<{ minutes: number; hours: number; employeeCount: number } | null>(null);
+
 
   const html5QrCodeRef = useRef<Html5Qrcode | null>(null);
   const physicalScannerInputRef = useRef<HTMLInputElement | null>(null);
@@ -160,6 +164,87 @@ export default function Home() {
   const MIN_SCAN_INTERVAL = 500;
 
   const reactToPrintFn = useReactToPrint({ contentRef: printRef });
+
+  const fetchWorkForceCapacity = useCallback(async () => {
+    try {
+        const today = new Date().toLocaleDateString('en-CA');
+        const daysMapping = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'];
+        const currentDayName = daysMapping[new Date().getDay()];
+
+        // 1. Obtener todos los registros del checador de hoy
+        const { data: allAttendance, error: attError } = await supabaseEtiquetas
+            .from('registro_checador')
+            .select('id_empleado, tipo_registro, id')
+            .eq('fecha', today)
+            .order('id', { ascending: true });
+
+        if (attError || !allAttendance) return;
+
+        // 2. Determinar quiénes tienen entrada activa (el último registro es 'entrada')
+        const lastStatus = new Map<string, string>();
+        allAttendance.forEach(rec => {
+            lastStatus.set(rec.id_empleado, rec.tipo_registro);
+        });
+
+        const activeEmployeeIds = Array.from(lastStatus.entries())
+            .filter(([_, status]) => status === 'entrada')
+            .map(([id, _]) => id);
+
+        if (activeEmployeeIds.length === 0) {
+            setWorkForceCapacity({ minutes: 0, hours: 0, employeeCount: 0 });
+            return;
+        }
+
+        // 3. Obtener horarios asignados para esos empleados
+        const { data: shifts, error: shiftError } = await supabaseEtiquetas
+            .from('empleados_turno_horarios')
+            .select(`id_empleado, ${currentDayName}`)
+            .in('id_empleado', activeEmployeeIds);
+
+        if (shiftError || !shifts) return;
+
+        // 4. Mapear IDs de horarios únicos
+        const scheduleIds = Array.from(new Set(shifts.map(s => s[currentDayName]).filter(Boolean)));
+        
+        if (scheduleIds.length === 0) {
+            setWorkForceCapacity({ minutes: 0, hours: 0, employeeCount: activeEmployeeIds.length });
+            return;
+        }
+
+        // 5. Consultar los horarios reales
+        const { data: schedules, error: schedError } = await supabaseEtiquetas
+            .from('horarios')
+            .select('id, hora_entrada, hora_salida')
+            .in('id', scheduleIds);
+
+        if (schedError || !schedules) return;
+
+        const scheduleMap = new Map(schedules.map(s => [s.id, s]));
+
+        // 6. Calcular suma total de minutos
+        let totalMinutes = 0;
+        shifts.forEach(s => {
+            const schedId = s[currentDayName];
+            const time = scheduleMap.get(schedId);
+            if (time && time.hora_entrada && time.hora_salida) {
+                const [h1, m1] = time.hora_entrada.split(':').map(Number);
+                const [h2, m2] = time.hora_salida.split(':').map(Number);
+                
+                const duration = (h2 * 60 + m2) - (h1 * 60 + m1);
+                if (duration > 0) totalMinutes += duration;
+            }
+        });
+
+        setWorkForceCapacity({
+            minutes: totalMinutes,
+            hours: Math.floor(totalMinutes / 60),
+            employeeCount: activeEmployeeIds.length
+        });
+
+    } catch (err) {
+        console.error("Error calculating workforce capacity:", err);
+    }
+  }, []);
 
   const fetchCreatedLotes = useCallback(async () => {
     const { data, error } = await supabase
@@ -265,6 +350,7 @@ export default function Home() {
     };
     checkDbConnections();
     fetchCreatedLotes();
+    fetchWorkForceCapacity();
 
     const channel = supabase
       .channel('personal_prog_changes')
@@ -280,7 +366,7 @@ export default function Home() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [fetchCreatedLotes]);
+  }, [fetchCreatedLotes, fetchWorkForceCapacity]);
 
   // VALIDACIÓN DE ASISTENCIA Y NOMBRE DEL ENCARGADO (LOGUEADO)
   useEffect(() => {
@@ -2245,7 +2331,7 @@ const deleteRow = (codeToDelete: string) => {
 
                 <div className="space-y-4">
                      {scanMode === 'assign' && (
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-center">
+                        <div className="grid grid-cols-2 md:grid-cols-5 gap-2 text-center">
                              <div className="p-2 rounded-lg bg-blue-100 text-blue-800">
                                 <h3 className="font-bold uppercase text-xs flex items-center justify-center gap-1"><Clock className="h-4 w-4" /> Tiempo</h3>
                                 <p className="text-2xl font-mono">{formatElapsedTime(elapsedTime)}</p>
@@ -2262,6 +2348,31 @@ const deleteRow = (codeToDelete: string) => {
                                 <h3 className="font-bold text-starbucks-dark uppercase text-xs">MEL</h3>
                                 <p id="unique-scans" className="text-2xl font-mono text-starbucks-accent">{melCodesCount}</p>
                             </div>
+                            <TooltipProvider>
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <div className="bg-starbucks-white border-2 border-starbucks-green/20 p-2 rounded-lg shadow-sm hover:shadow-md transition-all cursor-help flex flex-col justify-center">
+                                            <h3 className="font-bold text-starbucks-green uppercase text-[10px] flex items-center justify-center gap-1">
+                                                <Users className="h-3 w-3" /> Capacidad Hoy
+                                            </h3>
+                                            <div className="mt-1">
+                                                <p className="text-xl font-black text-starbucks-dark tracking-tighter leading-none">
+                                                    {workForceCapacity?.hours || 0}h {workForceCapacity ? workForceCapacity.minutes % 60 : 0}m
+                                                </p>
+                                                <div className="flex justify-between items-center mt-1 px-1">
+                                                    <span className="text-[8px] font-bold text-gray-500 uppercase">{workForceCapacity?.minutes || 0} min</span>
+                                                    <span className="text-[8px] font-black text-gray-400 uppercase">{workForceCapacity?.employeeCount || 0} Oper.</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </TooltipTrigger>
+                                    <TooltipContent side="bottom" className="max-w-xs text-center p-3">
+                                        <p className="text-xs">
+                                            Tiempo total disponible calculado utilizando los horarios asignados a los empleados que registraron entrada activa durante el día actual. Se obtiene sumando la duración de cada jornada (hora_salida - hora_entrada) para estimar la capacidad operativa disponible.
+                                        </p>
+                                    </TooltipContent>
+                                </Tooltip>
+                            </TooltipProvider>
                         </div>
                     )}
                 </div>
