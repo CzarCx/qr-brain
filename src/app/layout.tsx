@@ -2,7 +2,7 @@
 import './globals.css';
 import Navbar from '@/components/Navbar';
 import { useEffect, useState, useRef }from 'react';
-import { Cog, Send, AlertTriangle } from 'lucide-react';
+import { Cog, Send, AlertTriangle, Database } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { supabase, supabaseEtiquetas } from '@/lib/supabaseClient';
 import { useToast } from '@/hooks/use-toast';
 import { Toaster } from '@/components/ui/toaster';
+import { cn } from '@/lib/utils';
 import {
   Table,
   TableBody,
@@ -48,6 +49,12 @@ export default function RootLayout({
 
   const notifiedCheckins = useRef(new Set<string>());
   const dailyReportRun = useRef(new Set<string>());
+
+  // Identificación de entorno
+  const etiquetasUrl = process.env.NEXT_PUBLIC_SUPABASE_ETIQUETAS_URL || '';
+  const isQA = etiquetasUrl.includes('thbbxcirlvpncevkvvpn');
+  const isProd = etiquetasUrl.includes('zknhnivznhifhhpexipy');
+  const environmentName = isProd ? 'PRODUCCIÓN' : isQA ? 'QA / PRUEBAS' : 'DESCONOCIDO';
 
   const playNotificationSound = () => {
     const context = new (window.AudioContext || (window as any).webkitAudioContext)();
@@ -211,6 +218,30 @@ export default function RootLayout({
                       <DialogTitle>Ajustes</DialogTitle>
                   </DialogHeader>
                   <div className="space-y-6 pt-4">
+                      {/* Indicador de Entorno de Base de Datos */}
+                      <div className="space-y-2 pb-4 border-b">
+                          <Label className="text-[10px] font-black uppercase text-gray-400 tracking-widest flex items-center gap-1.5">
+                              <Database className="h-3 w-3" /> Entorno de Etiquetas
+                          </Label>
+                          <div className={cn(
+                              "flex items-center gap-2 p-3 rounded-lg border font-black text-xs",
+                              isProd ? "bg-green-50 border-green-200 text-green-700" : 
+                              isQA ? "bg-amber-50 border-amber-200 text-amber-700" : 
+                              "bg-gray-50 border-gray-200 text-gray-700"
+                          )}>
+                              <div className={cn(
+                                  "h-2 w-2 rounded-full", 
+                                  isProd ? "bg-green-500" : 
+                                  isQA ? "bg-amber-500 animate-pulse" : 
+                                  "bg-gray-400"
+                              )} />
+                              {environmentName}
+                          </div>
+                          <p className="text-[8px] text-gray-400 font-mono truncate px-1">
+                              URL: {etiquetasUrl || 'N/D'}
+                          </p>
+                      </div>
+
                       <div>
                           <Label htmlFor="report-time">Hora del Reporte Diario</Label>
                           <Input id="report-time" type="time" value={reportTime} onChange={handleTimeChange} className="mt-2" />
