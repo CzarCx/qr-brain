@@ -15,7 +15,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Zap, ZoomIn, UserPlus, PlusCircle, Clock, AlertTriangle, Wifi, WifiOff, Search, XCircle, CheckCircle, Trash2, Lock, Unlock, FileText, Printer, Download, FileUp, Loader2, Copy, ChevronDown, ChevronUp } from 'lucide-react';
+import { Zap, ZoomIn, UserPlus, PlusCircle, Clock, AlertTriangle, Wifi, WifiOff, Search, XCircle, CheckCircle, Trash2, Lock, Unlock, FileText, Printer, Download, FileUp, FileSpreadsheet, Loader2, Copy, ChevronDown, ChevronUp } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Combobox } from '@/components/ui/combobox';
 import {
@@ -193,7 +193,7 @@ export default function Home() {
           lote_p,
           ...details,
         }))
-        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        .sort((a, b) => b.lote_p.localeCompare(a.lote_p));
   
       setCreatedLotesList(lotesList);
     }
@@ -284,30 +284,16 @@ export default function Home() {
 
   // VALIDACIÓN DE ASISTENCIA Y NOMBRE DEL ENCARGADO (LOGUEADO)
   useEffect(() => {
-    if (!user?.id && !user?.email) return;
+    if (!user?.id) return;
 
     const checkAttendanceAndFetchName = async () => {
         try {
             // 1. Obtener nombre del empleado desde la tabla operativa 'empleados'
-            // Intentamos por ID y como respaldo por correo electrónico
-            let empData = null;
-            
-            const { data: empById } = await supabaseEtiquetas
+            const { data: empData, error: empError } = await supabaseEtiquetas
                 .from('empleados')
-                .select('nombres, apellido_paterno, apellido_materno, email')
+                .select('nombres, apellido_paterno, apellido_materno')
                 .eq('id', user.id)
                 .maybeSingle();
-            
-            empData = empById;
-
-            if (!empData && user.email) {
-                const { data: empByEmail } = await supabaseEtiquetas
-                    .from('empleados')
-                    .select('nombres, apellido_paterno, apellido_materno, email')
-                    .ilike('email', user.email)
-                    .maybeSingle();
-                empData = empByEmail;
-            }
 
             if (empData) {
                 const fullName = [empData.nombres, empData.apellido_paterno, empData.apellido_materno].filter(Boolean).join(' ');
@@ -317,7 +303,7 @@ export default function Home() {
             // 2. Verificar asistencia para el día de hoy
             const todayStr = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD
 
-            const { data, error } = await supabaseEtiquetas
+            const { data: attendanceData, error: attendanceError } = await supabaseEtiquetas
                 .from('registro_checador')
                 .select('tipo_registro')
                 .eq('id_empleado', user.id)
@@ -325,10 +311,10 @@ export default function Home() {
                 .order('id', { ascending: false })
                 .limit(1);
 
-            if (error) throw error;
+            if (attendanceError) throw attendanceError;
 
-            if (data && data.length > 0) {
-                setIsAttendanceValid(data[0].tipo_registro === 'entrada');
+            if (attendanceData && attendanceData.length > 0) {
+                setIsAttendanceValid(attendanceData[0].tipo_registro === 'entrada');
             } else {
                 setIsAttendanceValid(false);
             }
@@ -419,7 +405,7 @@ export default function Home() {
             .order('nombres', { ascending: true });
 
         if (error) {
-            setDbError('Error al cargar empleados.');
+            setDbError('Error al cargar empleados operativos.');
         } else if (data) {
              setPersonalList(data.map(e => ({
                 id: e.id,
@@ -435,12 +421,10 @@ export default function Home() {
             .eq('rol', 'barra');
 
         if (error) {
-            setDbError('Error al cargar encargados. Revisa los permisos RLS de la tabla `personal_name`.');
+            setDbError('Error al cargar encargados de barra.');
         } else if (data) {
             const uniqueEncargados = Array.from(new Map(data.map(item => [item.name, item])).values());
             setEncargadosList((uniqueEncargados as Encargado[]) || []);
-        } else {
-             setDbError('No se encontraron encargados con el rol "barra". Revisa los datos o los permisos RLS.');
         }
     };
     fetchEncargados();
@@ -483,7 +467,7 @@ export default function Home() {
     const gainNode = context.createGain();
     oscillator.type = 'square';
     oscillator.frequency.setValueAtTime(880, context.currentTime); // A5 note
-    gainNode.gain.setValueAtTime(1, context.currentTime); // Increased Volume
+    gainNode.gain.setValueAtTime(1, context.currentTime); 
     gainNode.gain.exponentialRampToValueAtTime(0.00001, context.currentTime + 0.1);
     oscillator.connect(gainNode);
     gainNode.connect(context.destination);
@@ -497,8 +481,8 @@ export default function Home() {
     const oscillator = context.createOscillator();
     const gainNode = context.createGain();
     oscillator.type = 'sawtooth';
-    oscillator.frequency.setValueAtTime(440, context.currentTime);
-    gainNode.gain.setValueAtTime(1.5, context.currentTime);
+    oscillator.frequency.setValueAtTime(440, context.currentTime); 
+    gainNode.gain.setValueAtTime(1.5, context.currentTime); 
     gainNode.gain.exponentialRampToValueAtTime(0.00001, context.currentTime + 0.2);
     oscillator.connect(gainNode);
     gainNode.connect(context.destination);
@@ -1768,7 +1752,11 @@ const deleteRow = (codeToDelete: string) => {
     
     return [{
         label: "Personal de Operación",
-        options: personalList.map(p => ({ value: p.id, label: p.name }))
+        options: personalList.map(p => ({ 
+            value: p.id, 
+            label: p.name,
+            keywords: p.email || '' 
+        }))
     }];
   }, [personalList]);
   

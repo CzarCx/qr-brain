@@ -1,4 +1,3 @@
-
 "use client"
 
 import * as React from "react"
@@ -23,6 +22,7 @@ import {
 export type ComboboxOption = {
     value: string
     label: string
+    keywords?: string // Campos extra para búsqueda (ej. email)
 }
 
 export type ComboboxGroup = {
@@ -75,15 +75,15 @@ export function Combobox({ options, groupedOptions, value, onValueChange, placeh
           variant="outline"
           role="combobox"
           aria-expanded={open}
-          className={cn("w-full justify-between", buttonClassName)}
+          className={cn("w-full justify-between text-left font-normal", buttonClassName)}
         >
-          {selectedLabel}
+          <span className="truncate">{selectedLabel}</span>
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-[--radix-popover-trigger-width] p-0 z-[100]">
         <Command>
-          <CommandInput placeholder="Search option..." />
+          <CommandInput placeholder="Buscar..." />
           <CommandList>
             <CommandEmpty>{emptyMessage}</CommandEmpty>
             {options && (
@@ -91,9 +91,9 @@ export function Combobox({ options, groupedOptions, value, onValueChange, placeh
                 {options.map((option) => (
                   <CommandItem
                     key={option.value}
-                    value={option.value}
-                    onSelect={(currentValue) => {
-                      onValueChange(currentValue === value ? "" : currentValue)
+                    value={`${option.label} ${option.keywords || ''}`}
+                    onSelect={() => {
+                      onValueChange(option.value)
                       setOpen(false)
                     }}
                   >
@@ -113,9 +113,9 @@ export function Combobox({ options, groupedOptions, value, onValueChange, placeh
                 {group.options.map((option) => (
                   <CommandItem
                     key={option.value}
-                    value={option.value}
-                    onSelect={(currentValue) => {
-                      onValueChange(currentValue === value ? "" : currentValue)
+                    value={`${option.label} ${option.keywords || ''}`}
+                    onSelect={() => {
+                      onValueChange(option.value)
                       setOpen(false)
                     }}
                   >
