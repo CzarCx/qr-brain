@@ -17,7 +17,7 @@ import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Zap, ZoomIn, UserPlus, PlusCircle, Clock, AlertTriangle, Wifi, WifiOff, Search, XCircle, CheckCircle, Trash2, Lock, Unlock, FileText, Printer, Download, FileUp } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { Combobox, ComboboxGroup } from '@/components/ui/combobox';
+import { Combobox } from '@/components/ui/combobox';
 import {
   Dialog,
   DialogContent,
@@ -65,22 +65,6 @@ type ScannedItem = {
   deli_date?: string | null;
 };
 
-type PersonalScanItem = {
-  code: string | number;
-  sku: string | null;
-  personal: string;
-  encargado: string;
-  product: string | null;
-  quantity: number | null;
-  organization: string | null;
-  venta: string | number | null;
-  date: string;
-  status: string;
-  esti_time?: number | null;
-  date_esti?: string | null;
-  date_ini?: string | null;
-};
-
 type CreatedLote = {
   lote_p: string;
   name_inc: string;
@@ -125,7 +109,6 @@ export default function Home() {
   const [otherCodesCount, setOtherCodesCount] = useState(0);
   const [selectedScannerMode, setSelectedScannerMode] = useState('camara');
   const [scannerActive, setScannerActive] = useState(false);
-  const [ingresarDatosEnabled, setIngresarDatosEnabled] = useState(false);
   const [loading, setLoading] = useState(false);
   const [confirmation, setConfirmation] = useState({
     isOpen: false,
@@ -143,7 +126,6 @@ export default function Home() {
   const [createdLotesList, setCreatedLotesList] = useState<CreatedLote[]>([]);
   const [loadingProgramados, setLoadingProgramados] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
-  const [selectedBulkPersonal, setSelectedBulkPersonal] = useState('');
   const [dbError, setDbError] = useState<string | null>(null);
   const [dbStatus, setDbStatus] = useState<DbStatus>({ personalDb: 'connecting', etiquetasDb: 'connecting' });
   const [selectedPersonalParaCargar, setSelectedPersonalParaCargar] = useState('');
@@ -156,7 +138,6 @@ export default function Home() {
   const [showCargarProduccion, setShowCargarProduccion] = useState(false);
   const [loteProgramado, setLoteProgramado] = useState('');
   const [cargaFilterType, setCargaFilterType] = useState<'persona' | 'lote'>('persona');
-  const [isUnlocked, setIsUnlocked] = useState(false);
   const [verificationCode, setVerificationCode] = useState('');
   const [isVerifying, setIsVerifying] = useState(false);
   const [verificationResult, setVerificationResult] = useState<VerificationResult>({ status: 'pending', message: 'Ingrese un código de corte para registrar la fecha.' });
@@ -350,42 +331,36 @@ export default function Home() {
     };
   }, [scannedData]);
 
+  // VALIDACIÓN DE ASISTENCIA MEJORADA
   useEffect(() => {
-    if (!user?.email) return;
+    if (!user?.id) return;
 
     const checkAttendance = async () => {
         try {
-            const { data: empData, error: empError } = await supabaseEtiquetas
-                .from('empleados')
-                .select('id')
-                .ilike('email', user.email)
-                .maybeSingle();
-
-            if (empError || !empData) {
-                console.warn("No se encontró registro de empleado para el email:", user.email);
-                setIsAttendanceValid(false);
-                return;
-            }
-
-            const employeeId = empData.id;
             const now = new Date();
             const year = now.getFullYear();
             const month = String(now.getMonth() + 1).padStart(2, '0');
             const day = String(now.getDate()).padStart(2, '0');
-            const today = `${year}-${month}-${day}`;
+            const todayStr = `${year}-${month}-${day}`;
 
+            // Consultar directamente registro_checador usando user.id (UUID directo)
             const { data, error } = await supabaseEtiquetas
                 .from('registro_checador')
                 .select('tipo_registro')
-                .eq('id_empleado', employeeId)
-                .eq('fecha', today)
-                .order('created_at', { ascending: false })
+                .eq('id_empleado', user.id)
+                .eq('fecha', todayStr)
+                .order('id', { ascending: false })
                 .limit(1);
 
             if (error) throw error;
 
-            if (data && data.length > 0 && data[0].tipo_registro === 'entrada') {
-                setIsAttendanceValid(true);
+            if (data && data.length > 0) {
+                // Solo permitimos operar si el último movimiento fue 'entrada'
+                if (data[0].tipo_registro === 'entrada') {
+                    setIsAttendanceValid(true);
+                } else {
+                    setIsAttendanceValid(false);
+                }
             } else {
                 setIsAttendanceValid(false);
             }
@@ -2391,3 +2366,4 @@ const deleteRow = (codeToDelete: string) => {
     </>
   );
 }
+

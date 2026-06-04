@@ -252,17 +252,6 @@ export default function CalificarPage() {
     return () => { if (interval) clearInterval(interval); };
   }, [timerStartTime]);
 
-  useEffect(() => {
-    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
-      if (massScannedCodes.length > 0) {
-        event.preventDefault();
-        event.returnValue = '¿Estás seguro de refrescar la página? Si refrescas se perderá el progreso de etiquetas escaneadas.';
-      }
-    };
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, [massScannedCodes]);
-
   const playBeep = () => {
     const context = new (window.AudioContext || (window as any).webkitAudioContext)();
     if (!context) return;
@@ -509,14 +498,6 @@ export default function CalificarPage() {
     return () => { cleanup(); };
   }, [scannerActive, selectedScannerMode, isMobile, isMounted, onScanSuccess]);
 
-  useEffect(() => {
-      setMassScannedCodes([]);
-      massScannedCodesRef.current.clear();
-      setLastScannedResult(null);
-      setTimerStartTime(null);
-      timerStartedRef.current = false;
-  }, [scanMode]);
-
   const handleOpenRatingModal = (isOpen: boolean) => {
     setIsRatingModalOpen(isOpen);
     if (!isOpen) {
@@ -708,6 +689,13 @@ const triggerMassQualify = async () => {
       setLoteToLoad('');
     } catch (e: any) { showAppMessage(`Error: ${e.message}`, 'error'); } finally { setLoading(false); }
   };
+
+  const filteredInventoryList = useMemo(() => {
+    if (!searchQueryDespachado.trim()) return inventoryList;
+    return inventoryList.filter(item => 
+        item.subcategoria.toLowerCase().includes(searchQueryDespachado.toLowerCase())
+    );
+  }, [inventoryList, searchQueryDespachado]);
 
   const messageClasses: any = { success: 'bg-green-500/80 text-white', error: 'bg-red-500/80 text-white', warning: 'bg-yellow-500/80 text-white', info: 'bg-blue-500/80 text-white' };
 
@@ -1085,12 +1073,12 @@ const triggerMassQualify = async () => {
                            <PopoverContent className="w-[--radix-popover-trigger-width] p-0 z-[110]" align="start">
                                <ScrollArea className="max-h-[300px] overflow-y-auto flex flex-col bg-white shadow-xl rounded-md border">
                                    {loadingInventory && <div className="p-4 text-center text-xs text-muted-foreground"><Loader2 className="animate-spin h-4 w-4 mx-auto" /></div>}
-                                   {!loadingInventory && inventoryList.length === 0 && <div className="p-4 text-center text-xs text-muted-foreground">No se encontraron resultados.</div>}
-                                   {inventoryList.map((item, idx) => (
+                                   {!loadingInventory && filteredInventoryList.length === 0 && <div className="p-4 text-center text-xs text-muted-foreground">No se encontraron resultados.</div>}
+                                   {filteredInventoryList.map((item, idx) => (
                                        <div
                                            key={`${item.subcategoria}-${idx}`}
                                            onMouseDown={(e) => {
-                                               e.preventDefault();
+                                               e.preventDefault(); // Previene la pérdida de foco inmediata
                                                handleSelectProduct(item.subcategoria);
                                            }}
                                            className={cn(
@@ -1176,3 +1164,4 @@ const triggerMassQualify = async () => {
     </>
   );
 }
+
