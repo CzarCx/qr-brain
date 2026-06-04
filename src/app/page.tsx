@@ -1,3 +1,4 @@
+
 'use client';
 import React, {useEffect, useRef, useState, useCallback, useMemo} from 'react';
 import Head from 'next/head';
@@ -95,8 +96,9 @@ type Encargado = {
 };
 
 type PersonalOperativo = {
+  id: string;
   name: string;
-  organization: string;
+  email?: string | null;
 };
 
 type DbStatus = {
@@ -111,7 +113,7 @@ type VerificationResult = {
 
 
 export default function Home() {
-  const { profile } = useAuth();
+  const { profile, user } = useAuth();
   const [isMounted, setIsMounted] = useState(false);
   const [message, setMessage] = useState<{text: React.ReactNode, type: 'info' | 'success' | 'duplicate', show: boolean}>({text: 'Esperando para escanear...', type: 'info', show: false});
   const [lastScannedCode, setLastScannedCode] = useState<string | null>(null);
@@ -164,6 +166,8 @@ export default function Home() {
   const [timerStartTime, setTimerStartTime] = useState<Date | null>(null);
   const [elapsedTime, setElapsedTime] = useState(0);
   const [isPrintDialogOpen, setIsPrintDialogOpen] = useState(false);
+  const [isAttendanceValid, setIsAttendanceValid] = useState(false);
+  const [attendanceChecked, setAttendanceChecked] = useState(false);
 
   // States for deleting batch audit
   const [isDeleteLoteModalOpen, setIsDeleteLoteModalOpen] = useState(false);
@@ -354,20 +358,54 @@ export default function Home() {
     };
   }, [scannedData]);
 
+  // Validation of Attendance
+  useEffect(() => {
+    if (!user) return;
+
+    const checkAttendance = async () => {
+        const today = new Date().toISOString().split('T')[0];
+        try {
+            const { data, error } = await supabase
+                .from('registro_checador')
+                .select('tipo_registro')
+                .eq('id_empleado', user.id)
+                .eq('fecha', today)
+                .order('created_at', { ascending: false })
+                .limit(1);
+
+            if (error) throw error;
+
+            if (data && data.length > 0 && data[0].tipo_registro === 'entrada') {
+                setIsAttendanceValid(true);
+            } else {
+                setIsAttendanceValid(false);
+            }
+        } catch (err) {
+            console.error("Error checking attendance:", err);
+            setIsAttendanceValid(false);
+        } finally {
+            setAttendanceChecked(true);
+        }
+    };
+
+    checkAttendance();
+  }, [user]);
+
   useEffect(() => {
     const fetchPersonal = async () => {
         const { data, error } = await supabase
-            .from('personal_name')
-            .select('name, organization')
-            .eq('rol', 'operativo');
+            .from('empleados')
+            .select('id, nombres, apellido_paterno, apellido_materno, email')
+            .order('nombres', { ascending: true });
 
         if (error) {
-            setDbError('Error al cargar personal. Revisa los permisos RLS de la tabla `personal_name`.');
+            setDbError('Error al cargar empleados.');
         } else if (data) {
-             const uniquePersonal = Array.from(new Map(data.map(item => [item.name, item])).values());
-             setPersonalList((uniquePersonal as PersonalOperativo[]) || []);
-        } else {
-            setDbError('No se encontró personal con el rol "operativo". Revisa los permisos RLS.');
+             setPersonalList(data.map(e => ({
+                id: e.id,
+                name: [e.nombres, e.apellido_paterno, e.apellido_materno].filter(Boolean).join(' '),
+                email: e.email
+             })));
         }
     };
     const fetchEncargados = async () => {
@@ -561,11 +599,20 @@ export default function Home() {
     return true;
   }, [encargado, selectedArea]);
 
-  const saveToPersonal = async (personName: string) => {
+  const saveToPersonal = async (personIdOrName: string) => {
+      if (!isAttendanceValid) {
+          showModalNotification('Asistencia Requerida', 'No es posible asignar etiquetas porque el empleado no tiene una entrada activa registrada para el día de hoy.', 'destructive');
+          return;
+      }
+
       setLoading(true);
       showAppMessage('Guardando asignación...', 'info');
 
       try {
+          const employee = personalList.find(p => p.id === personIdOrName || p.name === personIdOrName);
+          const personId = employee?.id || null;
+          const personName = employee?.name || personIdOrName;
+
           const { data: lastRecords, error: lastRecordError } = await supabase
               .from('personal')
               .select('date_esti')
@@ -597,6 +644,7 @@ export default function Home() {
                 code: String(item.code),
                 sku: item.sku,
                 name: personName,
+                id_empleado: personId,
                 name_inc: item.encargado,
                 place: skipAreaSelection ? null : selectedArea,
                 product: item.producto,
@@ -640,7 +688,7 @@ export default function Home() {
   };
   
   const onScanSuccess = useCallback((decodedText: string, decodedResult: any) => {
-    if (!scannerActive || Date.now() - lastScanTimeRef.current < MIN_SCAN_INTERVAL) return;
+    if (!scannerActive || Date.now() - lastScanTimeRef.current < MIN_SCAN_INTERVAL || !isAttendanceValid) return;
     lastScanTimeRef.current = Date.now();
     
     let finalCode = decodedText;
@@ -654,9 +702,14 @@ export default function Home() {
     }
     
     setLastScannedCode(finalCode);
-  }, [scannerActive]);
+  }, [scannerActive, isAttendanceValid]);
 
  const processScan = useCallback(async (decodedText: string) => {
+    if (!isAttendanceValid) {
+        showModalNotification('Asistencia Requerida', 'No es posible asignar etiquetas porque el empleado no tiene una entrada activa registrada para el día de hoy.', 'destructive');
+        return;
+    }
+
     setLoading(true);
     const finalCode = String(decodedText).trim();
 
@@ -738,8 +791,8 @@ export default function Home() {
             return;
         }
 
-        const isKnownPersonal = personalList.some(p => p.name === finalCode);
-        if (isKnownPersonal) {
+        const employee = personalList.find(p => p.id === finalCode || p.name === finalCode);
+        if (employee) {
             if ('vibrate' in navigator) navigator.vibrate([100, 50, 100]);
 
             if (scannedData.length === 0) {
@@ -759,7 +812,7 @@ export default function Home() {
                 return;
             }
 
-            await saveToPersonal(finalCode);
+            await saveToPersonal(employee.id);
 
             lastSuccessfullyScannedCodeRef.current = finalCode;
             setLoading(false);
@@ -852,7 +905,7 @@ export default function Home() {
     } finally {
         setLoading(false);
     }
-}, [addCodeAndUpdateCounters, scannedData, personalList, scanMode, selectedArea, skipAreaSelection, fetchCreatedLotes]);
+}, [addCodeAndUpdateCounters, scannedData, personalList, scanMode, selectedArea, skipAreaSelection, fetchCreatedLotes, isAttendanceValid]);
 
 
   useEffect(() => {
@@ -989,6 +1042,11 @@ export default function Home() {
       showModalNotification('Falta Encargado', 'Por favor, ingresa el nombre del encargado.', 'destructive');
       return;
     }
+    if (!isAttendanceValid) {
+        showModalNotification('Asistencia Requerida', 'No es posible asignar etiquetas porque el empleado no tiene una entrada activa registrada para el día de hoy.', 'destructive');
+        return;
+    }
+
     setScannerActive(true);
     if(selectedScannerMode === 'camara') {
       showAppMessage('Cámara activada. Apunta al código.', 'info');
@@ -1118,6 +1176,8 @@ const deleteRow = (codeToDelete: string) => {
       }
     });
 
+    const selectedEmployee = personalList.find(p => p.id === selectedPersonal);
+
     return {
       ticketId: `TKT-${Date.now()}`,
       secondaryBarcodeId: `REF-${Date.now().toString().slice(-6)}${Math.floor(Math.random() * 1000)}`,
@@ -1126,7 +1186,7 @@ const deleteRow = (codeToDelete: string) => {
       deadline: cumulativeTime.toLocaleTimeString('es-MX', { hour: 'numeric', minute: '2-digit' }),
       encargado: encargado || 'No especificado',
       area: selectedArea || (skipAreaSelection ? 'QUINTA' : 'No especificada'),
-      packer: selectedPersonal || 'No seleccionado',
+      packer: selectedEmployee?.name || 'No seleccionado',
       resumen: Object.entries(resumenMap).map(([sub_cat, data]) => ({ sub_cat, ...data })),
       desglose: Object.entries(desgloseMap).map(([key, packages]) => {
         const [units, sub_cat] = key.split('|');
@@ -1134,7 +1194,7 @@ const deleteRow = (codeToDelete: string) => {
       }),
       totalPaquetes: scannedData.length,
     };
-  }, [scannedData, encargado, selectedArea, skipAreaSelection, selectedPersonal]);
+  }, [scannedData, encargado, selectedArea, skipAreaSelection, selectedPersonal, personalList]);
 
   const generatePDF = () => {
     const doc = new jsPDF();
@@ -1202,6 +1262,10 @@ const deleteRow = (codeToDelete: string) => {
 
 
   const handleProduccionProgramada = async () => {
+    if (!isAttendanceValid) {
+        showModalNotification('Asistencia Requerida', 'No es posible asignar etiquetas porque el empleado no tiene una entrada activa registrada para el día de hoy.', 'destructive');
+        return;
+    }
     if (scannedData.length === 0) {
       showModalNotification('Lista Vacía', 'No hay registros pendientes para programar.', 'info');
       return;
@@ -1255,6 +1319,9 @@ const deleteRow = (codeToDelete: string) => {
             return;
         }
 
+        const employee = personalList.find(p => p.id === selectedPersonal);
+        const personName = employee?.name || selectedPersonal;
+
         let lastFinishTime = new Date();
         const dataToInsert = scannedData.map(item => {
             const startTime = new Date(lastFinishTime.getTime());
@@ -1267,7 +1334,8 @@ const deleteRow = (codeToDelete: string) => {
             return {
                 code: String(item.code),
                 sku: item.sku,
-                name: selectedPersonal,
+                name: personName,
+                id_empleado: employee?.id || null,
                 name_inc: item.encargado,
                 place: skipAreaSelection ? null : selectedArea,
                 product: item.producto,
@@ -1357,7 +1425,10 @@ const deleteRow = (codeToDelete: string) => {
 
         setLoadedProgData(data);
         const originalAssignee = byPerson ? filterValue : (data.length > 0 ? data[0].name : '');
-        setPersonToAssign(originalAssignee);
+        
+        // Find ID if possible
+        const matchedEmp = personalList.find(p => p.name === originalAssignee);
+        setPersonToAssign(matchedEmp?.id || originalAssignee);
 
     } catch (error: any) {
         console.error("Error al cargar producción programada:", error);
@@ -1369,6 +1440,10 @@ const deleteRow = (codeToDelete: string) => {
 
 
   const handleFinalizeAssociation = async () => {
+    if (!isAttendanceValid) {
+        showModalNotification('Asistencia Requerida', 'No es posible asignar etiquetas porque el empleado no tiene una entrada activa registrada para el día de hoy.', 'destructive');
+        return;
+    }
     if (!personToAssign || loadedProgData.length === 0) {
         showModalNotification('Error', 'No hay datos o persona seleccionada para asociar.', 'destructive');
         return;
@@ -1376,10 +1451,14 @@ const deleteRow = (codeToDelete: string) => {
     setLoading(true);
 
     try {
+        const employee = personalList.find(p => p.id === personToAssign || p.name === personToAssign);
+        const personId = employee?.id || null;
+        const personName = employee?.name || personToAssign;
+
         const { data: lastRecords, error: lastRecordError } = await supabase
             .from('personal')
             .select('date_esti')
-            .eq('name', personToAssign)
+            .eq('name', personName)
             .not('date_esti', 'is', null)
             .order('date_esti', { ascending: false })
             .limit(1);
@@ -1408,7 +1487,8 @@ const deleteRow = (codeToDelete: string) => {
             return {
                 code: String(item.code),
                 sku: item.sku,
-                name: personToAssign,
+                name: personName,
+                id_empleado: personId,
                 name_inc: item.name_inc,
                 place: item.place,
                 product: item.product,
@@ -1449,7 +1529,7 @@ const deleteRow = (codeToDelete: string) => {
             throw new Error(`Error al eliminar de 'personal_prog': ${deleteError.message}. Los registros fueron asignados, pero no se eliminaron de la lista de programados.`);
         }
 
-        showModalNotification('¡Éxito!', `Se asignaron y guardaron ${loadedProgData.length} códigos a ${personToAssign}.`, 'success');
+        showModalNotification('¡Éxito!', `Se asignaron y guardaron ${loadedProgData.length} códigos a ${personName}.`, 'success');
 
         setShowCargarProduccion(false);
         setLoadedProgData([]);
@@ -1596,7 +1676,7 @@ const deleteRow = (codeToDelete: string) => {
       info: 'bg-blue-500/80 text-white'
   };
   
-  const isAssociationDisabled = scannedData.length === 0 || loading || (!selectedArea && !skipAreaSelection);
+  const isAssociationDisabled = scannedData.length === 0 || loading || (!selectedArea && !skipAreaSelection) || !isAttendanceValid;
 
   const totalEstimatedTime = useMemo(() => {
     return scannedData.reduce((acc, item) => acc + (item.esti_time || 0), 0);
@@ -1682,19 +1762,10 @@ const deleteRow = (codeToDelete: string) => {
   const groupedPersonalOptions = useMemo(() => {
     if (personalList.length === 0) return [];
     
-    const grouped = personalList.reduce((acc, person) => {
-        const org = person.organization || 'Sin Empresa';
-        if (!acc[org]) {
-            acc[org] = [];
-        }
-        acc[org].push({ value: person.name, label: person.name });
-        return acc;
-    }, {} as Record<string, { value: string; label: string }[]>);
-
-    return Object.keys(grouped).sort().map(org => ({
-        label: org,
-        options: grouped[org].sort((a, b) => a.label.localeCompare(b.label))
-    }));
+    return [{
+        label: "Personal de Operación",
+        options: personalList.map(p => ({ value: p.id, label: p.name }))
+    }];
   }, [personalList]);
   
   const groupedEncargadoOptions = useMemo(() => {
@@ -2003,6 +2074,16 @@ const deleteRow = (codeToDelete: string) => {
                     <p className="text-gray-600 text-sm md:text-base mt-1">Asigna un producto a un miembro del personal.</p>
                 </header>
 
+                {!isAttendanceValid && attendanceChecked && (
+                    <Alert variant="destructive" className="animate-in fade-in zoom-in duration-300">
+                        <AlertTriangle className="h-5 w-5" />
+                        <AlertTitle className="font-black uppercase tracking-widest text-xs">Asistencia Requerida</AlertTitle>
+                        <AlertDescription className="text-sm font-bold">
+                            No es posible asignar etiquetas porque el empleado no tiene una entrada activa registrada para el día de hoy.
+                        </AlertDescription>
+                    </Alert>
+                )}
+
                 <div className="flex justify-center gap-4">
                     <div className={`flex items-center gap-2 p-2 rounded-lg ${dbStatus.personalDb === 'success' ? 'bg-green-100 text-green-800' : dbStatus.personalDb === 'error' ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800'}`}>
                         {dbStatus.personalDb === 'success' ? <Wifi className="h-5 w-5" /> : dbStatus.personalDb === 'error' ? <WifiOff className="h-5 w-5"/> : <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-yellow-800"></div>}
@@ -2045,9 +2126,9 @@ const deleteRow = (codeToDelete: string) => {
                             className="flex-grow bg-transparent"
                             placeholder="Ingresa el código de corte..."
                             onKeyDown={(e) => e.key === 'Enter' && handleVerifyCode()}
-                            disabled={isVerifying || !encargado.trim()}
+                            disabled={isVerifying || !encargado.trim() || !isAttendanceValid}
                         />
-                        <Button onClick={handleVerifyCode} disabled={isVerifying || !encargado.trim()}>
+                        <Button onClick={handleVerifyCode} disabled={isVerifying || !encargado.trim() || !isAttendanceValid}>
                             {isVerifying ? 'Verificando...' : <Search className="h-4 w-4"/>}
                         </Button>
                     </div>
@@ -2137,7 +2218,7 @@ const deleteRow = (codeToDelete: string) => {
                         )}
                         
                         <div id="scanner-controls" className="mt-4 flex flex-wrap gap-2 justify-center">
-                            <button onClick={startScanner} disabled={scannerActive || loading || !encargado} className="px-4 py-2 text-white font-semibold rounded-lg shadow-md transition-colors duration-200 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-sm">
+                            <button onClick={startScanner} disabled={scannerActive || loading || !encargado || !isAttendanceValid} className="px-4 py-2 text-white font-semibold rounded-lg shadow-md transition-colors duration-200 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-sm">
                                 Iniciar
                             </button>
                             <button onClick={stopScanner} disabled={!scannerActive} className="px-4 py-2 text-white font-semibold rounded-lg shadow-md transition-colors duration-200 bg-red-600 hover:bg-red-700 disabled:bg-gray-400 text-sm">
@@ -2185,6 +2266,7 @@ const deleteRow = (codeToDelete: string) => {
                                 className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 w-full border-0 bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0"
                                 placeholder="Escriba el código..."
                                 onKeyDown={(e) => e.key === 'Enter' && handleManualAdd()}
+                                disabled={!isAttendanceValid}
                             />
                             <Button
                                 type="button"
@@ -2192,6 +2274,7 @@ const deleteRow = (codeToDelete: string) => {
                                 onClick={handleManualAdd}
                                 size="icon"
                                 className="h-8 w-8 bg-starbucks-green hover:bg-starbucks-dark text-white rounded-md mr-1"
+                                disabled={!isAttendanceValid}
                             >
                                 <PlusCircle className="h-5 w-5" />
                             </Button>
