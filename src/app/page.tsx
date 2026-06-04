@@ -1,3 +1,4 @@
+
 'use client';
 import React, {useEffect, useRef, useState, useCallback, useMemo} from 'react';
 import Head from 'next/head';
@@ -1407,7 +1408,7 @@ const deleteRow = (codeToDelete: string) => {
                 place: skipAreaSelection ? null : selectedArea,
                 product: item.producto,
                 quantity: item.cantidad,
-                organization: item.empresa,
+                organization: item.organization,
                 sales_num: item.venta && !isNaN(Number(item.venta)) ? Number(item.venta) : null,
                 date: new Date().toISOString(),
                 esti_time: item.esti_time,
@@ -2357,10 +2358,12 @@ const deleteRow = (codeToDelete: string) => {
                                             </h3>
                                             <div className="mt-1">
                                                 <p className="text-xl font-black text-starbucks-dark tracking-tighter leading-none">
-                                                    {workForceCapacity?.hours || 0}h {workForceCapacity ? workForceCapacity.minutes % 60 : 0}m
+                                                    {workForceCapacity?.minutes || 0} <span className="text-[10px] font-bold text-gray-400">MIN</span>
                                                 </p>
                                                 <div className="flex justify-between items-center mt-1 px-1">
-                                                    <span className="text-[8px] font-bold text-gray-500 uppercase">{workForceCapacity?.minutes || 0} min</span>
+                                                    <span className="text-[8px] font-bold text-gray-500 uppercase">
+                                                        {workForceCapacity?.hours || 0}H {workForceCapacity ? workForceCapacity.minutes % 60 : 0}M
+                                                    </span>
                                                     <span className="text-[8px] font-black text-gray-400 uppercase">{workForceCapacity?.employeeCount || 0} Oper.</span>
                                                 </div>
                                             </div>
