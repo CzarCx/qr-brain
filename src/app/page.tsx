@@ -357,14 +357,14 @@ export default function Home() {
     };
   }, [scannedData]);
 
-  // Validation of Attendance logic optimized
+  // Validation of Attendance logic optimized - Fixed to use Labels DB where session is active
   useEffect(() => {
     if (!user?.email) return;
 
     const checkAttendance = async () => {
         try {
-            // 1. Obtener ID del empleado desde la tabla pública basado en el email de auth
-            const { data: empData, error: empError } = await supabase
+            // 1. Obtener ID del empleado desde la tabla pública en la DB de etiquetas
+            const { data: empData, error: empError } = await supabaseEtiquetas
                 .from('empleados')
                 .select('id')
                 .eq('email', user.email)
@@ -385,8 +385,8 @@ export default function Home() {
             const day = String(now.getDate()).padStart(2, '0');
             const today = `${year}-${month}-${day}`;
 
-            // 3. Consultar el último registro del checador para hoy
-            const { data, error } = await supabase
+            // 3. Consultar el último registro del checador para hoy en la DB de etiquetas
+            const { data, error } = await supabaseEtiquetas
                 .from('registro_checador')
                 .select('tipo_registro')
                 .eq('id_empleado', employeeId)
@@ -414,7 +414,8 @@ export default function Home() {
 
   useEffect(() => {
     const fetchPersonal = async () => {
-        const { data, error } = await supabase
+        // Cargar empleados de la DB de etiquetas (donde está el checador operativo)
+        const { data, error } = await supabaseEtiquetas
             .from('empleados')
             .select('id, nombres, apellido_paterno, apellido_materno, email')
             .order('nombres', { ascending: true });
