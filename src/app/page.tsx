@@ -300,11 +300,52 @@ export default function Home() {
     };
   }, [fetchCreatedLotes]);
 
+  // VALIDACIÓN DE ASISTENCIA Y NOMBRE DEL ENCARGADO (LOGUEADO)
   useEffect(() => {
-    if (profile?.name) {
-      setEncargado(profile.name);
-    }
-  }, [profile]);
+    if (!user?.id) return;
+
+    const checkAttendanceAndFetchName = async () => {
+        try {
+            // 1. Obtener nombre del empleado desde la tabla operativa
+            const { data: empData } = await supabaseEtiquetas
+                .from('empleados')
+                .select('nombres, apellido_paterno, apellido_materno')
+                .eq('id', user.id)
+                .maybeSingle();
+
+            if (empData) {
+                const fullName = [empData.nombres, empData.apellido_paterno, empData.apellido_materno].filter(Boolean).join(' ');
+                setEncargado(fullName);
+            }
+
+            // 2. Verificar asistencia para el día de hoy
+            const todayStr = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD
+
+            const { data, error } = await supabaseEtiquetas
+                .from('registro_checador')
+                .select('tipo_registro')
+                .eq('id_empleado', user.id)
+                .eq('fecha', todayStr)
+                .order('id', { ascending: false })
+                .limit(1);
+
+            if (error) throw error;
+
+            if (data && data.length > 0) {
+                setIsAttendanceValid(data[0].tipo_registro === 'entrada');
+            } else {
+                setIsAttendanceValid(false);
+            }
+        } catch (err) {
+            console.error("Error checking user attendance/name:", err);
+            setIsAttendanceValid(false);
+        } finally {
+            setAttendanceChecked(true);
+        }
+    };
+
+    checkAttendanceAndFetchName();
+  }, [user]);
 
   useEffect(() => {
     if (isMounted) {
@@ -336,40 +377,6 @@ export default function Home() {
     };
   }, [scannedData]);
 
-  // VALIDACIÓN DE ASISTENCIA DEL USUARIO LOGUEADO
-  useEffect(() => {
-    if (!user?.id) return;
-
-    const checkAttendance = async () => {
-        try {
-            const todayStr = new Date().toISOString().split('T')[0];
-
-            const { data, error } = await supabaseEtiquetas
-                .from('registro_checador')
-                .select('tipo_registro')
-                .eq('id_empleado', user.id)
-                .eq('fecha', todayStr)
-                .order('id', { ascending: false })
-                .limit(1);
-
-            if (error) throw error;
-
-            if (data && data.length > 0) {
-                setIsAttendanceValid(data[0].tipo_registro === 'entrada');
-            } else {
-                setIsAttendanceValid(false);
-            }
-        } catch (err) {
-            console.error("Error checking user attendance:", err);
-            setIsAttendanceValid(false);
-        } finally {
-            setAttendanceChecked(true);
-        }
-    };
-
-    checkAttendance();
-  }, [user]);
-
   // VALIDACIÓN DE ASISTENCIA DE LA PERSONA SELECCIONADA PARA ASIGNACIÓN
   useEffect(() => {
     if (!selectedPersonal) {
@@ -380,7 +387,7 @@ export default function Home() {
     const checkTargetAttendance = async () => {
         setCheckingTargetAttendance(true);
         try {
-            const todayStr = new Date().toISOString().split('T')[0];
+            const todayStr = new Date().toLocaleDateString('en-CA');
 
             const { data, error } = await supabaseEtiquetas
                 .from('registro_checador')
@@ -479,8 +486,8 @@ export default function Home() {
     const oscillator = context.createOscillator();
     const gainNode = context.createGain();
     oscillator.type = 'square';
-    oscillator.frequency.setValueAtTime(880, context.currentTime);
-    gainNode.gain.setValueAtTime(1, context.currentTime);
+    oscillator.frequency.setValueAtTime(880, context.currentTime); // A5 note
+    gainNode.gain.setValueAtTime(1, context.currentTime); // Increased Volume
     gainNode.gain.exponentialRampToValueAtTime(0.00001, context.currentTime + 0.1);
     oscillator.connect(gainNode);
     gainNode.connect(context.destination);
@@ -803,7 +810,7 @@ export default function Home() {
             }
             
             // Validar asistencia del operario al que se le asocia vía escaneo directo
-            const todayStr = new Date().toISOString().split('T')[0];
+            const todayStr = new Date().toLocaleDateString('en-CA');
             const { data: attData } = await supabaseEtiquetas
                 .from('registro_checador')
                 .select('tipo_registro')
@@ -1444,7 +1451,7 @@ const deleteRow = (codeToDelete: string) => {
     }
     
     // Validar asistencia del destino para asociación masiva
-    const todayStr = new Date().toISOString().split('T')[0];
+    const todayStr = new Date().toLocaleDateString('en-CA');
     const { data: attData } = await supabaseEtiquetas
         .from('registro_checador')
         .select('tipo_registro')
@@ -1981,7 +1988,7 @@ const deleteRow = (codeToDelete: string) => {
             </div>
              <Button 
                 onClick={handleManualAssociate} 
-                disabled={isAssociationDisabled || loading || !isAttendanceValid} 
+                disabled={isAssociationDisabled || loading} 
                 className={cn(
                     "bg-starbucks-accent hover:bg-starbucks-green text-white w-full sm:w-auto",
                     (!isTargetPersonAttending || !isAttendanceValid) && selectedPersonal && "opacity-50 grayscale"
