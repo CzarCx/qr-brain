@@ -357,17 +357,39 @@ export default function Home() {
     };
   }, [scannedData]);
 
-  // Validation of Attendance
+  // Validation of Attendance logic optimized
   useEffect(() => {
-    if (!user) return;
+    if (!user?.email) return;
 
     const checkAttendance = async () => {
-        const today = new Date().toISOString().split('T')[0];
         try {
+            // 1. Obtener ID del empleado desde la tabla pública basado en el email de auth
+            const { data: empData, error: empError } = await supabase
+                .from('empleados')
+                .select('id')
+                .eq('email', user.email)
+                .maybeSingle();
+
+            if (empError || !empData) {
+                console.warn("No se encontró registro de empleado para el email:", user.email);
+                setIsAttendanceValid(false);
+                return;
+            }
+
+            const employeeId = empData.id;
+
+            // 2. Obtener fecha actual en formato local YYYY-MM-DD
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = String(now.getMonth() + 1).padStart(2, '0');
+            const day = String(now.getDate()).padStart(2, '0');
+            const today = `${year}-${month}-${day}`;
+
+            // 3. Consultar el último registro del checador para hoy
             const { data, error } = await supabase
                 .from('registro_checador')
                 .select('tipo_registro')
-                .eq('id_empleado', user.id)
+                .eq('id_empleado', employeeId)
                 .eq('fecha', today)
                 .order('created_at', { ascending: false })
                 .limit(1);
@@ -682,7 +704,8 @@ export default function Home() {
           console.error("Error al guardar en personal:", error);
           showModalNotification('Error', `Error al guardar la asignación: ${error.message}`, 'destructive');
       } finally {
-          }
+          setLoading(false);
+      }
   };
   
   const onScanSuccess = useCallback((decodedText: string, decodedResult: any) => {
@@ -1596,7 +1619,7 @@ const deleteRow = (codeToDelete: string) => {
             })
             .eq('code_i', verificationCode);
 
-        if (updateError) {
+        if (verificationCode && updateError) {
             throw new Error(`Error al registrar el corte: ${updateError.message}`);
         }
         

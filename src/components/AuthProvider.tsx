@@ -99,6 +99,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     } catch (err) {
       console.error("Error en sincronización de perfil:", err);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -113,10 +115,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setSession(initialSession);
           setUser(initialSession.user);
           await syncProfileAndRoles(initialSession.user);
+        } else {
+          setLoading(false);
         }
       } catch (error) {
         console.error("Error inicializando sesión:", error);
-      } finally {
         setLoading(false);
       }
     };
@@ -133,6 +136,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser(null);
         setProfile(null);
         setRoles([]);
+        setLoading(false);
       }
     });
 
