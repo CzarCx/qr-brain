@@ -1,4 +1,3 @@
-
 'use client';
 import React, {useEffect, useRef, useState, useCallback, useMemo} from 'react';
 import Head from 'next/head';
@@ -16,7 +15,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Zap, ZoomIn, UserPlus, PlusCircle, Clock, AlertTriangle, Wifi, WifiOff, Search, XCircle, CheckCircle, Trash2, Lock, Unlock, FileText, Printer, Download } from 'lucide-react';
+import { Zap, ZoomIn, UserPlus, PlusCircle, Clock, AlertTriangle, Wifi, WifiOff, Search, XCircle, CheckCircle, Trash2, Lock, Unlock, FileText, Printer, Download, FileUp } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Combobox, ComboboxGroup } from '@/components/ui/combobox';
 import {
@@ -39,7 +38,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
   AlertDialogTrigger,
-} from "@/AlertDialog";
+} from "@/components/ui/alert-dialog";
 import { Checkbox } from '@/components/ui/checkbox';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useReactToPrint } from "react-to-print";
@@ -683,8 +682,7 @@ export default function Home() {
           console.error("Error al guardar en personal:", error);
           showModalNotification('Error', `Error al guardar la asignación: ${error.message}`, 'destructive');
       } finally {
-          setLoading(false);
-      }
+          }
   };
   
   const onScanSuccess = useCallback((decodedText: string, decodedResult: any) => {
@@ -2406,4 +2404,3 @@ const deleteRow = (codeToDelete: string) => {
     </>
   );
 }
-

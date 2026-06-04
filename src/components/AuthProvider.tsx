@@ -109,10 +109,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       try {
         const { data: { session: initialSession } } = await supabaseEtiquetas.auth.getSession();
-        setSession(initialSession);
-        setUser(initialSession?.user ?? null);
-        
-        if (initialSession?.user) {
+        if (initialSession) {
+          setSession(initialSession);
+          setUser(initialSession.user);
           await syncProfileAndRoles(initialSession.user);
         }
       } catch (error) {
@@ -125,12 +124,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     initAuth();
 
     const { data: { subscription } } = supabaseEtiquetas.auth.onAuthStateChange(async (event, currentSession) => {
-      if (event === 'SIGNED_IN') {
+      if (event === 'SIGNED_IN' && currentSession) {
         setSession(currentSession);
-        setUser(currentSession?.user ?? null);
-        if (currentSession?.user) {
-          await syncProfileAndRoles(currentSession.user);
-        }
+        setUser(currentSession.user);
+        await syncProfileAndRoles(currentSession.user);
       } else if (event === 'SIGNED_OUT') {
         setSession(null);
         setUser(null);
@@ -151,7 +148,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     router.push('/login');
   };
 
-  // Manejo de Redirecciones (Solo después de que loading es false)
+  // Manejo de Redirecciones Seguras
   useEffect(() => {
     if (loading) return;
 

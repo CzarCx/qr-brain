@@ -199,7 +199,7 @@ export default function CalificarPage() {
     }
   }, []);
 
-  // Carga inicial al montar o abrir el popover
+  // Carga inicial al abrir el buscador
   useEffect(() => {
     if (isInventoryPopoverOpen && inventoryList.length === 0) {
         fetchInventoryItems('');
@@ -537,7 +537,6 @@ export default function CalificarPage() {
       setPiezasDespachadas('');
       setObservacionesIncidencia('');
       setIsDiscrepancyModalOpen(true);
-      if (inventoryList.length === 0) fetchInventoryItems('');
   };
   
   const saveKpiData = async (name: string, quantity: number, timeInSeconds: number) => {
@@ -593,10 +592,7 @@ export default function CalificarPage() {
             .from('registro_incidencias_en_paquetes_listos_para_entrega')
             .insert([record]);
 
-          if (insError) {
-              console.error("Supabase Etiquetas Insert Error Detail:", JSON.stringify(insError, null, 2));
-              throw new Error(`Error de base de datos: ${insError.message || 'Error desconocido'}`);
-          }
+          if (insError) throw new Error(`Error de base de datos: ${insError.message}`);
 
           await supabase.from('personal').update({ 
               details: `DISCREPANCIA EN QC: Encontrado ${piezasDespachadas} pzas. Subcategoría: ${searchQueryDespachado}`, 
@@ -1073,10 +1069,7 @@ const triggerMassQualify = async () => {
                                    <Input 
                                        placeholder="Busca o selecciona subcategoría..."
                                        value={searchQueryDespachado}
-                                       onChange={(e) => {
-                                           setSearchQueryDespachado(e.target.value);
-                                           if (!isInventoryPopoverOpen) setIsInventoryPopoverOpen(true);
-                                       }}
+                                       onChange={(e) => setSearchQueryDespachado(e.target.value)}
                                        onFocus={() => {
                                            if (!isInventoryPopoverOpen) setIsInventoryPopoverOpen(true);
                                        }}
@@ -1092,13 +1085,13 @@ const triggerMassQualify = async () => {
                                </div>
                            </PopoverTrigger>
                            <PopoverContent className="w-[--radix-popover-trigger-width] p-0 z-[110]" align="start">
-                               <div className="max-h-[300px] overflow-y-auto flex flex-col p-1 bg-white">
-                                   {loadingInventory && <div className="p-4 text-center text-xs text-muted-foreground">Cargando subcategorías...</div>}
+                               <div className="max-h-[300px] overflow-y-auto flex flex-col p-1 bg-white shadow-xl rounded-md border">
+                                   {loadingInventory && <div className="p-4 text-center text-xs text-muted-foreground"><Loader2 className="animate-spin h-4 w-4 mx-auto" /></div>}
                                    {!loadingInventory && inventoryList.length === 0 && <div className="p-4 text-center text-xs text-muted-foreground">No se encontraron resultados.</div>}
                                    {inventoryList.map((item, idx) => (
                                        <div
                                            key={`${item.subcategoria}-${idx}`}
-                                           onPointerDown={(e) => {
+                                           onMouseDown={(e) => {
                                                e.preventDefault();
                                                handleSelectProduct(item.subcategoria);
                                            }}
