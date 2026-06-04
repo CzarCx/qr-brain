@@ -15,7 +15,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Zap, ZoomIn, UserPlus, PlusCircle, Clock, AlertTriangle, Wifi, WifiOff, Search, XCircle, CheckCircle, Trash2, Lock, Unlock, FileText, Printer, Download, FileUp } from 'lucide-react';
+import { Zap, ZoomIn, UserPlus, PlusCircle, Clock, AlertTriangle, Wifi, WifiOff, Search, XCircle, CheckCircle, Trash2, Lock, Unlock, FileText, Printer, Download, FileUp, Loader2 } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Combobox } from '@/components/ui/combobox';
 import {
@@ -146,8 +146,12 @@ export default function Home() {
   const [timerStartTime, setTimerStartTime] = useState<Date | null>(null);
   const [elapsedTime, setElapsedTime] = useState(0);
   const [isPrintDialogOpen, setIsPrintDialogOpen] = useState(false);
+  
+  // Estados de Asistencia
   const [isAttendanceValid, setIsAttendanceValid] = useState(false);
   const [attendanceChecked, setAttendanceChecked] = useState(false);
+  const [isTargetPersonAttending, setIsTargetPersonAttending] = useState(false);
+  const [checkingTargetAttendance, setCheckingTargetAttendance] = useState(false);
 
   const [isDeleteLoteModalOpen, setIsDeleteLoteModalOpen] = useState(false);
   const [loteIdToDelete, setLoteIdToDelete] = useState('');
@@ -331,19 +335,14 @@ export default function Home() {
     };
   }, [scannedData]);
 
-  // VALIDACIÓN DE ASISTENCIA MEJORADA
+  // VALIDACIÓN DE ASISTENCIA DEL USUARIO LOGUEADO
   useEffect(() => {
     if (!user?.id) return;
 
     const checkAttendance = async () => {
         try {
-            const now = new Date();
-            const year = now.getFullYear();
-            const month = String(now.getMonth() + 1).padStart(2, '0');
-            const day = String(now.getDate()).padStart(2, '0');
-            const todayStr = `${year}-${month}-${day}`;
+            const todayStr = new Date().toISOString().split('T')[0];
 
-            // Consultar directamente registro_checador usando user.id (UUID directo)
             const { data, error } = await supabaseEtiquetas
                 .from('registro_checador')
                 .select('tipo_registro')
@@ -355,17 +354,12 @@ export default function Home() {
             if (error) throw error;
 
             if (data && data.length > 0) {
-                // Solo permitimos operar si el último movimiento fue 'entrada'
-                if (data[0].tipo_registro === 'entrada') {
-                    setIsAttendanceValid(true);
-                } else {
-                    setIsAttendanceValid(false);
-                }
+                setIsAttendanceValid(data[0].tipo_registro === 'entrada');
             } else {
                 setIsAttendanceValid(false);
             }
         } catch (err) {
-            console.error("Error checking attendance:", err);
+            console.error("Error checking user attendance:", err);
             setIsAttendanceValid(false);
         } finally {
             setAttendanceChecked(true);
@@ -374,6 +368,44 @@ export default function Home() {
 
     checkAttendance();
   }, [user]);
+
+  // VALIDACIÓN DE ASISTENCIA DE LA PERSONA SELECCIONADA PARA ASIGNACIÓN
+  useEffect(() => {
+    if (!selectedPersonal) {
+      setIsTargetPersonAttending(false);
+      return;
+    }
+
+    const checkTargetAttendance = async () => {
+        setCheckingTargetAttendance(true);
+        try {
+            const todayStr = new Date().toISOString().split('T')[0];
+
+            const { data, error } = await supabaseEtiquetas
+                .from('registro_checador')
+                .select('tipo_registro')
+                .eq('id_empleado', selectedPersonal)
+                .eq('fecha', todayStr)
+                .order('id', { ascending: false })
+                .limit(1);
+
+            if (error) throw error;
+
+            if (data && data.length > 0) {
+                setIsTargetPersonAttending(data[0].tipo_registro === 'entrada');
+            } else {
+                setIsTargetPersonAttending(false);
+            }
+        } catch (err) {
+            console.error("Error checking target attendance:", err);
+            setIsTargetPersonAttending(false);
+        } finally {
+            setCheckingTargetAttendance(false);
+        }
+    };
+
+    checkTargetAttendance();
+  }, [selectedPersonal]);
 
   useEffect(() => {
     const fetchPersonal = async () => {
@@ -426,17 +458,12 @@ export default function Home() {
     setShowNotification(true);
   };
 
-  const invalidateCSV = () => {
-    setIngresarDatosEnabled(false);
-  };
-  
   const clearSessionData = () => {
     scannedCodesRef.current.clear();
     setScannedData([]);
     setMelCodesCount(0);
     setOtherCodesCount(0);
     lastSuccessfullyScannedCodeRef.current = null;
-    setIngresarDatosEnabled(false);
     setTimerStartTime(null);
     timerStartedRef.current = false;
     
@@ -577,14 +604,12 @@ export default function Home() {
     };
 
     setScannedData(prevData => [...prevData, newItem]);
-
-    invalidateCSV();
     return true;
   }, [encargado, selectedArea]);
 
   const saveToPersonal = async (personIdOrName: string) => {
-      if (!isAttendanceValid) {
-          showModalNotification('Asistencia Requerida', 'No es posible asignar etiquetas porque el empleado no tiene una entrada activa registrada para el día de hoy.', 'destructive');
+      if (!isTargetPersonAttending) {
+          showModalNotification('Operario sin Asistencia', 'No es posible asociar etiquetas porque la persona seleccionada no tiene una entrada activa registrada para el día de hoy.', 'destructive');
           return;
       }
 
@@ -645,11 +670,6 @@ export default function Home() {
 
           const { error } = await supabase.from('personal').insert(dataToInsert);
           if (error) {
-              if (error.message.includes("could not find the 'user_id' column")) {
-                 showModalNotification('Error de Permisos', 'No tienes permiso para asignar. Contacta a un administrador.', 'destructive');
-                 setLoading(false);
-                 return;
-              }
               throw error;
           };
 
@@ -687,7 +707,7 @@ export default function Home() {
 
  const processScan = useCallback(async (decodedText: string) => {
     if (!isAttendanceValid) {
-        showModalNotification('Asistencia Requerida', 'No es posible asignar etiquetas porque el empleado no tiene una entrada activa registrada para el día de hoy.', 'destructive');
+        showModalNotification('Asistencia Requerida', 'Tú (el encargado) debes haber registrado entrada hoy para operar el sistema.', 'destructive');
         return;
     }
 
@@ -780,6 +800,23 @@ export default function Home() {
                 setLoading(false); 
                 return;
             }
+            
+            // Validar asistencia del operario al que se le asocia vía escaneo directo
+            const todayStr = new Date().toISOString().split('T')[0];
+            const { data: attData } = await supabaseEtiquetas
+                .from('registro_checador')
+                .select('tipo_registro')
+                .eq('id_empleado', employee.id)
+                .eq('fecha', todayStr)
+                .order('id', { ascending: false })
+                .limit(1);
+
+            if (!attData || attData.length === 0 || attData[0].tipo_registro !== 'entrada') {
+                showModalNotification('Operario sin Asistencia', `${employee.name} no ha registrado entrada hoy. No puedes asociarle etiquetas en tiempo real.`, 'destructive');
+                setLoading(false);
+                return;
+            }
+
             const missingTimeRows = scannedData.map((item, index) => (item.esti_time === null || item.esti_time === undefined ? index + 1 : null)).filter(Boolean) as number[];
             if (missingTimeRows.length > 0) {
                 showModalNotification('Faltan Datos', `Falta el tiempo estimado en las filas: ${missingTimeRows.join(', ')}`, 'destructive');
@@ -882,7 +919,7 @@ export default function Home() {
     } finally {
         setLoading(false);
     }
-}, [addCodeAndUpdateCounters, scannedData, personalList, scanMode, selectedArea, skipAreaSelection, fetchCreatedLotes, isAttendanceValid]);
+}, [addCodeAndUpdateCounters, scannedData, personalList, scanMode, selectedArea, skipAreaSelection, isAttendanceValid]);
 
 
   useEffect(() => {
@@ -1020,7 +1057,7 @@ export default function Home() {
       return;
     }
     if (!isAttendanceValid) {
-        showModalNotification('Asistencia Requerida', 'No es posible asignar etiquetas porque el empleado no tiene una entrada activa registrada para el día de hoy.', 'destructive');
+        showModalNotification('Asistencia Requerida', 'Tú (encargado) debes haber registrado entrada hoy para operar.', 'destructive');
         return;
     }
 
@@ -1046,10 +1083,6 @@ export default function Home() {
         showModalNotification('Falta Encargado', 'Por favor, ingresa el nombre del encargado.', 'destructive');
         return;
       }
-      if (!isAttendanceValid) {
-          showModalNotification('Asistencia Requerida', 'No es posible asignar etiquetas porque el empleado no tiene una entrada activa registrada para el día de hoy.', 'destructive');
-          return;
-      }
       
       const manualCode = manualCodeInput.value.trim();
       if (!manualCode) {
@@ -1074,7 +1107,6 @@ const deleteRow = (codeToDelete: string) => {
         
         scannedCodesRef.current.delete(codeToDelete);
         showAppMessage(`Registro ${codeToDelete} borrado.`, 'info');
-        invalidateCSV();
 
         return newData;
     });
@@ -1095,7 +1127,6 @@ const deleteRow = (codeToDelete: string) => {
         )
       );
     }
-    invalidateCSV();
   };
 
   const handleShowTicketPreview = () => {
@@ -1233,10 +1264,6 @@ const deleteRow = (codeToDelete: string) => {
 
 
   const handleProduccionProgramada = async () => {
-    if (!isAttendanceValid) {
-        showModalNotification('Asistencia Requerida', 'No es posible asignar etiquetas porque el empleado no tiene una entrada activa registrada para el día de hoy.', 'destructive');
-        return;
-    }
     if (scannedData.length === 0) {
       showModalNotification('Lista Vacía', 'No hay registros pendientes para programar.', 'info');
       return;
@@ -1345,10 +1372,6 @@ const deleteRow = (codeToDelete: string) => {
 };
 
   const handleOpenCargarSeccion = async () => {
-    if (!isAttendanceValid) {
-        showModalNotification('Asistencia Requerida', 'No es posible cargar etiquetas porque el empleado no tiene una entrada activa registrada para el día de hoy.', 'destructive');
-        return;
-    }
     setShowCargarProduccion(true);
     setLoadingProgramados(true);
     try {
@@ -1414,14 +1437,26 @@ const deleteRow = (codeToDelete: string) => {
 
 
   const handleFinalizeAssociation = async () => {
-    if (!isAttendanceValid) {
-        showModalNotification('Asistencia Requerida', 'No es posible asignar etiquetas porque el empleado no tiene una entrada activa registrada para el día de hoy.', 'destructive');
-        return;
-    }
     if (!personToAssign || loadedProgData.length === 0) {
         showModalNotification('Error', 'No hay datos o persona seleccionada para asociar.', 'destructive');
         return;
     }
+    
+    // Validar asistencia del destino para asociación masiva
+    const todayStr = new Date().toISOString().split('T')[0];
+    const { data: attData } = await supabaseEtiquetas
+        .from('registro_checador')
+        .select('tipo_registro')
+        .eq('id_empleado', personToAssign)
+        .eq('fecha', todayStr)
+        .order('id', { ascending: false })
+        .limit(1);
+
+    if (!attData || attData.length === 0 || attData[0].tipo_registro !== 'entrada') {
+        showModalNotification('Operario sin Asistencia', 'El operario seleccionado para la carga no ha registrado entrada hoy.', 'destructive');
+        return;
+    }
+
     setLoading(true);
 
     try {
@@ -1646,7 +1681,7 @@ const deleteRow = (codeToDelete: string) => {
       info: 'bg-blue-500/80 text-white'
   };
   
-  const isAssociationDisabled = scannedData.length === 0 || loading || (!selectedArea && !skipAreaSelection) || !isAttendanceValid;
+  const isAssociationDisabled = scannedData.length === 0 || loading || (!selectedArea && !skipAreaSelection) || !selectedPersonal || !isTargetPersonAttending;
 
   const totalEstimatedTime = useMemo(() => {
     return scannedData.reduce((acc, item) => acc + (item.esti_time || 0), 0);
@@ -1816,7 +1851,7 @@ const deleteRow = (codeToDelete: string) => {
                        )
                      )}
                 </div>
-                <Button onClick={handleCargarProgramada} disabled={loading || !isAttendanceValid || (cargaFilterType === 'persona' && !selectedPersonalParaCargar) || (cargaFilterType === 'lote' && !selectedLoteParaCargar)} className="bg-green-600 hover:bg-green-700">
+                <Button onClick={handleCargarProgramada} disabled={loading || (cargaFilterType === 'persona' && !selectedPersonalParaCargar) || (cargaFilterType === 'lote' && !selectedLoteParaCargar)} className="bg-green-600 hover:bg-green-700">
                     {loading ? 'Cargando...' : 'Cargar'}
                 </Button>
             </div>
@@ -1871,7 +1906,7 @@ const deleteRow = (codeToDelete: string) => {
 
               <div className="flex gap-2 justify-end">
                 <Button variant="outline" onClick={() => { setLoadedProgData([]); setPersonToAssign(''); setSelectedPersonalParaCargar(''); setSelectedLoteParaCargar(''); }}>Cancelar</Button>
-                <Button onClick={handleFinalizeAssociation} disabled={loading || !personToAssign || !isAttendanceValid}>
+                <Button onClick={handleFinalizeAssociation} disabled={loading || !personToAssign}>
                     {loading ? 'Asociando...' : 'Asociar y Guardar Producción'}
                 </Button>
               </div>
@@ -1892,10 +1927,10 @@ const deleteRow = (codeToDelete: string) => {
         <div className="flex flex-wrap justify-between items-center mb-2 gap-2">
             <h2 className="text-lg font-bold text-starbucks-dark">Registros Pendientes</h2>
              <div className="flex flex-wrap gap-2">
-                <Button onClick={handleShowTicketPreview} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-sm text-sm transition-colors duration-200" disabled={scannedData.length === 0 || !isAttendanceValid}>
+                <Button onClick={handleShowTicketPreview} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-sm text-sm transition-colors duration-200" disabled={scannedData.length === 0}>
                     <FileText className="mr-2 h-4 w-4" /> Ticket
                 </Button>
-                <Button onClick={handleOpenCargarSeccion} className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg shadow-sm text-sm transition-colors duration-200" disabled={loading || !isAttendanceValid}>
+                <Button onClick={handleOpenCargarSeccion} className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg shadow-sm text-sm transition-colors duration-200" disabled={loading}>
                     <FileUp className="mr-2 h-4 w-4" /> Cargar
                 </Button>
                 <button id="clear-data" onClick={() => { if(window.confirm('¿Estás seguro?')) clearSessionData() }} className="px-3 py-1.5 bg-yellow-500 hover:bg-yellow-600 text-white font-semibold rounded-lg shadow-sm text-xs transition-colors duration-200">Limpiar</button>
@@ -1908,12 +1943,12 @@ const deleteRow = (codeToDelete: string) => {
           <div>
               <Label className="block text-sm font-bold text-starbucks-dark mb-2">Área de Trabajo:</Label>
               <div className="grid grid-cols-3 gap-2">
-                  <button onClick={() => setSelectedArea('VIVERO')} disabled={skipAreaSelection || !isAttendanceValid} className={`area-btn w-full px-4 py-3 text-sm rounded-md shadow-sm focus:outline-none disabled:bg-gray-200 disabled:cursor-not-allowed ${selectedArea === 'VIVERO' ? 'scanner-mode-selected' : ''}`}>VIVERO</button>
-                  <button onClick={() => setSelectedArea('QUINTA')} disabled={skipAreaSelection || !isAttendanceValid} className={`area-btn w-full px-4 py-3 text-sm rounded-md shadow-sm focus:outline-none disabled:bg-gray-200 disabled:cursor-not-allowed ${selectedArea === 'QUINTA' ? 'scanner-mode-selected' : ''}`}>QUINTA</button>
-                  <button onClick={() => setSelectedArea('LAVADO')} disabled={skipAreaSelection || !isAttendanceValid} className={`area-btn w-full px-4 py-3 text-sm rounded-md shadow-sm focus:outline-none disabled:bg-gray-200 disabled:cursor-not-allowed ${selectedArea === 'LAVADO' ? 'scanner-mode-selected' : ''}`}>LAVADO</button>
+                  <button onClick={() => setSelectedArea('VIVERO')} disabled={skipAreaSelection} className={`area-btn w-full px-4 py-3 text-sm rounded-md shadow-sm focus:outline-none disabled:bg-gray-200 disabled:cursor-not-allowed ${selectedArea === 'VIVERO' ? 'scanner-mode-selected' : ''}`}>VIVERO</button>
+                  <button onClick={() => setSelectedArea('QUINTA')} disabled={skipAreaSelection} className={`area-btn w-full px-4 py-3 text-sm rounded-md shadow-sm focus:outline-none disabled:bg-gray-200 disabled:cursor-not-allowed ${selectedArea === 'QUINTA' ? 'scanner-mode-selected' : ''}`}>QUINTA</button>
+                  <button onClick={() => setSelectedArea('LAVADO')} disabled={skipAreaSelection} className={`area-btn w-full px-4 py-3 text-sm rounded-md shadow-sm focus:outline-none disabled:bg-gray-200 disabled:cursor-not-allowed ${selectedArea === 'LAVADO' ? 'scanner-mode-selected' : ''}`}>LAVADO</button>
               </div>
               <div className="flex items-center space-x-2 mt-2">
-                  <Checkbox id="skip-area" checked={skipAreaSelection} onCheckedChange={(checked) => setSkipAreaSelection(Boolean(checked))} disabled={!isAttendanceValid} />
+                  <Checkbox id="skip-area" checked={skipAreaSelection} onCheckedChange={(checked) => setSkipAreaSelection(Boolean(checked))} />
                   <Label htmlFor="skip-area" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
                       Continuar sin asignar área
                   </Label>
@@ -1930,10 +1965,27 @@ const deleteRow = (codeToDelete: string) => {
                     placeholder="Selecciona o busca personal..."
                     emptyMessage="No se encontró personal."
                     buttonClassName="bg-transparent border-input"
-                    disabled={!isAttendanceValid}
                 />
+                {selectedPersonal && !isTargetPersonAttending && !checkingTargetAttendance && (
+                    <p className="text-[10px] text-red-600 font-bold mt-1 animate-pulse">
+                        ⚠️ EL OPERARIO NO HA REGISTRADO ENTRADA HOY
+                    </p>
+                )}
+                {checkingTargetAttendance && (
+                    <div className="flex items-center gap-1 mt-1">
+                        <Loader2 className="h-2 w-2 animate-spin text-gray-400" />
+                        <span className="text-[10px] text-gray-400 uppercase font-black">Validando asistencia...</span>
+                    </div>
+                )}
             </div>
-             <Button onClick={handleManualAssociate} disabled={isAssociationDisabled || loading} className="bg-starbucks-accent hover:bg-starbucks-green text-white w-full sm:w-auto">
+             <Button 
+                onClick={handleManualAssociate} 
+                disabled={isAssociationDisabled || loading} 
+                className={cn(
+                    "bg-starbucks-accent hover:bg-starbucks-green text-white w-full sm:w-auto",
+                    !isTargetPersonAttending && selectedPersonal && "opacity-50 grayscale"
+                )}
+            >
                 <UserPlus className="mr-2 h-4 w-4" /> Asociar y Guardar
             </Button>
           </div>
@@ -1946,10 +1998,10 @@ const deleteRow = (codeToDelete: string) => {
                 onChange={(e) => setLoteProgramado(e.target.value)}
                 placeholder="Ej. 12345"
                 className="bg-transparent"
-                disabled={loading || !isAttendanceValid}
+                disabled={loading}
               />
           </div>
-          <Button onClick={handleProduccionProgramada} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg shadow-sm text-sm transition-colors duration-200 w-full" disabled={isAssociationDisabled || loading}>
+          <Button onClick={handleProduccionProgramada} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg shadow-sm text-sm transition-colors duration-200 w-full" disabled={scannedData.length === 0 || loading || !selectedPersonal || (!selectedArea && !skipAreaSelection)}>
             Guardar como Producción Programada
           </Button>
 
@@ -2049,7 +2101,7 @@ const deleteRow = (codeToDelete: string) => {
                         <AlertTriangle className="h-5 w-5" />
                         <AlertTitle className="font-black uppercase tracking-widest text-xs">Asistencia Requerida</AlertTitle>
                         <AlertDescription className="text-sm font-bold">
-                            No es posible asignar etiquetas porque el empleado no tiene una entrada activa registrada para el día de hoy.
+                            Tú (encargado) no tienes una entrada activa registrada hoy. No es posible asignar etiquetas.
                         </AlertDescription>
                     </Alert>
                 )}
@@ -2366,4 +2418,3 @@ const deleteRow = (codeToDelete: string) => {
     </>
   );
 }
-
