@@ -53,6 +53,7 @@ import { useAuth } from '@/components/AuthProvider';
 import { Textarea } from '@/components/ui/textarea';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 type ScanResult = {
     name: string | null;
@@ -118,7 +119,6 @@ export default function CalificarPage() {
   const [timerStartTime, setTimerStartTime] = useState<Date | null>(null);
   const [elapsedTime, setElapsedTime] = useState(0);
 
-  // States for Discrepancy Report
   const [isDiscrepancyModalOpen, setIsDiscrepancyModalOpen] = useState(false);
   const [itemToReport, setItemToReport] = useState<ScanResult | null>(null);
   const [searchQueryDespachado, setSearchQueryDespachado] = useState('');
@@ -199,14 +199,12 @@ export default function CalificarPage() {
     }
   }, []);
 
-  // Carga inicial al abrir el buscador
   useEffect(() => {
     if (isInventoryPopoverOpen && inventoryList.length === 0) {
         fetchInventoryItems('');
     }
   }, [isInventoryPopoverOpen, inventoryList.length, fetchInventoryItems]);
 
-  // Búsqueda dinámica con debounce
   useEffect(() => {
     const timer = setTimeout(() => {
         if (isInventoryPopoverOpen) {
@@ -1085,7 +1083,7 @@ const triggerMassQualify = async () => {
                                </div>
                            </PopoverTrigger>
                            <PopoverContent className="w-[--radix-popover-trigger-width] p-0 z-[110]" align="start">
-                               <div className="max-h-[300px] overflow-y-auto flex flex-col p-1 bg-white shadow-xl rounded-md border">
+                               <ScrollArea className="max-h-[300px] overflow-y-auto flex flex-col bg-white shadow-xl rounded-md border">
                                    {loadingInventory && <div className="p-4 text-center text-xs text-muted-foreground"><Loader2 className="animate-spin h-4 w-4 mx-auto" /></div>}
                                    {!loadingInventory && inventoryList.length === 0 && <div className="p-4 text-center text-xs text-muted-foreground">No se encontraron resultados.</div>}
                                    {inventoryList.map((item, idx) => (
@@ -1106,7 +1104,7 @@ const triggerMassQualify = async () => {
                                            {searchQueryDespachado === item.subcategoria && <Check className="h-4 w-4 text-starbucks-green" />}
                                        </div>
                                    ))}
-                               </div>
+                               </ScrollArea>
                            </PopoverContent>
                        </Popover>
                    </div>

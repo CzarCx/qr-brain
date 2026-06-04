@@ -152,7 +152,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     router.push('/login');
   };
 
-  // Manejo de Redirecciones Seguras
   useEffect(() => {
     if (loading) return;
 
@@ -168,10 +167,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    // Si es ADMIN, tiene acceso total
     if (roles.includes('ADMIN')) return;
 
-    // Validación de permisos por ruta
     const requiredRoles = ROUTE_PERMISSIONS[pathname];
     if (requiredRoles && requiredRoles.length > 0) {
       const hasPermission = requiredRoles.some(r => roles.includes(r));

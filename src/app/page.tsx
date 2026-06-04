@@ -168,14 +168,12 @@ export default function Home() {
   const [isAttendanceValid, setIsAttendanceValid] = useState(false);
   const [attendanceChecked, setAttendanceChecked] = useState(false);
 
-  // States for deleting batch audit
   const [isDeleteLoteModalOpen, setIsDeleteLoteModalOpen] = useState(false);
   const [loteIdToDelete, setLoteIdToDelete] = useState('');
   const [deleteLoteName, setDeleteLoteName] = useState('');
   const [deleteLoteReason, setDeleteLoteReason] = useState('');
 
 
-  // Refs para elementos del DOM y la instancia del escáner
   const html5QrCodeRef = useRef<Html5Qrcode | null>(null);
   const physicalScannerInputRef = useRef<HTMLInputElement | null>(null);
   const readerRef = useRef<HTMLDivElement>(null);
@@ -183,7 +181,6 @@ export default function Home() {
   const printRef = useRef<HTMLDivElement>(null);
 
 
-  // Refs para valores que no necesitan re-renderizar el componente
   const lastScanTimeRef = useRef(Date.now());
   const lastSuccessfullyScannedCodeRef = useRef<string | null>(null);
   const scannedCodesRef = useRef(new Set<string>());
@@ -261,11 +258,9 @@ export default function Home() {
     };
   }, [timerStartTime]);
 
-  // Persistencia de sesión en LocalStorage
   useEffect(() => {
     setIsMounted(true);
     
-    // Recuperar datos guardados
     const savedData = localStorage.getItem('scannedData');
     if (savedData) {
         try {
@@ -319,14 +314,12 @@ export default function Home() {
     };
   }, [fetchCreatedLotes]);
 
-  // Vincular encargado con el perfil de usuario logueado (Prioridad)
   useEffect(() => {
     if (profile?.name) {
       setEncargado(profile.name);
     }
   }, [profile]);
 
-  // Guardar cambios en LocalStorage automáticamente
   useEffect(() => {
     if (isMounted) {
         localStorage.setItem('scannedData', JSON.stringify(scannedData));
@@ -357,17 +350,15 @@ export default function Home() {
     };
   }, [scannedData]);
 
-  // Validation of Attendance logic optimized - Fixed to use Labels DB where session is active
   useEffect(() => {
     if (!user?.email) return;
 
     const checkAttendance = async () => {
         try {
-            // 1. Obtener ID del empleado desde la tabla pública en la DB de etiquetas
             const { data: empData, error: empError } = await supabaseEtiquetas
                 .from('empleados')
                 .select('id')
-                .eq('email', user.email)
+                .ilike('email', user.email)
                 .maybeSingle();
 
             if (empError || !empData) {
@@ -377,15 +368,12 @@ export default function Home() {
             }
 
             const employeeId = empData.id;
-
-            // 2. Obtener fecha actual en formato local YYYY-MM-DD
             const now = new Date();
             const year = now.getFullYear();
             const month = String(now.getMonth() + 1).padStart(2, '0');
             const day = String(now.getDate()).padStart(2, '0');
             const today = `${year}-${month}-${day}`;
 
-            // 3. Consultar el último registro del checador para hoy en la DB de etiquetas
             const { data, error } = await supabaseEtiquetas
                 .from('registro_checador')
                 .select('tipo_registro')
@@ -414,7 +402,6 @@ export default function Home() {
 
   useEffect(() => {
     const fetchPersonal = async () => {
-        // Cargar empleados de la DB de etiquetas (donde está el checador operativo)
         const { data, error } = await supabaseEtiquetas
             .from('empleados')
             .select('id, nombres, apellido_paterno, apellido_materno, email')
@@ -478,7 +465,6 @@ export default function Home() {
     setTimerStartTime(null);
     timerStartedRef.current = false;
     
-    // Limpiar localStorage
     localStorage.removeItem('scannedData');
     localStorage.removeItem('selectedPersonal');
     localStorage.removeItem('loteProgramado');
@@ -490,8 +476,8 @@ export default function Home() {
     const oscillator = context.createOscillator();
     const gainNode = context.createGain();
     oscillator.type = 'square';
-    oscillator.frequency.setValueAtTime(880, context.currentTime); // A5 note
-    gainNode.gain.setValueAtTime(1, context.currentTime); // Further increased Volume
+    oscillator.frequency.setValueAtTime(880, context.currentTime);
+    gainNode.gain.setValueAtTime(1, context.currentTime);
     gainNode.gain.exponentialRampToValueAtTime(0.00001, context.currentTime + 0.1);
     oscillator.connect(gainNode);
     gainNode.connect(context.destination);
@@ -505,8 +491,8 @@ export default function Home() {
     const oscillator = context.createOscillator();
     const gainNode = context.createGain();
     oscillator.type = 'sawtooth';
-    oscillator.frequency.setValueAtTime(440, context.currentTime); // A4
-    gainNode.gain.setValueAtTime(1.5, context.currentTime); // Increased Volume
+    oscillator.frequency.setValueAtTime(440, context.currentTime);
+    gainNode.gain.setValueAtTime(1.5, context.currentTime);
     gainNode.gain.exponentialRampToValueAtTime(0.00001, context.currentTime + 0.2);
     oscillator.connect(gainNode);
     gainNode.connect(context.destination);
@@ -719,9 +705,7 @@ export default function Home() {
         if (parsed && parsed.id) {
             finalCode = String(parsed.id);
         }
-    } catch (e) {
-        // Not a JSON, proceed with the original decodedText
-    }
+    } catch (e) {}
     
     setLastScannedCode(finalCode);
   }, [scannerActive, isAttendanceValid]);
@@ -803,7 +787,6 @@ export default function Home() {
         return;
     }
     
-    // Logic for 'assign' mode
     try {
         if (scannedCodesRef.current.has(finalCode) || finalCode === lastSuccessfullyScannedCodeRef.current) {
             if (scannedCodesRef.current.has(finalCode)) {
@@ -842,7 +825,6 @@ export default function Home() {
         }
 
 
-        // Strict validation flow (Handling multiple records for the same code)
         const { data: etiquetaRows, error: etiquetaInfoError } = await supabaseEtiquetas
             .from('etiquetas_i')
             .select('code_i, sku, quantity, product, organization, sales_num, deli_date')
@@ -859,7 +841,6 @@ export default function Home() {
             return;
         }
 
-        // Validate all cutting codes associated with this package code
         const uniqueCodeIs = Array.from(new Set(etiquetaRows.map(r => r.code_i).filter(Boolean)));
         if (uniqueCodeIs.length === 0) {
              showModalNotification('Error de Etiqueta', `La etiqueta ${finalCode} no tiene un código de corte asociado.`, 'destructive');
@@ -907,7 +888,6 @@ export default function Home() {
             return;
         }
 
-        // Aggregate details for all records sharing this code
         const allSkus = etiquetaRows.map(r => r.sku).filter(Boolean).join(' | ');
         const totalQuantity = etiquetaRows.reduce((acc, curr) => acc + (curr.quantity || 0), 0);
         const firstRow = etiquetaRows[0];
@@ -972,7 +952,7 @@ export default function Home() {
     const cleanup = () => {
         if (qrCode && qrCode.isScanning) {
             return qrCode.stop().catch(err => {
-                if (!String(err).includes('not started')) {
+                if (!String(err).includes('not started') && !String(err).includes('transition')) {
                     console.error("Fallo al detener el escáner:", err);
                 }
             }).finally(() => {
@@ -1173,28 +1153,22 @@ const deleteRow = (codeToDelete: string) => {
   };
 
   const ticketData = useMemo(() => {
-    // 1. Resumen: Agrupar por subcategoría para sumar piezas y contar etiquetas/pedidos
     const resumenMap: Record<string, { pieces: number, orders: number }> = {};
-    
-    // 2. Desglose: Agrupar por subcategoría Y cantidad específica
     const desgloseMap: Record<string, number> = {};
 
     scannedData.forEach(item => {
       const cat = item.subcategoria || item.sku || 'SIN CATEGORÍA';
       const qty = item.cantidad || 0;
       
-      // Lógica Resumen
       if (!resumenMap[cat]) resumenMap[cat] = { pieces: 0, orders: 0 };
       resumenMap[cat].pieces += qty;
       resumenMap[cat].orders += 1;
 
-      // Lógica Desglose
       const key = `${qty}|${cat}`;
       desgloseMap[key] = (desgloseMap[key] || 0) + 1;
     });
 
     const now = new Date();
-    // Calculate real deadline based on total estimated time (sequential)
     let cumulativeTime = now;
     scannedData.forEach(item => {
       if (item.esti_time) {
@@ -1226,16 +1200,14 @@ const deleteRow = (codeToDelete: string) => {
     const doc = new jsPDF();
     const pageWidth = doc.internal.pageSize.getWidth();
 
-    // Title
     doc.setFontSize(18);
-    doc.setTextColor(0, 98, 65); // Starbucks Green
+    doc.setTextColor(0, 98, 65);
     doc.text("TICKET DE REQUERIMIENTOS", pageWidth / 2, 20, { align: "center" });
     
     doc.setFontSize(10);
     doc.setTextColor(100);
     doc.text(`${ticketData.date} ${ticketData.time}`, pageWidth / 2, 28, { align: "center" });
 
-    // Header Info
     doc.setFontSize(12);
     doc.setTextColor(0);
     doc.text(`TICKET ID: ${ticketData.ticketId}`, 14, 40);
@@ -1243,17 +1215,15 @@ const deleteRow = (codeToDelete: string) => {
     doc.text(`ÁREA: ${ticketData.area}`, 14, 54);
     doc.text(`EMPACADOR: ${ticketData.packer}`, 14, 61);
 
-    // Table
     autoTable(doc, {
       startY: 75,
       head: [['PIEZAS', 'SUBCATEGORÍA', 'PEDIDOS']],
       body: ticketData.resumen.map(item => [item.pieces, item.sub_cat, item.orders]),
       theme: 'striped',
-      headStyles: { fillColor: [0, 98, 65] }, // Starbucks Green
+      headStyles: { fillColor: [0, 98, 65] },
       styles: { cellPadding: 3, fontSize: 10 },
     });
 
-    // Total
     const finalY = (doc as any).lastAutoTable.finalY || 80;
     doc.setFontSize(14);
     doc.setTextColor(0, 98, 65);
@@ -1456,7 +1426,6 @@ const deleteRow = (codeToDelete: string) => {
         setLoadedProgData(data);
         const originalAssignee = byPerson ? filterValue : (data.length > 0 ? data[0].name : '');
         
-        // Find ID if possible
         const matchedEmp = personalList.find(p => p.name === originalAssignee);
         setPersonToAssign(matchedEmp?.id || originalAssignee);
 
@@ -1545,7 +1514,6 @@ const deleteRow = (codeToDelete: string) => {
 
         const codesToDelete = loadedProgData.map(item => item.code);
         
-        // BORRADO SEGURO: Filtramos por lote o por persona para evitar borrar de más
         let deleteQuery = supabase.from('personal_prog').delete().in('code', codesToDelete);
         if (cargaFilterType === 'lote' && selectedLoteParaCargar) {
             deleteQuery = deleteQuery.eq('lote_p', selectedLoteParaCargar);
@@ -1647,7 +1615,6 @@ const deleteRow = (codeToDelete: string) => {
 
     setLoading(true);
     try {
-      // 1. Guardar auditoria en drop_lote
       const { error: auditError } = await supabase
         .from('drop_lote')
         .insert([{
@@ -1659,7 +1626,6 @@ const deleteRow = (codeToDelete: string) => {
 
       if (auditError) throw new Error(`Error al registrar auditoría: ${auditError.message}`);
 
-      // 2. Eliminar de personal_prog
       const { error: deleteError } = await supabase
         .from('personal_prog')
         .delete()
@@ -1669,7 +1635,6 @@ const deleteRow = (codeToDelete: string) => {
 
       showModalNotification('¡Éxito!', `El lote ${loteIdToDelete} ha sido eliminado y auditado.`, 'success');
       
-      // Resetear estados
       setIsDeleteLoteModalOpen(false);
       setLoteIdToDelete('');
       setDeleteLoteName('');
@@ -1801,7 +1766,6 @@ const deleteRow = (codeToDelete: string) => {
   const groupedEncargadoOptions = useMemo(() => {
     let list = [...encargadosList];
     
-    // Si el usuario logueado no está en la lista, añadirlo dinámicamente para que el Combobox lo muestre
     if (profile?.name && !list.some(e => e.name === profile.name)) {
         list.push({ name: profile.name, organization: 'Usuario Actual' });
     }
@@ -2150,11 +2114,11 @@ const deleteRow = (codeToDelete: string) => {
                 <div className="p-4 rounded-lg border-2 border-gray-300 bg-gray-50">
                     <Label className="text-sm font-bold text-starbucks-dark">Verificar Código de Corte</Label>
                      <div className="flex items-center gap-2 mt-1">
-                        <Input
+                        <input
                             type="text"
                             value={verificationCode}
                             onChange={(e) => setVerificationCode(e.target.value)}
-                            className="flex-grow bg-transparent"
+                            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 flex-grow bg-transparent"
                             placeholder="Ingresa el código de corte..."
                             onKeyDown={(e) => e.key === 'Enter' && handleVerifyCode()}
                             disabled={isVerifying || !encargado.trim() || !isAttendanceValid}
@@ -2376,7 +2340,6 @@ const deleteRow = (codeToDelete: string) => {
                 </DialogContent>
             </Dialog>
 
-            {/* Modal de auditoría para borrado de lote */}
             <Dialog open={isDeleteLoteModalOpen} onOpenChange={setIsDeleteLoteModalOpen}>
                 <DialogContent className="sm:max-w-md">
                     <DialogHeader>
