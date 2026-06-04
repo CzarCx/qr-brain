@@ -1069,6 +1069,10 @@ export default function Home() {
         showModalNotification('Falta Encargado', 'Por favor, ingresa el nombre del encargado.', 'destructive');
         return;
       }
+      if (!isAttendanceValid) {
+          showModalNotification('Asistencia Requerida', 'No es posible asignar etiquetas porque el empleado no tiene una entrada activa registrada para el día de hoy.', 'destructive');
+          return;
+      }
       
       const manualCode = manualCodeInput.value.trim();
       if (!manualCode) {
@@ -1374,6 +1378,10 @@ const deleteRow = (codeToDelete: string) => {
 };
 
   const handleOpenCargarSeccion = async () => {
+    if (!isAttendanceValid) {
+        showModalNotification('Asistencia Requerida', 'No es posible cargar etiquetas porque el empleado no tiene una entrada activa registrada para el día de hoy.', 'destructive');
+        return;
+    }
     setShowCargarProduccion(true);
     setLoadingProgramados(true);
     try {
@@ -1545,7 +1553,7 @@ const deleteRow = (codeToDelete: string) => {
     }
 };
 
- const handleVerifyCode = async () => {
+  const handleVerifyCode = async () => {
     if (!encargado.trim()) {
       showModalNotification('Falta Encargado', 'Por favor, selecciona un encargado para verificar el código.', 'destructive');
       return;
@@ -1847,7 +1855,7 @@ const deleteRow = (codeToDelete: string) => {
                        )
                      )}
                 </div>
-                <Button onClick={handleCargarProgramada} disabled={loading || (cargaFilterType === 'persona' && !selectedPersonalParaCargar) || (cargaFilterType === 'lote' && !selectedLoteParaCargar)} className="bg-green-600 hover:bg-green-700">
+                <Button onClick={handleCargarProgramada} disabled={loading || !isAttendanceValid || (cargaFilterType === 'persona' && !selectedPersonalParaCargar) || (cargaFilterType === 'lote' && !selectedLoteParaCargar)} className="bg-green-600 hover:bg-green-700">
                     {loading ? 'Cargando...' : 'Cargar'}
                 </Button>
             </div>
@@ -1902,7 +1910,7 @@ const deleteRow = (codeToDelete: string) => {
 
               <div className="flex gap-2 justify-end">
                 <Button variant="outline" onClick={() => { setLoadedProgData([]); setPersonToAssign(''); setSelectedPersonalParaCargar(''); setSelectedLoteParaCargar(''); }}>Cancelar</Button>
-                <Button onClick={handleFinalizeAssociation} disabled={loading || !personToAssign}>
+                <Button onClick={handleFinalizeAssociation} disabled={loading || !personToAssign || !isAttendanceValid}>
                     {loading ? 'Asociando...' : 'Asociar y Guardar Producción'}
                 </Button>
               </div>
@@ -1923,11 +1931,11 @@ const deleteRow = (codeToDelete: string) => {
         <div className="flex flex-wrap justify-between items-center mb-2 gap-2">
             <h2 className="text-lg font-bold text-starbucks-dark">Registros Pendientes</h2>
              <div className="flex flex-wrap gap-2">
-                <Button onClick={handleShowTicketPreview} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-sm text-sm transition-colors duration-200" disabled={scannedData.length === 0}>
+                <Button onClick={handleShowTicketPreview} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-sm text-sm transition-colors duration-200" disabled={scannedData.length === 0 || !isAttendanceValid}>
                     <FileText className="mr-2 h-4 w-4" /> Ticket
                 </Button>
-                <Button onClick={handleOpenCargarSeccion} className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg shadow-sm text-sm transition-colors duration-200" disabled={loading}>
-                    Cargar
+                <Button onClick={handleOpenCargarSeccion} className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg shadow-sm text-sm transition-colors duration-200" disabled={loading || !isAttendanceValid}>
+                    <FileUp className="mr-2 h-4 w-4" /> Cargar
                 </Button>
                 <button id="clear-data" onClick={() => { if(window.confirm('¿Estás seguro?')) clearSessionData() }} className="px-3 py-1.5 bg-yellow-500 hover:bg-yellow-600 text-white font-semibold rounded-lg shadow-sm text-xs transition-colors duration-200">Limpiar</button>
             </div>
@@ -1939,12 +1947,12 @@ const deleteRow = (codeToDelete: string) => {
           <div>
               <Label className="block text-sm font-bold text-starbucks-dark mb-2">Área de Trabajo:</Label>
               <div className="grid grid-cols-3 gap-2">
-                  <button onClick={() => setSelectedArea('VIVERO')} disabled={skipAreaSelection} className={`area-btn w-full px-4 py-3 text-sm rounded-md shadow-sm focus:outline-none disabled:bg-gray-200 disabled:cursor-not-allowed ${selectedArea === 'VIVERO' ? 'scanner-mode-selected' : ''}`}>VIVERO</button>
-                  <button onClick={() => setSelectedArea('QUINTA')} disabled={skipAreaSelection} className={`area-btn w-full px-4 py-3 text-sm rounded-md shadow-sm focus:outline-none disabled:bg-gray-200 disabled:cursor-not-allowed ${selectedArea === 'QUINTA' ? 'scanner-mode-selected' : ''}`}>QUINTA</button>
-                  <button onClick={() => setSelectedArea('LAVADO')} disabled={skipAreaSelection} className={`area-btn w-full px-4 py-3 text-sm rounded-md shadow-sm focus:outline-none disabled:bg-gray-200 disabled:cursor-not-allowed ${selectedArea === 'LAVADO' ? 'scanner-mode-selected' : ''}`}>LAVADO</button>
+                  <button onClick={() => setSelectedArea('VIVERO')} disabled={skipAreaSelection || !isAttendanceValid} className={`area-btn w-full px-4 py-3 text-sm rounded-md shadow-sm focus:outline-none disabled:bg-gray-200 disabled:cursor-not-allowed ${selectedArea === 'VIVERO' ? 'scanner-mode-selected' : ''}`}>VIVERO</button>
+                  <button onClick={() => setSelectedArea('QUINTA')} disabled={skipAreaSelection || !isAttendanceValid} className={`area-btn w-full px-4 py-3 text-sm rounded-md shadow-sm focus:outline-none disabled:bg-gray-200 disabled:cursor-not-allowed ${selectedArea === 'QUINTA' ? 'scanner-mode-selected' : ''}`}>QUINTA</button>
+                  <button onClick={() => setSelectedArea('LAVADO')} disabled={skipAreaSelection || !isAttendanceValid} className={`area-btn w-full px-4 py-3 text-sm rounded-md shadow-sm focus:outline-none disabled:bg-gray-200 disabled:cursor-not-allowed ${selectedArea === 'LAVADO' ? 'scanner-mode-selected' : ''}`}>LAVADO</button>
               </div>
               <div className="flex items-center space-x-2 mt-2">
-                  <Checkbox id="skip-area" checked={skipAreaSelection} onCheckedChange={(checked) => setSkipAreaSelection(Boolean(checked))} />
+                  <Checkbox id="skip-area" checked={skipAreaSelection} onCheckedChange={(checked) => setSkipAreaSelection(Boolean(checked))} disabled={!isAttendanceValid} />
                   <Label htmlFor="skip-area" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
                       Continuar sin asignar área
                   </Label>
@@ -1961,6 +1969,7 @@ const deleteRow = (codeToDelete: string) => {
                     placeholder="Selecciona o busca personal..."
                     emptyMessage="No se encontró personal."
                     buttonClassName="bg-transparent border-input"
+                    disabled={!isAttendanceValid}
                 />
             </div>
              <Button onClick={handleManualAssociate} disabled={isAssociationDisabled || loading} className="bg-starbucks-accent hover:bg-starbucks-green text-white w-full sm:w-auto">
@@ -1976,7 +1985,7 @@ const deleteRow = (codeToDelete: string) => {
                 onChange={(e) => setLoteProgramado(e.target.value)}
                 placeholder="Ej. 12345"
                 className="bg-transparent"
-                disabled={loading}
+                disabled={loading || !isAttendanceValid}
               />
           </div>
           <Button onClick={handleProduccionProgramada} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg shadow-sm text-sm transition-colors duration-200 w-full" disabled={isAssociationDisabled || loading}>
@@ -2397,3 +2406,4 @@ const deleteRow = (codeToDelete: string) => {
     </>
   );
 }
+
