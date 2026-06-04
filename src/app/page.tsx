@@ -15,7 +15,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Zap, ZoomIn, UserPlus, PlusCircle, Clock, AlertTriangle, Wifi, WifiOff, Search, XCircle, CheckCircle, Trash2, Lock, Unlock, FileText, Printer, Download, FileUp, Loader2 } from 'lucide-react';
+import { Zap, ZoomIn, UserPlus, PlusCircle, Clock, AlertTriangle, Wifi, WifiOff, Search, XCircle, CheckCircle, Trash2, Lock, Unlock, FileText, Printer, Download, FileUp, Loader2, Copy, ChevronDown, ChevronUp } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Combobox } from '@/components/ui/combobox';
 import {
@@ -38,7 +38,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
   AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
+} from "@/AlertDialog";
 import { Checkbox } from '@/components/ui/checkbox';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useReactToPrint } from "react-to-print";
@@ -47,6 +47,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { Textarea } from '@/components/ui/textarea';
 import { useAuth } from '@/components/AuthProvider';
+import { cn } from '@/lib/utils';
 
 
 type ScannedItem = {
@@ -1851,7 +1852,7 @@ const deleteRow = (codeToDelete: string) => {
                        )
                      )}
                 </div>
-                <Button onClick={handleCargarProgramada} disabled={loading || (cargaFilterType === 'persona' && !selectedPersonalParaCargar) || (cargaFilterType === 'lote' && !selectedLoteParaCargar)} className="bg-green-600 hover:bg-green-700">
+                <Button onClick={handleCargarProgramada} disabled={loading || (cargaFilterType === 'persona' && !selectedPersonalParaCargar) || (cargaFilterType === 'lote' && !selectedLoteParaCargar) || !isAttendanceValid} className="bg-green-600 hover:bg-green-700">
                     {loading ? 'Cargando...' : 'Cargar'}
                 </Button>
             </div>
@@ -1906,7 +1907,7 @@ const deleteRow = (codeToDelete: string) => {
 
               <div className="flex gap-2 justify-end">
                 <Button variant="outline" onClick={() => { setLoadedProgData([]); setPersonToAssign(''); setSelectedPersonalParaCargar(''); setSelectedLoteParaCargar(''); }}>Cancelar</Button>
-                <Button onClick={handleFinalizeAssociation} disabled={loading || !personToAssign}>
+                <Button onClick={handleFinalizeAssociation} disabled={loading || !personToAssign || !isAttendanceValid}>
                     {loading ? 'Asociando...' : 'Asociar y Guardar Producción'}
                 </Button>
               </div>
@@ -1927,10 +1928,10 @@ const deleteRow = (codeToDelete: string) => {
         <div className="flex flex-wrap justify-between items-center mb-2 gap-2">
             <h2 className="text-lg font-bold text-starbucks-dark">Registros Pendientes</h2>
              <div className="flex flex-wrap gap-2">
-                <Button onClick={handleShowTicketPreview} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-sm text-sm transition-colors duration-200" disabled={scannedData.length === 0}>
+                <Button onClick={handleShowTicketPreview} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-sm text-sm transition-colors duration-200" disabled={scannedData.length === 0 || !isAttendanceValid}>
                     <FileText className="mr-2 h-4 w-4" /> Ticket
                 </Button>
-                <Button onClick={handleOpenCargarSeccion} className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg shadow-sm text-sm transition-colors duration-200" disabled={loading}>
+                <Button onClick={handleOpenCargarSeccion} className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg shadow-sm text-sm transition-colors duration-200" disabled={loading || !isAttendanceValid}>
                     <FileUp className="mr-2 h-4 w-4" /> Cargar
                 </Button>
                 <button id="clear-data" onClick={() => { if(window.confirm('¿Estás seguro?')) clearSessionData() }} className="px-3 py-1.5 bg-yellow-500 hover:bg-yellow-600 text-white font-semibold rounded-lg shadow-sm text-xs transition-colors duration-200">Limpiar</button>
@@ -1980,10 +1981,10 @@ const deleteRow = (codeToDelete: string) => {
             </div>
              <Button 
                 onClick={handleManualAssociate} 
-                disabled={isAssociationDisabled || loading} 
+                disabled={isAssociationDisabled || loading || !isAttendanceValid} 
                 className={cn(
                     "bg-starbucks-accent hover:bg-starbucks-green text-white w-full sm:w-auto",
-                    !isTargetPersonAttending && selectedPersonal && "opacity-50 grayscale"
+                    (!isTargetPersonAttending || !isAttendanceValid) && selectedPersonal && "opacity-50 grayscale"
                 )}
             >
                 <UserPlus className="mr-2 h-4 w-4" /> Asociar y Guardar
@@ -2001,7 +2002,7 @@ const deleteRow = (codeToDelete: string) => {
                 disabled={loading}
               />
           </div>
-          <Button onClick={handleProduccionProgramada} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg shadow-sm text-sm transition-colors duration-200 w-full" disabled={scannedData.length === 0 || loading || !selectedPersonal || (!selectedArea && !skipAreaSelection)}>
+          <Button onClick={handleProduccionProgramada} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg shadow-sm text-sm transition-colors duration-200 w-full" disabled={scannedData.length === 0 || loading || !selectedPersonal || (!selectedArea && !skipAreaSelection) || !isAttendanceValid}>
             Guardar como Producción Programada
           </Button>
 
