@@ -28,17 +28,6 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/AlertDialog";
 import { Checkbox } from '@/components/ui/checkbox';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useReactToPrint } from "react-to-print";
@@ -111,13 +100,6 @@ export default function Home() {
   const [selectedScannerMode, setSelectedScannerMode] = useState('camara');
   const [scannerActive, setScannerActive] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [confirmation, setConfirmation] = useState({
-    isOpen: false,
-    title: '',
-    message: '',
-    code: '',
-    resolve: (value: boolean) => {},
-  });
   const [cameraCapabilities, setCameraCapabilities] = useState<any>(null);
   const [isFlashOn, setIsFlashOn] = useState(false);
   const [zoom, setZoom] = useState(1);
@@ -302,16 +284,30 @@ export default function Home() {
 
   // VALIDACIÓN DE ASISTENCIA Y NOMBRE DEL ENCARGADO (LOGUEADO)
   useEffect(() => {
-    if (!user?.id) return;
+    if (!user?.id && !user?.email) return;
 
     const checkAttendanceAndFetchName = async () => {
         try {
-            // 1. Obtener nombre del empleado desde la tabla operativa
-            const { data: empData } = await supabaseEtiquetas
+            // 1. Obtener nombre del empleado desde la tabla operativa 'empleados'
+            // Intentamos por ID y como respaldo por correo electrónico
+            let empData = null;
+            
+            const { data: empById } = await supabaseEtiquetas
                 .from('empleados')
-                .select('nombres, apellido_paterno, apellido_materno')
+                .select('nombres, apellido_paterno, apellido_materno, email')
                 .eq('id', user.id)
                 .maybeSingle();
+            
+            empData = empById;
+
+            if (!empData && user.email) {
+                const { data: empByEmail } = await supabaseEtiquetas
+                    .from('empleados')
+                    .select('nombres, apellido_paterno, apellido_materno, email')
+                    .ilike('email', user.email)
+                    .maybeSingle();
+                empData = empByEmail;
+            }
 
             if (empData) {
                 const fullName = [empData.nombres, empData.apellido_paterno, empData.apellido_materno].filter(Boolean).join(' ');
@@ -1161,11 +1157,6 @@ const deleteRow = (codeToDelete: string) => {
     await saveToPersonal(selectedPersonal);
   };
 
-  const handleConfirmation = (choice: boolean) => {
-    confirmation.resolve(choice);
-    setConfirmation(prev => ({ ...prev, isOpen: false }));
-  };
-
   const ticketData = useMemo(() => {
     const resumenMap: Record<string, { pieces: number, orders: number }> = {};
     const desgloseMap: Record<string, number> = {};
@@ -1689,7 +1680,7 @@ const deleteRow = (codeToDelete: string) => {
       info: 'bg-blue-500/80 text-white'
   };
   
-  const isAssociationDisabled = scannedData.length === 0 || loading || (!selectedArea && !skipAreaSelection) || !selectedPersonal || !isTargetPersonAttending;
+  const isAssociationDisabled = scannedData.length === 0 || loading || (!selectedArea && !skipAreaSelection) || !selectedPersonal || !isTargetPersonAttending || !isAttendanceValid;
 
   const totalEstimatedTime = useMemo(() => {
     return scannedData.reduce((acc, item) => acc + (item.esti_time || 0), 0);
@@ -1784,8 +1775,9 @@ const deleteRow = (codeToDelete: string) => {
   const groupedEncargadoOptions = useMemo(() => {
     let list = [...encargadosList];
     
-    if (profile?.name && !list.some(e => e.name === profile.name)) {
-        list.push({ name: profile.name, organization: 'Usuario Actual' });
+    // Inyectar el encargado actual (si fue detectado por sesión) en la lista para que el Combobox lo reconozca
+    if (encargado && !list.some(e => e.name === encargado)) {
+        list.unshift({ name: encargado, organization: 'Usuario Actual' });
     }
 
     if (list.length === 0) return [];
@@ -1803,7 +1795,7 @@ const deleteRow = (codeToDelete: string) => {
         label: org,
         options: grouped[org].sort((a, b) => a.label.localeCompare(b.label))
     }));
-  }, [encargadosList, profile]);
+  }, [encargadosList, encargado]);
 
   const CargarProduccionSection = (
     <div className="w-full mt-4 p-4 border-t-2 border-dashed border-gray-300">
@@ -1840,7 +1832,7 @@ const deleteRow = (codeToDelete: string) => {
                                       <SelectItem key={p.name} value={p.name}>{p.name}</SelectItem>
                                   ))}
                               </SelectContent>
-                          </Select>
+                           </Select>
                           </>
                        ) : (
                           <>
@@ -1854,7 +1846,7 @@ const deleteRow = (codeToDelete: string) => {
                                       <SelectItem key={l.lote_p} value={l.lote_p}>{l.lote_p}</SelectItem>
                                   ))}
                               </SelectContent>
-                          </Select>
+                           </Select>
                           </>
                        )
                      )}
@@ -2339,18 +2331,6 @@ const deleteRow = (codeToDelete: string) => {
                 </div>
             )}
             
-            {confirmation.isOpen && <div id="qr-confirmation-overlay" className="p-4" style={{display: 'flex'}}>
-                 <div className="bg-starbucks-white rounded-lg shadow-xl p-6 w-full max-w-sm text-center space-y-4">
-                    <h3 id="confirmation-title" className="text-lg font-bold text-starbucks-dark">{confirmation.title}</h3>
-                    <p id="confirmation-message" className="text-sm text-gray-600">{confirmation.message}</p>
-                    <div id="qr-code-display" className="bg-starbucks-cream p-3 rounded-md font-mono text-xs break-words max-h-28 overflow-y-auto font-bold text-starbucks-dark">{confirmation.code}</div>
-                    <div className="flex justify-center gap-4 mt-4">
-                        <button id="qr-confirm-yes" onClick={() => handleConfirmation(true)} className="px-6 py-2 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg shadow-md">Sí</button>
-                        <button id="qr-confirm-no" onClick={() => handleConfirmation(false)} className="px-6 py-2 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-lg shadow-md">No</button>
-                    </div>
-                </div>
-            </div>}
-
             <Dialog open={isPrintDialogOpen} onOpenChange={setIsPrintDialogOpen}>
                 <DialogContent className="max-w-[500px] bg-gray-100 p-0 overflow-hidden sm:rounded-xl border-none">
                     <DialogHeader className="p-4 bg-white border-b flex flex-row items-center justify-between space-y-0">
