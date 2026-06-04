@@ -16,7 +16,10 @@ import {
   Menu,
   Settings2,
   LogOut,
-  User as UserIcon
+  User as UserIcon,
+  LayoutGrid,
+  ExternalLink,
+  ChevronRight
 } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
@@ -49,20 +52,49 @@ const mainNavLinks = [
   { href: '/sewing-tickets/status', label: 'Status Rápido', icon: <Settings2 className="h-5 w-5" /> },
 ];
 
+const externalLinks = [
+  {
+    href: "https://etiquetas-extractor.vercel.app",
+    label: "Extractor de Etiquetas",
+    desc: "Herramienta de extracción"
+  },
+  {
+    href: "https://desktop-inventory-mtm.vercel.app",
+    label: "Gestión Inventarios (Jair)",
+    desc: "Pedidos internos e inventarios"
+  },
+  {
+    href: "https://cerebro2.vercel.app/perfil",
+    label: "Control RH (Austin)",
+    desc: "Asistencia y nómina"
+  },
+  {
+    href: "https://cerebro2-0.vercel.app/producto-estrella",
+    label: "Corte de Caja (César)",
+    desc: "Márgenes ML y SKUs"
+  },
+  {
+    href: "https://analizador-de-csv-2.vercel.app/historical-analysis/operations",
+    label: "Gastos y Ventas (Melanie)",
+    desc: "Análisis 80/20 y movimientos"
+  },
+  {
+    href: "https://invetario-compras.vercel.app",
+    label: "Compras (César)",
+    desc: "Nacionales e internacionales"
+  }
+];
+
 export default function Navbar() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const { session, profile, roles, hasRole, signOut } = useAuth();
 
-  // Si estamos en la página de login, no mostramos la navbar
   if (pathname === '/login') return null;
 
-  // Filtrar links de navegación según roles del usuario (RBAC)
   const visibleLinks = mainNavLinks.filter(link => {
     const requiredRoles = ROUTE_PERMISSIONS[link.href];
-    if (!requiredRoles) return true; // Rutas sin restricción explícita
-    
-    // El usuario debe tener al menos uno de los roles requeridos o ser ADMIN
+    if (!requiredRoles) return true;
     return roles.includes('ADMIN') || requiredRoles.some(r => roles.includes(r));
   });
 
@@ -102,7 +134,39 @@ export default function Navbar() {
           </div>
 
           {/* User Actions & Mobile Toggle */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
+             {/* External Modules Menu */}
+             <div className="hidden md:block">
+                <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" className="h-10 px-3 text-starbucks-dark hover:bg-starbucks-cream gap-2">
+                            <LayoutGrid className="h-5 w-5 text-starbucks-green" />
+                            <span className="text-xs font-black uppercase tracking-tight">Módulos</span>
+                        </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent className="w-72" align="end">
+                        <DropdownMenuLabel className="text-[10px] font-black uppercase text-gray-400 tracking-widest px-3 py-2">Plataformas Externas</DropdownMenuLabel>
+                        <DropdownMenuSeparator />
+                        {externalLinks.map((ext) => (
+                            <DropdownMenuItem key={ext.href} asChild>
+                                <a 
+                                    href={ext.href} 
+                                    target="_blank" 
+                                    rel="noopener noreferrer" 
+                                    className="flex flex-col items-start gap-0.5 p-3 cursor-pointer hover:bg-starbucks-cream/50 transition-colors"
+                                >
+                                    <div className="flex items-center justify-between w-full">
+                                        <span className="text-xs font-black text-starbucks-dark uppercase">{ext.label}</span>
+                                        <ExternalLink className="h-3 w-3 text-gray-300" />
+                                    </div>
+                                    <span className="text-[9px] font-bold text-gray-400 line-clamp-1">{ext.desc}</span>
+                                </a>
+                            </DropdownMenuItem>
+                        ))}
+                    </DropdownMenuContent>
+                </DropdownMenu>
+             </div>
+
              {session && (
                <DropdownMenu>
                  <DropdownMenuTrigger asChild>
@@ -149,50 +213,76 @@ export default function Navbar() {
                     <Menu className="h-6 w-6" />
                   </Button>
                 </SheetTrigger>
-                <SheetContent side="right" className="w-[280px] sm:w-[350px]">
-                  <SheetHeader className="border-b pb-4 mb-4">
-                    <SheetTitle className="text-starbucks-green flex items-center gap-2 text-left">
+                <SheetContent side="right" className="w-[300px] sm:w-[400px] p-0 flex flex-col">
+                  <SheetHeader className="p-6 border-b bg-starbucks-cream/30">
+                    <SheetTitle className="text-starbucks-green flex items-center gap-2 text-left font-black uppercase tracking-tighter">
                       <Home className="h-5 w-5" />
                       Menú del Sistema
                     </SheetTitle>
                   </SheetHeader>
-                  <div className="flex flex-col space-y-2">
-                    {visibleLinks.map((link) => {
-                      const isActive = pathname === link.href;
-                      return (
-                        <Link
-                          key={link.href}
-                          href={link.href}
-                          onClick={() => setOpen(false)}
-                          className={cn(
-                            'flex items-center gap-4 px-4 py-3 rounded-lg text-sm font-bold transition-colors',
-                            isActive
-                              ? 'bg-starbucks-green text-white'
-                              : 'text-starbucks-dark hover:bg-starbucks-cream'
-                          )}
-                        >
-                          <div className={cn("p-2 rounded-md", isActive ? "bg-white/20" : "bg-gray-100")}>
-                            {link.icon}
-                          </div>
-                          {link.label}
-                        </Link>
-                      );
-                    })}
+                  
+                  <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-6">
+                    <div className="space-y-1">
+                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4 mb-2">Módulos de Control</p>
+                        {visibleLinks.map((link) => {
+                          const isActive = pathname === link.href;
+                          return (
+                            <Link
+                              key={link.href}
+                              href={link.href}
+                              onClick={() => setOpen(false)}
+                              className={cn(
+                                'flex items-center gap-4 px-4 py-3 rounded-xl text-sm font-bold transition-all active:scale-95',
+                                isActive
+                                  ? 'bg-starbucks-green text-white shadow-lg'
+                                  : 'text-starbucks-dark hover:bg-starbucks-cream'
+                              )}
+                            >
+                              <div className={cn("p-2 rounded-lg", isActive ? "bg-white/20" : "bg-gray-100")}>
+                                {link.icon}
+                              </div>
+                              {link.label}
+                            </Link>
+                          );
+                        })}
+                    </div>
+
+                    <div className="space-y-1">
+                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4 mb-2">Plataformas Externas</p>
+                        <div className="grid grid-cols-1 gap-2">
+                            {externalLinks.map((ext) => (
+                                <a
+                                    key={ext.href}
+                                    href={ext.href}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="flex items-center justify-between px-4 py-3 rounded-xl bg-gray-50 border border-gray-100 hover:border-starbucks-green/30 transition-colors"
+                                >
+                                    <div className="flex flex-col">
+                                        <span className="text-xs font-black text-starbucks-dark uppercase">{ext.label}</span>
+                                        <span className="text-[9px] font-bold text-gray-400">{ext.desc}</span>
+                                    </div>
+                                    <ExternalLink className="h-3 w-3 text-gray-300" />
+                                </a>
+                            ))}
+                        </div>
+                    </div>
                   </div>
-                  <div className="mt-8 pt-4 border-t space-y-2">
+
+                  <div className="p-4 border-t bg-gray-50 space-y-2">
                     {hasRole('ADMIN') && (
                       <Link
                         href="/registro-personal"
                         onClick={() => setOpen(false)}
                         className={cn(
-                          'flex items-center gap-4 px-4 py-3 rounded-lg text-sm font-bold transition-colors',
+                          'flex items-center gap-4 px-4 py-3 rounded-xl text-sm font-bold transition-colors',
                           pathname === '/registro-personal'
                             ? 'bg-starbucks-green text-white'
-                            : 'text-starbucks-dark hover:bg-starbucks-cream'
+                            : 'text-starbucks-dark hover:bg-gray-200'
                         )}
                       >
-                        <div className="p-2 rounded-md bg-gray-100">
-                          <UserPlus className="h-5 w-5" />
+                        <div className="p-2 rounded-lg bg-white shadow-sm">
+                          <UserPlus className="h-5 w-5 text-starbucks-green" />
                         </div>
                         Registrar Personal
                       </Link>
@@ -200,9 +290,9 @@ export default function Navbar() {
                     <Button 
                       variant="ghost" 
                       onClick={signOut}
-                      className="w-full justify-start gap-4 px-4 py-6 rounded-lg text-sm font-bold text-red-600 hover:bg-red-50 hover:text-red-700"
+                      className="w-full justify-start gap-4 px-4 py-6 rounded-xl text-sm font-bold text-red-600 hover:bg-red-50 hover:text-red-700"
                     >
-                      <div className="p-2 rounded-md bg-red-100">
+                      <div className="p-2 rounded-lg bg-white shadow-sm">
                         <LogOut className="h-5 w-5" />
                       </div>
                       Cerrar Sesión
