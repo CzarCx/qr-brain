@@ -1,4 +1,3 @@
-
 'use client';
 import React, {useEffect, useRef, useState, useCallback, useMemo} from 'react';
 import Head from 'next/head';
@@ -16,7 +15,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Zap, ZoomIn, UserPlus, PlusCircle, Clock, AlertTriangle, Wifi, WifiOff, Search, XCircle, CheckCircle, Trash2, Lock, Unlock, FileText, Printer, Download, FileUp, FileSpreadsheet, Loader2, Copy, ChevronDown, ChevronUp, Users, Info } from 'lucide-react';
+import { Zap, ZoomIn, UserPlus, PlusCircle, Clock, AlertTriangle, Wifi, WifiOff, Search, XCircle, CheckCircle, Trash2, Lock, Unlock, FileText, Printer, Download, FileUp, FileSpreadsheet, Loader2, Copy, ChevronDown, ChevronUp, Users, Info, ShoppingCart } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Combobox } from '@/components/ui/combobox';
 import {
@@ -143,8 +142,9 @@ export default function Home() {
   const [deleteLoteName, setDeleteLoteName] = useState('');
   const [deleteLoteReason, setDeleteLoteReason] = useState('');
 
-  // Nueva métrica de capacidad
+  // Nuevas métricas
   const [workForceCapacity, setWorkForceCapacity] = useState<{ minutes: number; hours: number; employeeCount: number } | null>(null);
+  const [requiredWorkload, setRequiredWorkload] = useState<{ minutes: number; orderCount: number } | null>(null);
 
 
   const html5QrCodeRef = useRef<Html5Qrcode | null>(null);
@@ -244,6 +244,69 @@ export default function Home() {
 
     } catch (err) {
         console.error("Error calculating workforce capacity:", err);
+    }
+  }, []);
+
+  const fetchRequiredWorkload = useCallback(async () => {
+    try {
+      const today = new Date();
+      const startOfDay = new Date(today.setHours(0,0,0,0)).toISOString();
+      const endOfDay = new Date(today.setHours(23,59,59,999)).toISOString();
+
+      // 1. Consultar ventas de hoy en ml_sales
+      const { data: sales, error: salesError } = await supabaseEtiquetas
+        .from('ml_sales')
+        .select('sku, pack_quantity')
+        .gte('created_at', startOfDay)
+        .lte('created_at', endOfDay);
+
+      if (salesError || !sales) return;
+
+      if (sales.length === 0) {
+        setRequiredWorkload({ minutes: 0, orderCount: 0 });
+        return;
+      }
+
+      const skusInSales = Array.from(new Set(sales.map(s => s.sku).filter(Boolean)));
+      
+      // 2. Mapear SKUs a su tiempo estimado (usando la cadena de sku_alterno -> sku_m)
+      const { data: alternos, error: altError } = await supabaseEtiquetas
+        .from('sku_alterno')
+        .select('sku, sku_mdr')
+        .in('sku', skusInSales);
+
+      if (altError || !alternos) return;
+
+      const skuToMdrMap = new Map(alternos.map(a => [a.sku, a.sku_mdr]));
+      const uniqueMdrs = Array.from(new Set(alternos.map(a => a.sku_mdr).filter(Boolean)));
+
+      const { data: mdrTimes, error: mdrError } = await supabaseEtiquetas
+        .from('sku_m')
+        .select('sku_mdr, esti_time')
+        .in('sku_mdr', uniqueMdrs);
+
+      if (mdrError || !mdrTimes) return;
+
+      const mdrToTimeMap = new Map(mdrTimes.map(m => [m.sku_mdr, m.esti_time || 0]));
+
+      // 3. Calcular tiempo total
+      let totalMinutes = 0;
+      sales.forEach(sale => {
+        const mdr = skuToMdrMap.get(sale.sku);
+        if (mdr) {
+          const time = mdrToTimeMap.get(mdr) || 0;
+          const qty = sale.pack_quantity || 1;
+          totalMinutes += (time * qty);
+        }
+      });
+
+      setRequiredWorkload({
+        minutes: totalMinutes,
+        orderCount: sales.length
+      });
+
+    } catch (err) {
+      console.error("Error calculating required workload:", err);
     }
   }, []);
 
@@ -352,6 +415,7 @@ export default function Home() {
     checkDbConnections();
     fetchCreatedLotes();
     fetchWorkForceCapacity();
+    fetchRequiredWorkload();
 
     const channel = supabase
       .channel('personal_prog_changes')
@@ -367,7 +431,7 @@ export default function Home() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [fetchCreatedLotes, fetchWorkForceCapacity]);
+  }, [fetchCreatedLotes, fetchWorkForceCapacity, fetchRequiredWorkload]);
 
   // VALIDACIÓN DE ASISTENCIA Y NOMBRE DEL ENCARGADO (LOGUEADO)
   useEffect(() => {
@@ -2332,7 +2396,7 @@ const deleteRow = (codeToDelete: string) => {
 
                 <div className="space-y-4">
                      {scanMode === 'assign' && (
-                        <div className="grid grid-cols-2 md:grid-cols-5 gap-2 text-center">
+                        <div className="grid grid-cols-2 md:grid-cols-6 gap-2 text-center">
                              <div className="p-2 rounded-lg bg-blue-100 text-blue-800">
                                 <h3 className="font-bold uppercase text-xs flex items-center justify-center gap-1"><Clock className="h-4 w-4" /> Tiempo</h3>
                                 <p className="text-2xl font-mono">{formatElapsedTime(elapsedTime)}</p>
@@ -2372,6 +2436,33 @@ const deleteRow = (codeToDelete: string) => {
                                     <TooltipContent side="bottom" className="max-w-xs text-center p-3">
                                         <p className="text-xs">
                                             Tiempo total disponible calculado utilizando los horarios asignados a los empleados que registraron entrada activa durante el día actual. Se obtiene sumando la duración de cada jornada (hora_salida - hora_entrada) para estimar la capacidad operativa disponible.
+                                        </p>
+                                    </TooltipContent>
+                                </Tooltip>
+                            </TooltipProvider>
+                            <TooltipProvider>
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <div className="bg-starbucks-white border-2 border-amber-200 p-2 rounded-lg shadow-sm hover:shadow-md transition-all cursor-help flex flex-col justify-center">
+                                            <h3 className="font-bold text-amber-600 uppercase text-[10px] flex items-center justify-center gap-1">
+                                                <ShoppingCart className="h-3 w-3" /> Trabajo ML Hoy
+                                            </h3>
+                                            <div className="mt-1">
+                                                <p className="text-xl font-black text-starbucks-dark tracking-tighter leading-none">
+                                                    {requiredWorkload?.minutes || 0} <span className="text-[10px] font-bold text-gray-400">MIN</span>
+                                                </p>
+                                                <div className="flex justify-between items-center mt-1 px-1">
+                                                    <span className="text-[8px] font-bold text-gray-500 uppercase">
+                                                        {Math.floor((requiredWorkload?.minutes || 0) / 60)}H {(requiredWorkload?.minutes || 0) % 60}M
+                                                    </span>
+                                                    <span className="text-[8px] font-black text-gray-400 uppercase">{requiredWorkload?.orderCount || 0} Ventas</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </TooltipTrigger>
+                                    <TooltipContent side="bottom" className="max-w-xs text-center p-3">
+                                        <p className="text-xs">
+                                            Tiempo total de trabajo estimado basado en las ventas registradas hoy en Mercado Libre (ml_sales). Se calcula multiplicando la cantidad de cada producto por el tiempo estimado (esti_time) definido en el catálogo maestro.
                                         </p>
                                     </TooltipContent>
                                 </Tooltip>
