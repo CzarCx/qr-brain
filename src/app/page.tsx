@@ -1,3 +1,4 @@
+
 'use client';
 import React, {useEffect, useRef, useState, useCallback, useMemo} from 'react';
 import Head from 'next/head';
@@ -267,56 +268,42 @@ export default function Home() {
         return;
       }
 
-      const skusInSales = Array.from(new Set(sales.map(s => s.sku).filter(Boolean)));
+      const skusInSales = Array.from(new Set(sales.map(s => s.sku).filter(Boolean))) as string[];
       
-      // 2. Mapear SKUs a su tiempo estimado
-      // Intentamos encontrar el tiempo buscando primero si el SKU es directo en sku_m
-      // o si tiene un alterno que apunte a sku_m
-      
-      // Buscar en sku_alterno equivalencias
+      // 2. Obtener MDRs de los alternos
       const { data: alternos } = await supabaseEtiquetas
         .from('sku_alterno')
         .select('sku, sku_mdr')
         .in('sku', skusInSales);
 
-      // Buscar directamente en sku_m (por si el SKU de venta ya es el MDR)
-      const { data: directMdrs } = await supabaseEtiquetas
+      // Combinar los MDRs encontrados con los SKUs originales (por si ya son MDRs)
+      const potentialMdrs = Array.from(new Set([
+        ...skusInSales,
+        ...(alternos?.map(a => a.sku_mdr).filter(Boolean) || [])
+      ])) as string[];
+
+      // 3. Consultar sku_m para obtener los tiempos estimados de esos MDRs
+      const { data: skuMTimes, error: mError } = await supabaseEtiquetas
         .from('sku_m')
         .select('sku_mdr, esti_time')
-        .in('sku_mdr', skusInSales);
+        .in('sku_mdr', potentialMdrs);
+
+      if (mError) throw mError;
 
       const mdrToTimeMap = new Map();
-      if (directMdrs) {
-        directMdrs.forEach(m => mdrToTimeMap.set(m.sku_mdr, m.esti_time || 0));
+      if (skuMTimes) {
+        skuMTimes.forEach(m => mdrToTimeMap.set(m.sku_mdr, m.esti_time || 0));
       }
 
-      // Si encontramos alternos, buscamos los tiempos de sus MDRs correspondientes
-      const foundAlternoMdrs = alternos?.map(a => a.sku_mdr).filter(Boolean) || [];
-      if (foundAlternoMdrs.length > 0) {
-        const { data: altMdrTimes } = await supabaseEtiquetas
-          .from('sku_m')
-          .select('sku_mdr, esti_time')
-          .in('sku_mdr', foundAlternoMdrs);
-        
-        if (altMdrTimes) {
-          altMdrTimes.forEach(m => {
-             // Solo lo agregamos si no estaba ya (prioridad al directo si coinciden, aunque no debería pasar)
-             if (!mdrToTimeMap.has(m.sku_mdr)) {
-                mdrToTimeMap.set(m.sku_mdr, m.esti_time || 0);
-             }
-          });
-        }
-      }
-
-      // Crear un mapa final de SKU de venta -> tiempo estimado
+      // 4. Crear mapa final SKU_VENTA -> Tiempo
       const finalSkuToTimeMap = new Map();
       
       skusInSales.forEach(sku => {
-        // Opción A: Es un MDR directo
+        // Primero intentamos como MDR directo
         if (mdrToTimeMap.has(sku)) {
             finalSkuToTimeMap.set(sku, mdrToTimeMap.get(sku));
         } else {
-            // Opción B: Buscar en alternos
+            // Si no, buscamos su MDR en los alternos
             const alt = alternos?.find(a => a.sku === sku);
             if (alt && mdrToTimeMap.has(alt.sku_mdr)) {
                 finalSkuToTimeMap.set(sku, mdrToTimeMap.get(alt.sku_mdr));
@@ -324,7 +311,7 @@ export default function Home() {
         }
       });
 
-      // 3. Calcular tiempo total sumando todos los pedidos
+      // 5. Calcular tiempo total acumulado
       let totalMinutes = 0;
       sales.forEach(sale => {
         const time = finalSkuToTimeMap.get(sale.sku) || 0;
@@ -1210,7 +1197,7 @@ export default function Home() {
               bufferRef.current = '';
             }
           } else if (e.key.length === 1) {
-            bufferRef.current += e.key;
+            bufferRef.current += event.key;
           }
         };
         input.addEventListener('keydown', handleKeyDown);
