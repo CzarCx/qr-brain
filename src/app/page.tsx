@@ -269,39 +269,71 @@ export default function Home() {
 
       const skusInSales = Array.from(new Set(sales.map(s => s.sku).filter(Boolean)));
       
-      // 2. Mapear SKUs a su tiempo estimado (usando la cadena de sku_alterno -> sku_m)
-      const { data: alternos, error: altError } = await supabaseEtiquetas
+      // 2. Mapear SKUs a su tiempo estimado
+      // Intentamos encontrar el tiempo buscando primero si el SKU es directo en sku_m
+      // o si tiene un alterno que apunte a sku_m
+      
+      // Buscar en sku_alterno equivalencias
+      const { data: alternos } = await supabaseEtiquetas
         .from('sku_alterno')
         .select('sku, sku_mdr')
         .in('sku', skusInSales);
 
-      if (altError || !alternos) return;
-
-      const skuToMdrMap = new Map(alternos.map(a => [a.sku, a.sku_mdr]));
-      const uniqueMdrs = Array.from(new Set(alternos.map(a => a.sku_mdr).filter(Boolean)));
-
-      const { data: mdrTimes, error: mdrError } = await supabaseEtiquetas
+      // Buscar directamente en sku_m (por si el SKU de venta ya es el MDR)
+      const { data: directMdrs } = await supabaseEtiquetas
         .from('sku_m')
         .select('sku_mdr, esti_time')
-        .in('sku_mdr', uniqueMdrs);
+        .in('sku_mdr', skusInSales);
 
-      if (mdrError || !mdrTimes) return;
+      const mdrToTimeMap = new Map();
+      if (directMdrs) {
+        directMdrs.forEach(m => mdrToTimeMap.set(m.sku_mdr, m.esti_time || 0));
+      }
 
-      const mdrToTimeMap = new Map(mdrTimes.map(m => [m.sku_mdr, m.esti_time || 0]));
+      // Si encontramos alternos, buscamos los tiempos de sus MDRs correspondientes
+      const foundAlternoMdrs = alternos?.map(a => a.sku_mdr).filter(Boolean) || [];
+      if (foundAlternoMdrs.length > 0) {
+        const { data: altMdrTimes } = await supabaseEtiquetas
+          .from('sku_m')
+          .select('sku_mdr, esti_time')
+          .in('sku_mdr', foundAlternoMdrs);
+        
+        if (altMdrTimes) {
+          altMdrTimes.forEach(m => {
+             // Solo lo agregamos si no estaba ya (prioridad al directo si coinciden, aunque no debería pasar)
+             if (!mdrToTimeMap.has(m.sku_mdr)) {
+                mdrToTimeMap.set(m.sku_mdr, m.esti_time || 0);
+             }
+          });
+        }
+      }
 
-      // 3. Calcular tiempo total
-      let totalMinutes = 0;
-      sales.forEach(sale => {
-        const mdr = skuToMdrMap.get(sale.sku);
-        if (mdr) {
-          const time = mdrToTimeMap.get(mdr) || 0;
-          const qty = sale.pack_quantity || 1;
-          totalMinutes += (time * qty);
+      // Crear un mapa final de SKU de venta -> tiempo estimado
+      const finalSkuToTimeMap = new Map();
+      
+      skusInSales.forEach(sku => {
+        // Opción A: Es un MDR directo
+        if (mdrToTimeMap.has(sku)) {
+            finalSkuToTimeMap.set(sku, mdrToTimeMap.get(sku));
+        } else {
+            // Opción B: Buscar en alternos
+            const alt = alternos?.find(a => a.sku === sku);
+            if (alt && mdrToTimeMap.has(alt.sku_mdr)) {
+                finalSkuToTimeMap.set(sku, mdrToTimeMap.get(alt.sku_mdr));
+            }
         }
       });
 
+      // 3. Calcular tiempo total sumando todos los pedidos
+      let totalMinutes = 0;
+      sales.forEach(sale => {
+        const time = finalSkuToTimeMap.get(sale.sku) || 0;
+        const qty = sale.pack_quantity || 1;
+        totalMinutes += (time * qty);
+      });
+
       setRequiredWorkload({
-        minutes: totalMinutes,
+        minutes: Math.round(totalMinutes),
         orderCount: sales.length
       });
 
@@ -1632,7 +1664,7 @@ const deleteRow = (codeToDelete: string) => {
                 sku: item.sku,
                 name: personName,
                 id_empleado: personId,
-                name_inc: item.name_inc,
+                name_inc: item.encargado,
                 place: item.place,
                 product: item.product,
                 quantity: item.quantity,
