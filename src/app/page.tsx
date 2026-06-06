@@ -248,6 +248,7 @@ export default function Home() {
       const startOfDay = new Date(today.setHours(0,0,0,0)).toISOString();
       const endOfDay = new Date(today.setHours(23,59,59,999)).toISOString();
 
+      // 1. Obtener ventas de hoy de ml_sales
       const { data: sales, error: salesError } = await supabaseEtiquetas
         .from('ml_sales')
         .select('sku, pack_quantity')
@@ -255,52 +256,38 @@ export default function Home() {
         .lte('created_at', endOfDay);
 
       if (salesError || !sales) return;
+      
       if (sales.length === 0) {
         setRequiredWorkload({ minutes: 0, orderCount: 0 });
         return;
       }
 
+      // 2. Extraer SKUs únicos de las ventas
       const skusInSales = Array.from(new Set(sales.map(s => s.sku).filter(Boolean))) as string[];
       
-      const { data: alternos } = await supabaseEtiquetas
-        .from('sku_alterno')
-        .select('sku, sku_mdr')
-        .in('sku', skusInSales);
-
-      const potentialLookupSkus = Array.from(new Set([
-        ...skusInSales,
-        ...(alternos?.map(a => a.sku_mdr).filter(Boolean) || [])
-      ])) as string[];
-
-      // CAMBIO SOLICITADO: Buscar en la columna 'sku' de la tabla 'sku_m', no en 'sku_mdr'
+      // 3. Buscar esos SKUs directamente en la columna 'sku' de la tabla 'sku_m'
+      // Siguiendo la instrucción de buscar lo obtenido de ml_sales directamente en sku_m.sku
       const { data: skuMTimes, error: mError } = await supabaseEtiquetas
         .from('sku_m')
         .select('sku, esti_time')
-        .in('sku', potentialLookupSkus);
+        .in('sku', skusInSales);
 
       if (mError) throw mError;
 
+      // 4. Crear mapa de tiempos
       const skuToTimeMap = new Map();
       if (skuMTimes) {
-        skuMTimes.forEach(m => skuToTimeMap.set(m.sku, m.esti_time || 0));
+        skuMTimes.forEach(m => {
+            if (m.sku) {
+                skuToTimeMap.set(m.sku, m.esti_time || 0);
+            }
+        });
       }
 
-      const finalSkuToTimeMap = new Map();
-      
-      skusInSales.forEach(sku => {
-        if (skuToTimeMap.has(sku)) {
-            finalSkuToTimeMap.set(sku, skuToTimeMap.get(sku));
-        } else {
-            const alt = alternos?.find(a => a.sku === sku);
-            if (alt && alt.sku_mdr && skuToTimeMap.has(alt.sku_mdr)) {
-                finalSkuToTimeMap.set(sku, skuToTimeMap.get(alt.sku_mdr));
-            }
-        }
-      });
-
+      // 5. Calcular total acumulado multiplicando por la cantidad de la venta
       let totalMinutes = 0;
       sales.forEach(sale => {
-        const time = finalSkuToTimeMap.get(sale.sku) || 0;
+        const time = skuToTimeMap.get(sale.sku) || 0;
         const qty = sale.pack_quantity || 1;
         totalMinutes += (time * qty);
       });
