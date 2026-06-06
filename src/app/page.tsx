@@ -173,7 +173,6 @@ export default function Home() {
         const daysMapping = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'];
         const currentDayName = daysMapping[new Date().getDay()];
 
-        // 1. Obtener todos los registros del checador de hoy
         const { data: allAttendance, error: attError } = await supabaseEtiquetas
             .from('registro_checador')
             .select('id_empleado, tipo_registro, id')
@@ -182,7 +181,6 @@ export default function Home() {
 
         if (attError || !allAttendance) return;
 
-        // 2. Determinar quiénes tienen entrada activa (el último registro es 'entrada')
         const lastStatus = new Map<string, string>();
         allAttendance.forEach(rec => {
             lastStatus.set(rec.id_empleado, rec.tipo_registro);
@@ -197,7 +195,6 @@ export default function Home() {
             return;
         }
 
-        // 3. Obtener horarios asignados para esos empleados
         const { data: shifts, error: shiftError } = await supabaseEtiquetas
             .from('empleados_turno_horarios')
             .select(`id_empleado, ${currentDayName}`)
@@ -205,7 +202,6 @@ export default function Home() {
 
         if (shiftError || !shifts) return;
 
-        // 4. Mapear IDs de horarios únicos
         const scheduleIds = Array.from(new Set(shifts.map(s => s[currentDayName]).filter(Boolean)));
         
         if (scheduleIds.length === 0) {
@@ -213,7 +209,6 @@ export default function Home() {
             return;
         }
 
-        // 5. Consultar los horarios reales
         const { data: schedules, error: schedError } = await supabaseEtiquetas
             .from('horarios')
             .select('id, hora_entrada, hora_salida')
@@ -223,7 +218,6 @@ export default function Home() {
 
         const scheduleMap = new Map(schedules.map(s => [s.id, s]));
 
-        // 6. Calcular suma total de minutos
         let totalMinutes = 0;
         shifts.forEach(s => {
             const schedId = s[currentDayName];
@@ -254,7 +248,6 @@ export default function Home() {
       const startOfDay = new Date(today.setHours(0,0,0,0)).toISOString();
       const endOfDay = new Date(today.setHours(23,59,59,999)).toISOString();
 
-      // 1. Consultar ventas de hoy en ml_sales
       const { data: sales, error: salesError } = await supabaseEtiquetas
         .from('ml_sales')
         .select('sku, pack_quantity')
@@ -262,7 +255,6 @@ export default function Home() {
         .lte('created_at', endOfDay);
 
       if (salesError || !sales) return;
-
       if (sales.length === 0) {
         setRequiredWorkload({ minutes: 0, orderCount: 0 });
         return;
@@ -270,48 +262,42 @@ export default function Home() {
 
       const skusInSales = Array.from(new Set(sales.map(s => s.sku).filter(Boolean))) as string[];
       
-      // 2. Obtener MDRs de los alternos
       const { data: alternos } = await supabaseEtiquetas
         .from('sku_alterno')
         .select('sku, sku_mdr')
         .in('sku', skusInSales);
 
-      // Combinar los MDRs encontrados con los SKUs originales (por si ya son MDRs)
-      const potentialMdrs = Array.from(new Set([
+      const potentialLookupSkus = Array.from(new Set([
         ...skusInSales,
         ...(alternos?.map(a => a.sku_mdr).filter(Boolean) || [])
       ])) as string[];
 
-      // 3. Consultar sku_m para obtener los tiempos estimados de esos MDRs
+      // CAMBIO SOLICITADO: Buscar en la columna 'sku' de la tabla 'sku_m', no en 'sku_mdr'
       const { data: skuMTimes, error: mError } = await supabaseEtiquetas
         .from('sku_m')
-        .select('sku_mdr, esti_time')
-        .in('sku_mdr', potentialMdrs);
+        .select('sku, esti_time')
+        .in('sku', potentialLookupSkus);
 
       if (mError) throw mError;
 
-      const mdrToTimeMap = new Map();
+      const skuToTimeMap = new Map();
       if (skuMTimes) {
-        skuMTimes.forEach(m => mdrToTimeMap.set(m.sku_mdr, m.esti_time || 0));
+        skuMTimes.forEach(m => skuToTimeMap.set(m.sku, m.esti_time || 0));
       }
 
-      // 4. Crear mapa final SKU_VENTA -> Tiempo
       const finalSkuToTimeMap = new Map();
       
       skusInSales.forEach(sku => {
-        // Primero intentamos como MDR directo
-        if (mdrToTimeMap.has(sku)) {
-            finalSkuToTimeMap.set(sku, mdrToTimeMap.get(sku));
+        if (skuToTimeMap.has(sku)) {
+            finalSkuToTimeMap.set(sku, skuToTimeMap.get(sku));
         } else {
-            // Si no, buscamos su MDR en los alternos
             const alt = alternos?.find(a => a.sku === sku);
-            if (alt && mdrToTimeMap.has(alt.sku_mdr)) {
-                finalSkuToTimeMap.set(sku, mdrToTimeMap.get(alt.sku_mdr));
+            if (alt && alt.sku_mdr && skuToTimeMap.has(alt.sku_mdr)) {
+                finalSkuToTimeMap.set(sku, skuToTimeMap.get(alt.sku_mdr));
             }
         }
       });
 
-      // 5. Calcular tiempo total acumulado
       let totalMinutes = 0;
       sales.forEach(sale => {
         const time = finalSkuToTimeMap.get(sale.sku) || 0;
@@ -452,13 +438,11 @@ export default function Home() {
     };
   }, [fetchCreatedLotes, fetchWorkForceCapacity, fetchRequiredWorkload]);
 
-  // VALIDACIÓN DE ASISTENCIA Y NOMBRE DEL ENCARGADO (LOGUEADO)
   useEffect(() => {
     if (!user?.id) return;
 
     const checkAttendanceAndFetchName = async () => {
         try {
-            // 1. Obtener nombre del empleado desde la tabla operativa 'empleados'
             const { data: empData, error: empError } = await supabaseEtiquetas
                 .from('empleados')
                 .select('nombres, apellido_paterno, apellido_materno')
@@ -470,8 +454,7 @@ export default function Home() {
                 setEncargado(fullName);
             }
 
-            // 2. Verificar asistencia para el día de hoy
-            const todayStr = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD
+            const todayStr = new Date().toLocaleDateString('en-CA'); 
 
             const { data: attendanceData, error: attendanceError } = await supabaseEtiquetas
                 .from('registro_checador')
@@ -529,7 +512,6 @@ export default function Home() {
     };
   }, [scannedData]);
 
-  // VALIDACIÓN DE ASISTENCIA DE LA PERSONA SELECCIONADA PARA ASIGNACIÓN
   useEffect(() => {
     if (!selectedPersonal) {
       setIsTargetPersonAttending(false);
@@ -636,7 +618,7 @@ export default function Home() {
     const oscillator = context.createOscillator();
     const gainNode = context.createGain();
     oscillator.type = 'square';
-    oscillator.frequency.setValueAtTime(880, context.currentTime); // A5 note
+    oscillator.frequency.setValueAtTime(880, context.currentTime); 
     gainNode.gain.setValueAtTime(1, context.currentTime); 
     gainNode.gain.exponentialRampToValueAtTime(0.00001, context.currentTime + 0.1);
     oscillator.connect(gainNode);
@@ -959,7 +941,6 @@ export default function Home() {
                 return;
             }
             
-            // Validar asistencia del operario al que se le asocia vía escaneo directo
             const todayStr = new Date().toLocaleDateString('en-CA');
             const { data: attData } = await supabaseEtiquetas
                 .from('registro_checador')
@@ -1595,7 +1576,6 @@ const deleteRow = (codeToDelete: string) => {
         return;
     }
     
-    // Validar asistencia del destino para asociación masiva
     const todayStr = new Date().toLocaleDateString('en-CA');
     const { data: attData } = await supabaseEtiquetas
         .from('registro_checador')
@@ -1933,7 +1913,6 @@ const deleteRow = (codeToDelete: string) => {
   const groupedEncargadoOptions = useMemo(() => {
     let list = [...encargadosList];
     
-    // Inyectar el encargado actual (si fue detectado por sesión) en la lista para que el Combobox lo reconozca
     if (encargado && !list.some(e => e.name === encargado)) {
         list.unshift({ name: encargado, organization: 'Usuario Actual' });
     }
@@ -2375,13 +2354,13 @@ const deleteRow = (codeToDelete: string) => {
                         {isMounted && isMobile && scannerActive && selectedScannerMode === 'camara' && cameraCapabilities && (
                             <div id="camera-controls" className="flex items-center gap-4 mt-4 p-2 rounded-lg bg-gray-200">
                                 {cameraCapabilities.torch && (
-                                    <Button variant="ghost" size="icon" onClick={() => setIsFlashOn(prev => !prev)} className={isFlashOn ? 'bg-yellow-400' : ''}>
+                                    <Button variant="ghost" size="icon" onClick={() => setIsFlashOn(!isFlashOn)} className={isFlashOn ? 'text-yellow-400 bg-white/10' : 'text-white'}>
                                         <Zap className="h-5 w-5" />
                                     </Button>
                                 )}
                                 {cameraCapabilities.zoom && (
                                     <div className="flex-1 flex items-center gap-2">
-                                        <ZoomIn className="h-5 w-5" />
+                                        <ZoomIn className="h-4 w-4" />
                                         <input
                                             id="zoom-slider"
                                             type="range"
