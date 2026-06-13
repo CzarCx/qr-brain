@@ -196,7 +196,6 @@ export default function SewingTicketsPage() {
 
       let targetGroup = groups.OTROS;
 
-      // Orden específico de categorización corregido
       if (upper.includes('MALLA SOMBRA CONFECCIONADA') || upper.includes('MS FABRICACION')) {
         targetGroup = groups['MALLAS COSTURA'];
       } else if (upper === 'MALLA SOMBRA BOLSA') {
@@ -293,7 +292,7 @@ export default function SewingTicketsPage() {
         ]);
       });
 
-      worksheet.columns.forEach(column => { column.width = 15; });
+      worksheet.columns.forEach(column => { column.width = 18; });
       const buffer = await workbook.xlsx.writeBuffer();
       const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
       saveAs(blob, `bitacora_costura_${format(new Date(), 'yyyy-MM-dd_HHmm')}.xlsx`);
@@ -305,7 +304,7 @@ export default function SewingTicketsPage() {
       toast({
         variant: 'success',
         title: "Exportación Exitosa",
-        description: `Lienzos: ${groupedTickets.LIENZOS.total} | Bolas: ${groupedTickets['MALLAS BOLAS'].total} | Costura: ${groupedTickets['MALLAS COSTURA'].total}`,
+        description: `Se han procesado y archivado ${tickets.length} bultos correctamente.`,
       });
     } catch (error: any) {
       toast({ variant: 'destructive', title: 'Error en Exportación', description: error.message || 'No se pudo completar la exportación.' });
@@ -336,21 +335,6 @@ export default function SewingTicketsPage() {
       'Empaque', 'Recol', 'Recolector', 'Fecha Entrega'
     ];
 
-    const formatDate = (dateStr: string | null) => {
-      if (!dateStr) return '---';
-      try {
-        const d = new Date(dateStr);
-        if (isNaN(d.getTime())) return dateStr;
-        return format(d, "d MMM yyyy", { locale: es });
-      } catch (e) { return dateStr; }
-    };
-
-    const formatBool = (val: boolean | null) => {
-      if (val === true) return 'SÍ';
-      if (val === false) return 'NO';
-      return 'N/A';
-    };
-
     const body = tickets.map(t => [
       t.codigo_barra,
       t.alias || '---',
@@ -362,17 +346,17 @@ export default function SewingTicketsPage() {
       t.cuenta || '---',
       t.sales_num || '---',
       t.pack_id || '---',
-      formatBool(t.confeccion),
-      formatBool(t.perforado),
-      formatBool(t.ojillado),
-      formatBool(t.impresa),
+      t.confeccion === true ? 'SÍ' : 'NO',
+      t.perforado === true ? 'SÍ' : 'NO',
+      t.ojillado === true ? 'SÍ' : 'NO',
+      t.impresa ? 'SÍ' : 'NO',
       t.responsable_impresion || '---',
-      formatDate(t.fecha_impresion),
+      t.fecha_impresion || '---',
       t.asignada_a || '---',
-      formatBool(t.empaquetado),
-      formatBool(t.lista_para_recoleccion),
+      t.empaquetado ? 'SÍ' : 'NO',
+      t.lista_para_recoleccion ? 'SÍ' : 'NO',
       t.recolectada_por || 'PENDIENTE',
-      formatDate(t.fecha_entrega_paquete)
+      t.fecha_entrega_paquete || '---'
     ]);
 
     autoTable(doc, {
@@ -382,22 +366,6 @@ export default function SewingTicketsPage() {
       theme: 'striped',
       headStyles: { fillColor: [0, 98, 65], fontSize: 5, halign: 'center' },
       bodyStyles: { fontSize: 4.8, valign: 'middle' },
-      columnStyles: {
-        1: { cellWidth: 15 },
-        2: { cellWidth: 35 },
-        3: { fontStyle: 'bold' },
-        4: { fontStyle: 'bold', halign: 'center' },
-        19: { fontStyle: 'bold' },
-        20: { fontStyle: 'bold' },
-      },
-      didParseCell: (data) => {
-        if (data.section === 'body') {
-          const val = data.cell.text[0];
-          if (val === 'SÍ') data.cell.styles.textColor = [0, 150, 0];
-          if (val === 'NO') data.cell.styles.textColor = [200, 0, 0];
-          if (val === 'PENDIENTE') data.cell.styles.textColor = [150, 100, 0];
-        }
-      }
     });
 
     doc.save(`bitacora_costura_${format(today, "yyyy-MM-dd")}.pdf`);
@@ -447,7 +415,7 @@ export default function SewingTicketsPage() {
             </Button>
             <Button onClick={exportToExcel} variant="outline" size="sm" className="flex-1 md:flex-none border-green-600 text-green-700 font-bold" disabled={tickets.length === 0 || loading || isExporting}>
               {isExporting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <FileSpreadsheet className="h-4 w-4 mr-2" />}
-              Excel e Imprimir
+              Exportar Excel y Archivar
             </Button>
             <Button onClick={handleOpenBulkLabels} variant="outline" size="sm" className="flex-1 md:flex-none bg-starbucks-green text-white font-bold" disabled={tickets.length === 0}>
               <Tag className="h-4 w-4 mr-2" /> Etiquetas
@@ -600,7 +568,6 @@ export default function SewingTicketsPage() {
           </div>
         </div>
 
-        {/* Floating Back to Top Button */}
         {showScrollTop && (
           <Button
             onClick={scrollToTop}

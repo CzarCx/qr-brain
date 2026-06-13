@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
@@ -13,6 +14,7 @@ import {
   ArrowLeft,
   ClipboardCheck,
   FileDown,
+  FileSpreadsheet,
   Clock,
   ArrowUp,
   Tag,
@@ -27,6 +29,8 @@ import {
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import ExcelJS from 'exceljs';
+import { saveAs } from 'file-saver';
 import { format, isToday, isYesterday, isTomorrow, isThisWeek, startOfDay } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { supabase, supabaseEtiquetas } from '@/lib/supabaseClient';
@@ -34,6 +38,7 @@ import { SewingTicket } from '@/types/sewing';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { cn } from '@/lib/utils';
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useToast } from '@/hooks/use-toast';
 
 const SewingMachineIcon = ({ className }: { className?: string }) => (
   <svg 
@@ -59,6 +64,7 @@ type ProdStatusFilter = 'all' | 'finished' | 'pending';
 
 export default function SewingTicketsHistoryPage() {
   const { tickets, loading, fetchTickets, updateTicket, deleteTicket } = useSewingTickets();
+  const { toast } = useToast();
   const [isMounted, setIsMounted] = useState(false);
   const [skuMetadata, setSkuMetadata] = useState<Record<string, { cat: string, time: number }>>({});
   const [showScrollTop, setShowScrollTop] = useState(false);
@@ -66,6 +72,7 @@ export default function SewingTicketsHistoryPage() {
   const [prodStatusFilter, setProdStatusFilter] = useState<ProdStatusFilter>('all');
   const [expandedGroups, setExpandedGroups] = useState<string[]>(['group-today']);
   const [prodStatusMap, setProdStatusMap] = useState<Record<string, string>>({});
+  const [isExporting, setIsExporting] = useState(false);
 
   useEffect(() => {
     setIsMounted(true);
@@ -83,7 +90,6 @@ export default function SewingTicketsHistoryPage() {
     return () => window.removeEventListener('scroll', handleScroll);
   }, [fetchTickets]);
 
-  // Fetch production status from personal table
   useEffect(() => {
     const fetchProdStatus = async () => {
       if (tickets.length === 0) return;
@@ -172,11 +178,9 @@ export default function SewingTicketsHistoryPage() {
     return startOfDay(new Date(year, month - 1, day));
   };
 
-  // Filter tickets by delivery date AND production status
   const filteredTickets = useMemo(() => {
     let result = tickets;
 
-    // Delivery Filter
     if (deliveryFilter !== 'all') {
       result = result.filter(t => {
         if (!t.fecha_entrega_paquete) return false;
@@ -194,7 +198,6 @@ export default function SewingTicketsHistoryPage() {
       });
     }
 
-    // Status Filter (Solo afecta la visibilidad en la tabla, no las métricas globales de la vista)
     if (prodStatusFilter !== 'all') {
       result = result.filter(t => {
         const st = prodStatusMap[t.codigo_barra];
@@ -206,7 +209,6 @@ export default function SewingTicketsHistoryPage() {
     return result;
   }, [tickets, deliveryFilter, prodStatusFilter, prodStatusMap]);
 
-  // Traceability Metrics: DINÁMICAS (Solo cuenta lo que está en grupos expandidos)
   const traceabilityMetrics = useMemo(() => {
     const activeTickets = filteredTickets.filter(t => {
       if (!t.created_at) return false;
@@ -227,7 +229,6 @@ export default function SewingTicketsHistoryPage() {
     return { total, finished, pending, percent };
   }, [filteredTickets, expandedGroups, prodStatusMap]);
 
-  // Metrics for categories: DINÁMICAS (Solo cuenta lo que está en grupos expandidos)
   const categoryMetrics = useMemo(() => {
     const groups = {
       LIENZOS: { total: 0, totalTime: 0, count: 0, finishedCount: 0 },
@@ -257,7 +258,6 @@ export default function SewingTicketsHistoryPage() {
 
       let catKey: keyof typeof groups = 'OTROS';
 
-      // Prioridad: Si contiene "CONFECCIONADA" o "FABRICACION" va a MALLAS COSTURA primero
       if (upper.includes('CONFECCIONADA') || upper.includes('MS FABRICACION')) {
         catKey = 'MALLAS COSTURA';
       } else if (upper === 'MALLA SOMBRA BOLSA') {
@@ -297,6 +297,53 @@ export default function SewingTicketsHistoryPage() {
 
     return Object.entries(groups).sort((a, b) => b[0].localeCompare(a[0]));
   }, [filteredTickets]);
+
+  const exportToExcel = async () => {
+    if (filteredTickets.length === 0) {
+      toast({ title: "Sin registros", description: "No hay bultos visibles para exportar." });
+      return;
+    }
+
+    setIsExporting(true);
+    try {
+      const workbook = new ExcelJS.Workbook();
+      const worksheet = workbook.addWorksheet('Historial Costura');
+
+      const headers = [
+        'Código de Barra', 'Alias', 'Producto', 'SKU', 'Cantidad',
+        'Vaciado Por', 'H. Vaciado', 'Cuenta', 'No. Venta', 'Pack ID',
+        'Status Producción', 'Impresa', 'Resp. Impresión', 'Fecha Impresión',
+        'Asignada A', 'Cortada', 'Confección', 'Empaquetado', 'Recolector', 'Fecha Entrega'
+      ];
+
+      const headerRow = worksheet.addRow(headers);
+      headerRow.font = { bold: true };
+      headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF006241' } };
+      headerRow.eachCell(cell => { cell.font = { color: { argb: 'FFFFFFFF' }, bold: true }; });
+
+      filteredTickets.forEach(t => {
+        worksheet.addRow([
+          t.codigo_barra, t.alias || '', t.nombre_producto || '---', t.sku || '---', t.cantidad || 0,
+          t.responsable_vaciado || '---', t.hora_vaciado || '---', t.cuenta || '---', t.sales_num || '---', t.pack_id || '---',
+          prodStatusMap[t.codigo_barra] || 'PENDIENTE',
+          t.impresa ? 'SÍ' : 'NO', t.responsable_impresion || '---', t.fecha_impresion || '---', t.asignada_a || '---',
+          t.cortada ? 'SÍ' : 'NO', t.confeccion ? 'SÍ' : 'NO', t.empaquetado ? 'SÍ' : 'NO',
+          t.recolectada_por || 'PENDIENTE', t.fecha_entrega_paquete || '---'
+        ]);
+      });
+
+      worksheet.columns.forEach(column => { column.width = 18; });
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      saveAs(blob, `historial_costura_${format(new Date(), 'yyyy-MM-dd')}.xlsx`);
+
+      toast({ variant: 'success', title: "Descarga Exitosa", description: "El historial se ha exportado a Excel." });
+    } catch (error: any) {
+      toast({ variant: 'destructive', title: 'Error', description: error.message || 'Error al generar Excel.' });
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
   const exportToPDF = () => {
     if (tickets.length === 0) return;
@@ -366,8 +413,12 @@ export default function SewingTicketsHistoryPage() {
               </h1>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <Button onClick={exportToPDF} variant="outline" size="sm" className="border-starbucks-green text-starbucks-green font-bold" disabled={tickets.length === 0}><FileDown className="h-4 w-4 mr-2" /> Exportar PDF</Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button onClick={exportToExcel} variant="outline" size="sm" className="flex-1 md:flex-none border-green-600 text-green-700 font-bold" disabled={tickets.length === 0 || isExporting}>
+              {isExporting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <FileSpreadsheet className="h-4 w-4 mr-2" />}
+              Exportar Excel
+            </Button>
+            <Button onClick={exportToPDF} variant="outline" size="sm" className="flex-1 md:flex-none border-starbucks-green text-starbucks-green font-bold" disabled={tickets.length === 0}><FileDown className="h-4 w-4 mr-2" /> Exportar PDF</Button>
           </div>
         </header>
 
@@ -514,7 +565,6 @@ export default function SewingTicketsHistoryPage() {
                   const estTime = meta.time || 0;
                   const qty = t.cantidad || 0;
 
-                  // Prioridad: Si contiene "CONFECCIONADA" o "FABRICACION" va a MALLAS COSTURA primero
                   if (upper.includes('CONFECCIONADA') || upper.includes('MS FABRICACION')) {
                     subCategorized.COSTURA.tickets.push(t);
                     subCategorized.COSTURA.total += qty;
