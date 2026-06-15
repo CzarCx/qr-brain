@@ -1912,147 +1912,125 @@ const deleteRow = (codeToDelete: string) => {
     }));
   }, [encargadosList, encargado]);
 
-  const CargarProduccionSection = (
-    <div className="w-full mt-4 p-4 border-t-2 border-dashed border-gray-300">
-        <h3 className="text-lg font-bold text-starbucks-dark mb-2">Cargar Producción Programada</h3>
-        {loadedProgData.length === 0 ? (
-          <>
-            <RadioGroup value={cargaFilterType} onValueChange={(v) => setCargaFilterType(v as any)} className="grid grid-cols-2 gap-2 mb-4">
-              <div>
-                <RadioGroupItem value="persona" id="persona" className="sr-only" />
-                <Label htmlFor="persona" className={`block w-full text-center p-2 rounded-md cursor-pointer text-sm font-medium ${cargaFilterType === 'persona' ? 'bg-starbucks-green text-white shadow' : 'bg-white'}`}>
-                    Por Persona
-                </Label>
-              </div>
-               <div>
-                <RadioGroupItem value="lote" id="lote" className="sr-only" />
-                <Label htmlFor="lote" className={`block w-full text-center p-2 rounded-md cursor-pointer text-sm font-medium ${cargaFilterType === 'lote' ? 'bg-starbucks-green text-white shadow' : 'bg-white'}`}>
-                    Por Lote
-                </Label>
-              </div>
-            </RadioGroup>
-
-            <div className="flex items-end gap-2">
-                <div className="flex-grow">
-                     {loadingProgramados ? <p>Cargando...</p> : (
-                       cargaFilterType === 'persona' ? (
-                          <>
-                           <Label htmlFor="select-personal-cargar">Selecciona Personal</Label>
-                           <Select onValueChange={setSelectedPersonalParaCargar} value={selectedPersonalParaCargar}>
-                              <SelectTrigger id="select-personal-cargar">
-                                  <SelectValue placeholder="Selecciona una persona" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                  {programadosPersonalList.map((p) => (
-                                      <SelectItem key={p.name} value={p.name}>{p.name}</SelectItem>
-                                  ))}
-                              </SelectContent>
-                           </Select>
-                          </>
-                       ) : (
-                          <>
-                          <Label htmlFor="select-lote-cargar">Selecciona Lote</Label>
-                           <Select onValueChange={setSelectedLoteParaCargar} value={selectedLoteParaCargar}>
-                              <SelectTrigger id="select-lote-cargar">
-                                  <SelectValue placeholder="Selecciona un lote" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                  {programadosLotesList.map((l) => (
-                                      <SelectItem key={l.lote_p} value={l.lote_p}>{l.lote_p}</SelectItem>
-                                  ))}
-                              </SelectContent>
-                           </Select>
-                          </>
-                       )
-                     )}
-                </div>
-                <Button onClick={handleCargarProgramada} disabled={loading || (cargaFilterType === 'persona' && !selectedPersonalParaCargar) || (cargaFilterType === 'lote' && !selectedLoteParaCargar) || !isAttendanceValid} className="bg-green-600 hover:bg-green-700">
-                    {loading ? 'Cargando...' : 'Cargar'}
-                </Button>
-            </div>
-            </>
-        ) : (
-          <div className="space-y-4">
-              <div className="space-y-2">
-                  <Label>Reasignar producción a:</Label>
-                   <Combobox
-                      groupedOptions={groupedPersonalOptions}
-                      value={isMounted ? personToAssign : ''}
-                      onValueChange={setPersonToAssign}
-                      placeholder="Selecciona para reasignar..."
-                      emptyMessage="No se encontró personal."
-                  />
-                  <p className="text-xs text-gray-500">Originalmente asignado a: <span className="font-semibold">{selectedPersonalParaCargar || `Lote: ${selectedLoteParaCargar}`}</span></p>
-              </div>
-
-              <div className="max-h-64 overflow-auto border rounded-lg">
-                  <table className="w-full text-sm">
-                      <thead className="sticky top-0 bg-gray-100 z-10">
-                          <tr>
-                              <th className="px-2 py-1 text-left font-semibold">Código</th>
-                              <th className="px-2 py-1 text-left font-semibold">Producto</th>
-                              <th className="px-2 py-1 text-left font-semibold">Área</th>
-                              <th className="px-2 py-1 text-left font-semibold">Hora Prog.</th>
-                              <th className="px-2 py-1 text-left font-semibold">T. Est.</th>
-                          </tr>
-                      </thead>
-                      <tbody>
-                          {loadedProgData.map((item) => (
-                              <tr key={item.code} className="border-b">
-                                  <td className="px-2 py-1 font-mono">{item.code}</td>
-                                  <td className="px-2 py-1">{item.product}</td>
-                                  <td className="px-2 py-1">{item.place || 'N/A'}</td>
-                                  <td className="px-2 py-1">{new Date(item.date).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}</td>
-                                  <td className="px-2 py-1">{item.esti_time} min</td>
-                              </tr>
-                          ))}
-                      </tbody>
-                  </table>
-              </div>
-              
-              {totalLoadedProgTime > 0 && (
-                <div className="mt-2 p-2 bg-blue-100 border border-blue-300 rounded-lg text-center">
-                    <p className="font-semibold text-blue-800 flex items-center justify-center gap-2">
-                        <Clock className="h-5 w-5"/>
-                        Tiempo Total Estimado (Cargado): <span className="font-bold">{formatTotalTime(totalLoadedProgTime)}</span>
-                    </p>
-                </div>
-              )}
-
-              <div className="flex gap-2 justify-end">
-                <Button variant="outline" onClick={() => { setLoadedProgData([]); setPersonToAssign(''); setSelectedPersonalParaCargar(''); setSelectedLoteParaCargar(''); }}>Cancelar</Button>
-                <Button onClick={handleFinalizeAssociation} disabled={loading || !personToAssign || !isAttendanceValid}>
-                    {loading ? 'Asociando...' : 'Asociar y Guardar Producción'}
-                </Button>
-              </div>
-          </div>
-        )}
-         <Button variant="ghost" size="sm" className="mt-2 text-red-600" onClick={() => {
-            setShowCargarProduccion(false);
-            setLoadedProgData([]);
-            setPersonToAssign('');
-            setSelectedPersonalParaCargar('');
-            setSelectedLoteParaCargar('');
-        }}>Cerrar</Button>
-    </div>
-  );
-
   const RegistrosPendientesSection = (
     <div className="w-full">
         <div className="flex flex-wrap justify-between items-center mb-2 gap-2">
             <h2 className="text-lg font-bold text-starbucks-dark">Registros Pendientes</h2>
              <div className="flex flex-wrap gap-2">
-                <Button onClick={handleShowTicketPreview} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-sm text-sm transition-colors duration-200" disabled={scannedData.length === 0 || !isAttendanceValid}>
+                <Button onClick={handleShowTicketPreview} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-sm text-sm transition-colors duration-200" disabled={scannedData.length === 0}>
                     <FileText className="mr-2 h-4 w-4" /> Ticket
                 </Button>
-                <Button onClick={handleOpenCargarSeccion} className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg shadow-sm text-sm transition-colors duration-200" disabled={loading || !isAttendanceValid}>
+                <Button onClick={handleOpenCargarSeccion} className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg shadow-sm text-sm transition-colors duration-200" disabled={loading}>
                     <FileUp className="mr-2 h-4 w-4" /> Cargar
                 </Button>
                 <button id="clear-data" onClick={() => { if(window.confirm('¿Estás seguro?')) clearSessionData() }} className="px-3 py-1.5 bg-yellow-500 hover:bg-yellow-600 text-white font-semibold rounded-lg shadow-sm text-xs transition-colors duration-200">Limpiar</button>
             </div>
         </div>
         
-        {showCargarProduccion && CargarProduccionSection}
+        {showCargarProduccion && (
+           <div className="w-full mt-4 p-4 border-t-2 border-dashed border-gray-300">
+               <h3 className="text-lg font-bold text-starbucks-dark mb-2">Cargar Producción Programada</h3>
+               {loadedProgData.length === 0 ? (
+                 <>
+                   <RadioGroup value={cargaFilterType} onValueChange={(v) => setCargaFilterType(v as any)} className="grid grid-cols-2 gap-2 mb-4">
+                     <div>
+                       <RadioGroupItem value="persona" id="persona" className="sr-only" />
+                       <Label htmlFor="persona" className={`block w-full text-center p-2 rounded-md cursor-pointer text-sm font-medium ${cargaFilterType === 'persona' ? 'bg-starbucks-green text-white shadow' : 'bg-white'}`}>
+                           Por Persona
+                       </Label>
+                     </div>
+                      <div>
+                       <RadioGroupItem value="lote" id="lote" className="sr-only" />
+                       <Label htmlFor="lote" className={`block w-full text-center p-2 rounded-md cursor-pointer text-sm font-medium ${cargaFilterType === 'lote' ? 'bg-starbucks-green text-white shadow' : 'bg-white'}`}>
+                           Por Lote
+                       </Label>
+                     </div>
+                   </RadioGroup>
+                   <div className="flex items-end gap-2">
+                       <div className="flex-grow">
+                            {loadingProgramados ? <p>Cargando...</p> : (
+                              cargaFilterType === 'persona' ? (
+                                 <>
+                                  <Label htmlFor="select-personal-cargar">Selecciona Personal</Label>
+                                  <Select onValueChange={setSelectedPersonalParaCargar} value={selectedPersonalParaCargar}>
+                                     <SelectTrigger id="select-personal-cargar">
+                                         <SelectValue placeholder="Selecciona una persona" />
+                                     </SelectTrigger>
+                                     <SelectContent>
+                                         {programadosPersonalList.map((p) => (
+                                             <SelectItem key={p.name} value={p.name}>{p.name}</SelectItem>
+                                         ))}
+                                     </SelectContent>
+                                  </Select>
+                                 </>
+                              ) : (
+                                 <>
+                                 <Label htmlFor="select-lote-cargar">Selecciona Lote</Label>
+                                  <Select onValueChange={setSelectedLoteParaCargar} value={selectedLoteParaCargar}>
+                                     <SelectTrigger id="select-lote-cargar">
+                                         <SelectValue placeholder="Selecciona un lote" />
+                                     </SelectTrigger>
+                                     <SelectContent>
+                                         {programadosLotesList.map((l) => (
+                                             <SelectItem key={l.lote_p} value={l.lote_p}>{l.lote_p}</SelectItem>
+                                         ))}
+                                     </SelectContent>
+                                  </Select>
+                                 </>
+                              )
+                            )}
+                       </div>
+                       <Button onClick={handleCargarProgramada} disabled={loading || (cargaFilterType === 'persona' && !selectedPersonalParaCargar) || (cargaFilterType === 'lote' && !selectedLoteParaCargar)} className="bg-green-600 hover:bg-green-700">
+                           {loading ? 'Cargando...' : 'Cargar'}
+                       </Button>
+                   </div>
+                   </>
+               ) : (
+                 <div className="space-y-4">
+                     <div className="space-y-2">
+                         <Label>Reasignar producción a:</Label>
+                          <Combobox
+                             groupedOptions={groupedPersonalOptions}
+                             value={isMounted ? personToAssign : ''}
+                             onValueChange={setPersonToAssign}
+                             placeholder="Selecciona para reasignar..."
+                             emptyMessage="No se encontró personal."
+                         />
+                         <p className="text-xs text-gray-500">Originalmente asignado a: <span className="font-semibold">{selectedPersonalParaCargar || `Lote: ${selectedLoteParaCargar}`}</span></p>
+                     </div>
+                     <div className="max-h-64 overflow-auto border rounded-lg">
+                         <table className="w-full text-sm">
+                             <thead className="sticky top-0 bg-gray-100 z-10">
+                                 <tr>
+                                     <th className="px-2 py-1 text-left font-semibold">Código</th>
+                                     <th className="px-2 py-1 text-left font-semibold">Producto</th>
+                                     <th className="px-2 py-1 text-left font-semibold">Área</th>
+                                     <th className="px-2 py-1 text-left font-semibold">T. Est.</th>
+                                 </tr>
+                             </thead>
+                             <tbody>
+                                 {loadedProgData.map((item) => (
+                                     <tr key={item.code} className="border-b">
+                                         <td className="px-2 py-1 font-mono">{item.code}</td>
+                                         <td className="px-2 py-1">{item.product}</td>
+                                         <td className="px-2 py-1">{item.place || 'N/A'}</td>
+                                         <td className="px-2 py-1">{item.esti_time} min</td>
+                                     </tr>
+                                 ))}
+                             </tbody>
+                         </table>
+                     </div>
+                     <div className="flex gap-2 justify-end">
+                       <Button variant="outline" onClick={() => { setLoadedProgData([]); setPersonToAssign(''); }}>Cancelar</Button>
+                       <Button onClick={handleFinalizeAssociation} disabled={loading || !personToAssign}>
+                           {loading ? 'Asociando...' : 'Asociar y Guardar Producción'}
+                       </Button>
+                     </div>
+                 </div>
+               )}
+                <Button variant="ghost" size="sm" className="mt-2 text-red-600" onClick={() => setShowCargarProduccion(false)}>Cerrar</Button>
+           </div>
+        )}
 
         <div className="p-4 bg-starbucks-cream rounded-lg mt-4 space-y-4">
           <div>
@@ -2081,24 +2059,12 @@ const deleteRow = (codeToDelete: string) => {
                     emptyMessage="No se encontró personal."
                     buttonClassName="bg-transparent border-input"
                 />
-                {selectedPersonal && !isTargetPersonAttending && !checkingTargetAttendance && (
-                    <p className="text-[10px] text-red-600 font-bold mt-1 animate-pulse">
-                        ⚠️ EL OPERARIO NO HA REGISTRADO ENTRADA HOY
-                    </p>
-                )}
-                {checkingTargetAttendance && (
-                    <div className="flex items-center gap-1 mt-1">
-                        <Loader2 className="h-2 w-2 animate-spin text-gray-400" />
-                        <span className="text-[10px] text-gray-400 uppercase font-black">Validando asistencia...</span>
-                    </div>
-                )}
             </div>
              <Button 
                 onClick={handleManualAssociate} 
                 disabled={isAssociationDisabled || loading} 
                 className={cn(
-                    "bg-starbucks-accent hover:bg-starbucks-green text-white w-full sm:w-auto",
-                    (!isTargetPersonAttending || !isAttendanceValid) && selectedPersonal && "opacity-50 grayscale"
+                    "bg-starbucks-accent hover:bg-starbucks-green text-white w-full sm:w-auto"
                 )}
             >
                 <UserPlus className="mr-2 h-4 w-4" /> Asociar y Guardar
@@ -2116,7 +2082,7 @@ const deleteRow = (codeToDelete: string) => {
                 disabled={loading}
               />
           </div>
-          <Button onClick={handleProduccionProgramada} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg shadow-sm text-sm transition-colors duration-200 w-full" disabled={scannedData.length === 0 || loading || !selectedPersonal || (!selectedArea && !skipAreaSelection) || !isAttendanceValid}>
+          <Button onClick={handleProduccionProgramada} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg shadow-sm text-sm transition-colors duration-200 w-full" disabled={scannedData.length === 0 || loading || !selectedPersonal || (!selectedArea && !skipAreaSelection)}>
             Guardar como Producción Programada
           </Button>
 
@@ -2130,7 +2096,6 @@ const deleteRow = (codeToDelete: string) => {
                                 <TableHead>Creado por</TableHead>
                                 <TableHead>Fecha</TableHead>
                                 <TableHead>Cantidad</TableHead>
-                                <TableHead>Tiempo Programado</TableHead>
                                 <TableHead className="text-right">Acciones</TableHead>
                             </TableRow>
                         </TableHeader>
@@ -2141,7 +2106,6 @@ const deleteRow = (codeToDelete: string) => {
                                     <TableCell>{lote.name_inc}</TableCell>
                                     <TableCell>{new Date(lote.date).toLocaleString('es-MX')}</TableCell>
                                     <TableCell className="font-semibold">{lote.count}</TableCell>
-                                    <TableCell>{formatTotalTime(lote.total_esti_time)}</TableCell>
                                     <TableCell className="text-right">
                                       <Button variant="ghost" size="icon" onClick={() => openDeleteLoteModal(lote.lote_p)} className="text-red-500 hover:text-red-600 h-8 w-8">
                                           <Trash2 className="h-4 w-4" />
@@ -2150,7 +2114,7 @@ const deleteRow = (codeToDelete: string) => {
                                 </TableRow>
                             )) : (
                                 <TableRow>
-                                    <TableCell colSpan={6} className="text-center text-gray-500 py-4">
+                                    <TableCell colSpan={5} className="text-center text-gray-500 py-4">
                                         No hay lotes programados.
                                     </TableCell>
                                 </TableRow>
@@ -2211,16 +2175,6 @@ const deleteRow = (codeToDelete: string) => {
                     <p className="text-gray-600 text-sm md:text-base mt-1">Asigna un producto a un miembro del personal.</p>
                 </header>
 
-                {!isAttendanceValid && attendanceChecked && (
-                    <Alert variant="destructive" className="animate-in fade-in zoom-in duration-300">
-                        <AlertTriangle className="h-5 w-5" />
-                        <AlertTitle className="font-black uppercase tracking-widest text-xs">Asistencia Requerida</AlertTitle>
-                        <AlertDescription className="text-sm font-bold">
-                            Tú (encargado) no tienes una entrada activa registrada hoy. No es posible asignar etiquetas.
-                        </AlertDescription>
-                    </Alert>
-                )}
-
                 <div className="flex justify-center gap-4">
                     <div className={`flex items-center gap-2 p-2 rounded-lg ${dbStatus.personalDb === 'success' ? 'bg-green-100 text-green-800' : dbStatus.personalDb === 'error' ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800'}`}>
                         {dbStatus.personalDb === 'success' ? <Wifi className="h-5 w-5" /> : dbStatus.personalDb === 'error' ? <WifiOff className="h-5 w-5"/> : <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-yellow-800"></div>}
@@ -2263,9 +2217,9 @@ const deleteRow = (codeToDelete: string) => {
                             className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 flex-grow bg-transparent"
                             placeholder="Ingresa el código de corte..."
                             onKeyDown={(e) => e.key === 'Enter' && handleVerifyCode()}
-                            disabled={isVerifying || !encargado.trim() || !isAttendanceValid}
+                            disabled={isVerifying || !encargado.trim()}
                         />
-                        <Button onClick={handleVerifyCode} disabled={isVerifying || !encargado.trim() || !isAttendanceValid}>
+                        <Button onClick={handleVerifyCode} disabled={isVerifying || !encargado.trim()}>
                             {isVerifying ? 'Verificando...' : <Search className="h-4 w-4"/>}
                         </Button>
                     </div>
@@ -2355,7 +2309,7 @@ const deleteRow = (codeToDelete: string) => {
                         )}
                         
                         <div id="scanner-controls" className="mt-4 flex flex-wrap gap-2 justify-center">
-                            <button onClick={startScanner} disabled={scannerActive || loading || !encargado || !isAttendanceValid} className="px-4 py-2 text-white font-semibold rounded-lg shadow-md transition-colors duration-200 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-sm">
+                            <button onClick={startScanner} disabled={scannerActive || loading || !encargado} className="px-4 py-2 text-white font-semibold rounded-lg shadow-md transition-colors duration-200 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-sm">
                                 Iniciar
                             </button>
                             <button onClick={stopScanner} disabled={!scannerActive} className="px-4 py-2 text-white font-semibold rounded-lg shadow-md transition-colors duration-200 bg-red-600 hover:bg-red-700 disabled:bg-gray-400 text-sm">
@@ -2457,7 +2411,6 @@ const deleteRow = (codeToDelete: string) => {
                                 className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 w-full border-0 bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0"
                                 placeholder="Escriba el código..."
                                 onKeyDown={(e) => e.key === 'Enter' && handleManualAdd()}
-                                disabled={!isAttendanceValid}
                             />
                             <Button
                                 type="button"
@@ -2465,7 +2418,6 @@ const deleteRow = (codeToDelete: string) => {
                                 onClick={handleManualAdd}
                                 size="icon"
                                 className="h-8 w-8 bg-starbucks-green hover:bg-starbucks-dark text-white rounded-md mr-1"
-                                disabled={!isAttendanceValid}
                             >
                                 <PlusCircle className="h-5 w-5" />
                             </Button>

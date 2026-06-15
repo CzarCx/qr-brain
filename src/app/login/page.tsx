@@ -17,9 +17,11 @@ import {
   AlertCircle, 
   Eye, 
   EyeOff, 
-  ArrowRight 
+  ArrowRight,
+  UserCircle2
 } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { useAuth } from '@/components/AuthProvider';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -28,6 +30,7 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
+  const { continueAsGuest } = useAuth();
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -81,7 +84,7 @@ export default function LoginPage() {
               </div>
             </CardHeader>
 
-            <CardContent className="pt-6">
+            <CardContent className="pt-6 space-y-6">
               <form onSubmit={handleLogin} className="space-y-6">
                 {error && (
                   <Alert variant="destructive" className="rounded-2xl border-none bg-red-50 text-red-600 animate-in slide-in-from-top-2 duration-300">
@@ -166,6 +169,25 @@ export default function LoginPage() {
                   )}
                 </Button>
               </form>
+
+              <div className="relative">
+                <div className="absolute inset-0 flex items-center">
+                  <span className="w-full border-t border-gray-100" />
+                </div>
+                <div className="relative flex justify-center text-[10px] font-black uppercase tracking-widest">
+                  <span className="bg-white px-2 text-gray-300">O continuar como</span>
+                </div>
+              </div>
+
+              <Button 
+                variant="outline" 
+                onClick={continueAsGuest}
+                className="w-full h-14 border-2 border-gray-100 hover:border-[#006241]/20 hover:bg-gray-50 rounded-2xl font-black text-xs text-gray-500 tracking-widest transition-all gap-2"
+                disabled={loading}
+              >
+                <UserCircle2 className="h-5 w-5" />
+                MODO INVITADO
+              </Button>
             </CardContent>
             
             <CardFooter className="flex flex-col items-center justify-center pt-8 space-y-4">

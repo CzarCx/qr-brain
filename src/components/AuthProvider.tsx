@@ -34,7 +34,9 @@ type AuthContextType = {
   profile: Profile | null;
   roles: string[];
   loading: boolean;
+  isGuest: boolean;
   signOut: () => Promise<void>;
+  continueAsGuest: () => void;
   hasRole: (code: string) => boolean;
 };
 
@@ -46,6 +48,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [roles, setRoles] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isGuest, setIsGuest] = useState(false);
   const [isMetadataLoaded, setIsMetadataLoaded] = useState(false);
   const router = useRouter();
   const pathname = usePathname();
@@ -56,16 +59,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     isSyncing.current = true;
 
     try {
-      // Intentar cargar perfil y roles simultáneamente para velocidad
       const [profileRes, rolesRes] = await Promise.all([
         supabaseEtiquetas.from('table_profiles').select('*').eq('id', currentUser.id).maybeSingle(),
         supabaseEtiquetas.from('user_roles').select('roles(code)').eq('user_id', currentUser.id)
       ]);
 
-      let finalProfile = profileRes.data;
-
-      if (finalProfile) {
-        setProfile(finalProfile as Profile);
+      if (profileRes.data) {
+        setProfile(profileRes.data as Profile);
       }
 
       if (rolesRes.data) {
@@ -85,9 +85,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
+    // Check for guest mode first
+    const guestMode = localStorage.getItem('auth_guest_mode') === 'true';
+    if (guestMode) {
+      setIsGuest(true);
+      setLoading(false);
+      return;
+    }
+
     const initAuth = async () => {
       try {
-        // Obtener sesión de forma inmediata (local)
         const { data: { session: initialSession } } = await supabaseEtiquetas.auth.getSession();
         
         if (initialSession) {
@@ -126,20 +133,40 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [syncProfileAndRoles]);
 
   const hasRole = (code: string) => {
+    if (isGuest) return true; // Guests can see everything for workflow speed if requested
     return roles.includes('ADMIN') || roles.includes(code);
+  };
+
+  const continueAsGuest = () => {
+    localStorage.setItem('auth_guest_mode', 'true');
+    setIsGuest(true);
+    setLoading(false);
+    router.push('/main');
   };
 
   const signOut = async () => {
     setLoading(true);
+    localStorage.removeItem('auth_guest_mode');
+    setIsGuest(false);
     await supabaseEtiquetas.auth.signOut();
-    router.push('/login');
+    setSession(null);
+    setUser(null);
+    setProfile(null);
+    setRoles([]);
+    setLoading(false);
+    router.replace('/login');
   };
 
   useEffect(() => {
-    if (loading || !isMetadataLoaded) return;
+    if (loading) return;
 
     const isPublicRoute = pathname === '/login';
     
+    if (isGuest) {
+      if (isPublicRoute) router.replace('/main');
+      return;
+    }
+
     if (!user) {
       if (!isPublicRoute) router.replace('/login');
       return;
@@ -150,19 +177,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    if (roles.includes('ADMIN')) return;
-
-    const requiredRoles = ROUTE_PERMISSIONS[pathname];
-    if (requiredRoles && requiredRoles.length > 0) {
-      const hasPermission = requiredRoles.some(r => roles.includes(r));
-      if (!hasPermission && pathname !== '/main') {
-        router.replace('/main');
+    // Role check logic
+    if (isMetadataLoaded && !roles.includes('ADMIN')) {
+      const requiredRoles = ROUTE_PERMISSIONS[pathname];
+      if (requiredRoles && requiredRoles.length > 0) {
+        const hasPermission = requiredRoles.some(r => roles.includes(r));
+        if (!hasPermission && pathname !== '/main') {
+          router.replace('/main');
+        }
       }
     }
-  }, [user, loading, isMetadataLoaded, pathname, roles, router]);
+  }, [user, loading, isMetadataLoaded, pathname, roles, router, isGuest]);
 
   return (
-    <AuthContext.Provider value={{ session, user, profile, roles, loading, signOut, hasRole }}>
+    <AuthContext.Provider value={{ session, user, profile, roles, loading, isGuest, signOut, continueAsGuest, hasRole }}>
       {loading ? (
         <div className="fixed inset-0 flex flex-col items-center justify-center bg-background z-[9999]">
           <div className="flex flex-col items-center gap-6">
