@@ -829,7 +829,7 @@ export default function Home() {
 
  const processScan = useCallback(async (decodedText: string) => {
     if (!isGuest && !isAttendanceValid) {
-        showModalNotification('Asistencia Requerida', 'Tú (el encargado) debes tener un registro de entrada hoy para operar el sistema.', 'destructive');
+        showModalNotification('Asistencia Requerida', 'Tú (encargado) debes tener un registro de entrada hoy para operar.', 'destructive');
         return;
     }
 
@@ -2440,15 +2440,43 @@ const deleteRow = (codeToDelete: string) => {
             </div>}
 
             {showNotification && (
-                <div id="notification-overlay" className="p-4 fixed inset-0 bg-black/75 flex justify-center items-center z-[100]" onClick={() => setShowNotification(false)}>
-                     <div className="bg-starbucks-white rounded-lg shadow-xl p-6 w-full max-sm text-center space-y-4" onClick={(e) => e.stopPropagation()}>
-                        <Alert variant={notification.variant as any} className={notification.variant === 'success' ? 'border-green-500 text-green-700 [&>svg]:text-green-700' : ''}>
-                            {notification.variant === 'destructive' ? <XCircle className="h-5 w-5" /> : notification.variant === 'success' ? <CheckCircle className="h-5 w-5"/> : <AlertTriangle className="h-5 w-5" />}
-                            <AlertTitle className="font-bold">{notification.title}</AlertTitle>
-                            <AlertDescription>{notification.message}</AlertDescription>
-                        </Alert>
-                        <div className="flex justify-center gap-4 mt-4">
-                           <Button onClick={() => setShowNotification(false)}>Cerrar</Button>
+                <div id="notification-overlay" className="p-4 fixed inset-0 bg-black/60 backdrop-blur-sm flex justify-center items-center z-[100]" onClick={() => setShowNotification(false)}>
+                     <div 
+                        className="bg-white rounded-[2.5rem] shadow-2xl p-8 w-full max-w-[320px] animate-in fade-in zoom-in duration-300" 
+                        onClick={(e) => e.stopPropagation()}
+                     >
+                        <div className="flex flex-col items-center text-center space-y-6">
+                            <div className={cn(
+                                "p-4 rounded-3xl",
+                                notification.variant === 'destructive' ? "bg-red-50 text-red-500" : 
+                                notification.variant === 'success' ? "bg-green-50 text-green-600" : 
+                                "bg-amber-50 text-amber-600"
+                            )}>
+                                {notification.variant === 'destructive' ? <XCircle className="h-10 w-10" /> : 
+                                 notification.variant === 'success' ? <CheckCircle className="h-10 w-10"/> : 
+                                 <AlertTriangle className="h-10 w-10" />}
+                            </div>
+                            
+                            <div className="space-y-2">
+                                <h3 className="text-xl font-black text-gray-900 tracking-tight leading-tight">
+                                    {notification.title}
+                                </h3>
+                                <p className="text-sm text-gray-500 font-medium leading-relaxed">
+                                    {notification.message}
+                                </p>
+                            </div>
+
+                            <Button 
+                                onClick={() => setShowNotification(false)}
+                                className={cn(
+                                    "w-full h-12 rounded-2xl font-black text-xs tracking-widest transition-all",
+                                    notification.variant === 'destructive' ? "bg-red-500 hover:bg-red-600 shadow-lg shadow-red-100" :
+                                    notification.variant === 'success' ? "bg-green-600 hover:bg-green-700 shadow-lg shadow-green-100" :
+                                    "bg-starbucks-green hover:bg-starbucks-dark shadow-lg shadow-starbucks-green/20"
+                                )}
+                            >
+                                Cerrar
+                            </Button>
                         </div>
                     </div>
                 </div>
