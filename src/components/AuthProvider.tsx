@@ -46,6 +46,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [roles, setRoles] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isMetadataLoaded, setIsMetadataLoaded] = useState(false);
   const router = useRouter();
   const pathname = usePathname();
   const isSyncing = useRef(false);
@@ -75,12 +76,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           .single();
         
         if (!createError) finalProfile = newProfile;
-      } else if (finalProfile) {
-        supabaseEtiquetas
-          .from('table_profiles')
-          .update({ last_seen: new Date().toISOString() })
-          .eq('id', currentUser.id)
-          .then();
       }
 
       if (finalProfile) setProfile(finalProfile as Profile);
@@ -91,6 +86,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           .filter(Boolean);
         setRoles(codes);
       }
+      setIsMetadataLoaded(true);
     } catch (err) {
       console.error("Error en sincronización de sesión:", err);
     } finally {
@@ -100,7 +96,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   useEffect(() => {
-    // 1. Initial Session Check (Garantiza desbloqueo rápido)
     const initAuth = async () => {
       try {
         const { data: { session: initialSession } } = await supabaseEtiquetas.auth.getSession();
@@ -119,28 +114,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     initAuth();
 
-    // 2. Auth State Listener
     const { data: { subscription } } = supabaseEtiquetas.auth.onAuthStateChange(async (event, currentSession) => {
       if (currentSession) {
         setSession(currentSession);
         setUser(currentSession.user);
-        await syncProfileAndRoles(currentSession.user);
+        if (!isMetadataLoaded) await syncProfileAndRoles(currentSession.user);
       } else {
         setSession(null);
         setUser(null);
         setProfile(null);
         setRoles([]);
         setLoading(false);
+        setIsMetadataLoaded(false);
       }
     });
 
-    // 3. Safety Fail-safe (Evita quedarse atorado si Supabase no responde)
     const timeout = setTimeout(() => {
-      if (loading) {
-        console.warn("Auth timeout reached. Unlocking UI.");
-        setLoading(false);
-      }
-    }, 6000);
+      if (loading) setLoading(false);
+    }, 8000);
 
     return () => {
       subscription.unsubscribe();
@@ -159,7 +150,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   useEffect(() => {
-    if (loading) return;
+    if (loading || !isMetadataLoaded) return;
 
     const isPublicRoute = pathname === '/login';
     
@@ -182,7 +173,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         router.replace('/main');
       }
     }
-  }, [session, loading, pathname, roles, router]);
+  }, [session, loading, isMetadataLoaded, pathname, roles, router]);
 
   return (
     <AuthContext.Provider value={{ session, user, profile, roles, loading, signOut, hasRole }}>

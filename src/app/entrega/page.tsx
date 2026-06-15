@@ -394,7 +394,7 @@ export default function Home() {
     return () => {
       cleanup();
     };
-  }, [scannerActive, selectedScannerMode, isMounted, isMobile]);
+  }, [scannerActive, selectedScannerMode, isMounted, isMobile, onScanSuccess]);
 
   const startScanner = () => {
     if (!encargado.trim()) return showAppMessage('Por favor, selecciona un encargado.', 'error');
