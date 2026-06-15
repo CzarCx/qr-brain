@@ -50,16 +50,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const isSyncing = useRef(false);
 
-  /**
-   * Sincroniza el perfil y los roles del usuario de forma atómica.
-   * Garantiza que loading se vuelva false incluso en errores parciales.
-   */
   const syncProfileAndRoles = async (currentUser: User) => {
     if (isSyncing.current) return;
     isSyncing.current = true;
 
     try {
-      // Carga paralela de perfil y roles para máxima velocidad
       const [profileRes, rolesRes] = await Promise.all([
         supabaseEtiquetas.from('table_profiles').select('*').eq('id', currentUser.id).maybeSingle(),
         supabaseEtiquetas.from('user_roles').select('roles(code)').eq('user_id', currentUser.id)
@@ -68,7 +63,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       let finalProfile = profileRes.data;
 
       if (!finalProfile && !profileRes.error) {
-        // Crear perfil básico si no existe (primer ingreso)
         const { data: newProfile, error: createError } = await supabaseEtiquetas
           .from('table_profiles')
           .insert([{
@@ -82,7 +76,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         
         if (!createError) finalProfile = newProfile;
       } else if (finalProfile) {
-        // Actualizar última conexión de forma asíncrona (no bloquea)
         supabaseEtiquetas
           .from('table_profiles')
           .update({ last_seen: new Date().toISOString() })
@@ -107,16 +100,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   useEffect(() => {
-    // Inicialización de Auth mejorada: manejamos eventos de sesión persistente
-    const { data: { subscription } } = supabaseEtiquetas.auth.onAuthStateChange(async (event, currentSession) => {
-      console.log(`Auth state change: ${event}`);
+    // 1. Initial Session Check (Garantiza desbloqueo rápido)
+    const initAuth = async () => {
+      try {
+        const { data: { session: initialSession } } = await supabaseEtiquetas.auth.getSession();
+        if (initialSession) {
+          setSession(initialSession);
+          setUser(initialSession.user);
+          await syncProfileAndRoles(initialSession.user);
+        } else {
+          setLoading(false);
+        }
+      } catch (err) {
+        console.error("Auth init error:", err);
+        setLoading(false);
+      }
+    };
 
+    initAuth();
+
+    // 2. Auth State Listener
+    const { data: { subscription } } = supabaseEtiquetas.auth.onAuthStateChange(async (event, currentSession) => {
       if (currentSession) {
         setSession(currentSession);
         setUser(currentSession.user);
         await syncProfileAndRoles(currentSession.user);
       } else {
-        // Limpieza inmediata en cierre de sesión
         setSession(null);
         setUser(null);
         setProfile(null);
@@ -125,7 +134,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     });
 
-    return () => subscription.unsubscribe();
+    // 3. Safety Fail-safe (Evita quedarse atorado si Supabase no responde)
+    const timeout = setTimeout(() => {
+      if (loading) {
+        console.warn("Auth timeout reached. Unlocking UI.");
+        setLoading(false);
+      }
+    }, 6000);
+
+    return () => {
+      subscription.unsubscribe();
+      clearTimeout(timeout);
+    };
   }, []);
 
   const hasRole = (code: string) => {
@@ -138,28 +158,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     router.push('/login');
   };
 
-  // Lógica de Redirección y Control de Acceso
   useEffect(() => {
     if (loading) return;
 
     const isPublicRoute = pathname === '/login';
     
-    // 1. Redirigir a login si no hay sesión
     if (!session) {
       if (!isPublicRoute) router.replace('/login');
       return;
     }
 
-    // 2. Redirigir a main si está logueado pero intenta ver login
     if (isPublicRoute) {
       router.replace('/main');
       return;
     }
 
-    // 3. Ignorar validaciones para ADMIN
     if (roles.includes('ADMIN')) return;
 
-    // 4. Validar permisos de ruta para usuarios estándar
     const requiredRoles = ROUTE_PERMISSIONS[pathname];
     if (requiredRoles && requiredRoles.length > 0) {
       const hasPermission = requiredRoles.some(r => roles.includes(r));
