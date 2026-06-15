@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
+import React, { createContext, useContext, useEffect, useState, useRef, useCallback } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { supabaseEtiquetas } from '@/lib/supabaseClient';
 import { Session, User } from '@supabase/supabase-js';
@@ -51,12 +51,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const isSyncing = useRef(false);
 
-  const syncProfileAndRoles = async (currentUser: User) => {
+  const syncProfileAndRoles = useCallback(async (currentUser: User) => {
     if (isSyncing.current) return;
     isSyncing.current = true;
 
     try {
-      // Intentar cargar perfil y roles simultáneamente
+      // Intentar cargar perfil y roles simultáneamente para velocidad
       const [profileRes, rolesRes] = await Promise.all([
         supabaseEtiquetas.from('table_profiles').select('*').eq('id', currentUser.id).maybeSingle(),
         supabaseEtiquetas.from('user_roles').select('roles(code)').eq('user_id', currentUser.id)
@@ -64,23 +64,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       let finalProfile = profileRes.data;
 
-      // Si no hay perfil, crearlo (como usuario básico)
-      if (!finalProfile && !profileRes.error) {
-        const { data: newProfile, error: createError } = await supabaseEtiquetas
-          .from('table_profiles')
-          .insert([{
-            id: currentUser.id,
-            email: currentUser.email,
-            role: 'USER',
-            last_seen: new Date().toISOString()
-          }])
-          .select()
-          .single();
-        
-        if (!createError) finalProfile = newProfile;
+      if (finalProfile) {
+        setProfile(finalProfile as Profile);
       }
-
-      if (finalProfile) setProfile(finalProfile as Profile);
 
       if (rolesRes.data) {
         const codes = (rolesRes.data as any[])
@@ -92,26 +78,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setIsMetadataLoaded(true);
     } catch (err) {
       console.error("Error en sincronización de sesión:", err);
-      // Marcamos como cargado incluso con error para no bloquear la app infinitamente
-      setIsMetadataLoaded(true);
     } finally {
       isSyncing.current = false;
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     const initAuth = async () => {
       try {
-        // Usar getUser() es más seguro al recargar que getSession()
-        const { data: { user: initialUser }, error } = await supabaseEtiquetas.auth.getUser();
+        // Obtener sesión de forma inmediata (local)
+        const { data: { session: initialSession } } = await supabaseEtiquetas.auth.getSession();
         
-        if (initialUser) {
-          setUser(initialUser);
-          // Obtenemos la sesión para mantener compatibilidad
-          const { data: { session: currentSession } } = await supabaseEtiquetas.auth.getSession();
-          setSession(currentSession);
-          await syncProfileAndRoles(initialUser);
+        if (initialSession) {
+          setSession(initialSession);
+          setUser(initialSession.user);
+          await syncProfileAndRoles(initialSession.user);
         } else {
           setLoading(false);
         }
@@ -140,19 +122,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     });
 
-    // FAIL-SAFE: Desbloquear la pantalla de carga después de 6 segundos pase lo que pase
-    const timeout = setTimeout(() => {
-      if (loading) {
-        console.warn("Auth: Fail-safe timeout triggered. Unblocking UI.");
-        setLoading(false);
-      }
-    }, 6000);
-
-    return () => {
-      subscription.unsubscribe();
-      clearTimeout(timeout);
-    };
-  }, []);
+    return () => subscription.unsubscribe();
+  }, [syncProfileAndRoles]);
 
   const hasRole = (code: string) => {
     return roles.includes('ADMIN') || roles.includes(code);
@@ -164,29 +135,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     router.push('/login');
   };
 
-  // Lógica de redirección y protección de rutas
   useEffect(() => {
-    // IMPORTANTE: No tomar decisiones de ruta si aún estamos cargando o recuperando metadatos
     if (loading || !isMetadataLoaded) return;
 
     const isPublicRoute = pathname === '/login';
     
-    // Si no hay sesión, mandamos al login
     if (!user) {
       if (!isPublicRoute) router.replace('/login');
       return;
     }
 
-    // Si hay sesión y estamos en login, mandamos a main
     if (isPublicRoute) {
       router.replace('/main');
       return;
     }
 
-    // Si es ADMIN, tiene acceso total
     if (roles.includes('ADMIN')) return;
 
-    // Verificar permisos específicos por ruta
     const requiredRoles = ROUTE_PERMISSIONS[pathname];
     if (requiredRoles && requiredRoles.length > 0) {
       const hasPermission = requiredRoles.some(r => roles.includes(r));
@@ -208,8 +173,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 </div>
             </div>
             <div className="text-center space-y-2">
-                <p className="text-sm font-black text-gray-800 uppercase tracking-[0.3em] animate-pulse">Autenticando Acceso</p>
-                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Sincronizando con base de datos de etiquetas...</p>
+                <p className="text-sm font-black text-gray-800 uppercase tracking-[0.3em] animate-pulse">Sincronizando Accesos</p>
+                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Validando credenciales de etiquetas...</p>
             </div>
           </div>
         </div>

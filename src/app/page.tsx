@@ -1,4 +1,3 @@
-
 'use client';
 import React, {useEffect, useRef, useState, useCallback, useMemo} from 'react';
 import Head from 'next/head';
@@ -132,7 +131,6 @@ export default function Home() {
   const [elapsedTime, setElapsedTime] = useState(0);
   const [isPrintDialogOpen, setIsPrintDialogOpen] = useState(false);
   
-  // Estados de Asistencia
   const [isAttendanceValid, setIsAttendanceValid] = useState(false);
   const [attendanceChecked, setAttendanceChecked] = useState(false);
   const [isTargetPersonAttending, setIsTargetPersonAttending] = useState(false);
@@ -143,7 +141,6 @@ export default function Home() {
   const [deleteLoteName, setDeleteLoteName] = useState('');
   const [deleteLoteReason, setDeleteLoteReason] = useState('');
 
-  // Nuevas métricas
   const [workForceCapacity, setWorkForceCapacity] = useState<{ minutes: number; hours: number; employeeCount: number } | null>(null);
   const [requiredWorkload, setRequiredWorkload] = useState<{ minutes: number; orderCount: number } | null>(null);
 
@@ -248,7 +245,6 @@ export default function Home() {
       const startOfDay = new Date(today.setHours(0,0,0,0)).toISOString();
       const endOfDay = new Date(today.setHours(23,59,59,999)).toISOString();
 
-      // 1. Obtener ventas de hoy de ml_sales
       const { data: sales, error: salesError } = await supabaseEtiquetas
         .from('ml_sales')
         .select('sku, pack_quantity')
@@ -262,11 +258,8 @@ export default function Home() {
         return;
       }
 
-      // 2. Extraer SKUs únicos de las ventas
       const skusInSales = Array.from(new Set(sales.map(s => s.sku).filter(Boolean))) as string[];
       
-      // 3. Buscar esos SKUs directamente en la columna 'sku' de la tabla 'sku_m'
-      // Siguiendo la instrucción de buscar lo obtenido de ml_sales directamente en sku_m.sku
       const { data: skuMTimes, error: mError } = await supabaseEtiquetas
         .from('sku_m')
         .select('sku, esti_time')
@@ -274,7 +267,6 @@ export default function Home() {
 
       if (mError) throw mError;
 
-      // 4. Crear mapa de tiempos
       const skuToTimeMap = new Map();
       if (skuMTimes) {
         skuMTimes.forEach(m => {
@@ -284,7 +276,6 @@ export default function Home() {
         });
       }
 
-      // 5. Calcular total acumulado multiplicando por la cantidad de la venta
       let totalMinutes = 0;
       sales.forEach(sale => {
         const time = skuToTimeMap.get(sale.sku) || 0;
@@ -816,6 +807,14 @@ export default function Home() {
           setLoading(false);
       }
   };
+
+  const handleManualAssociate = async () => {
+    if (!selectedPersonal) {
+      showModalNotification('Falta Personal', 'Por favor, selecciona al personal para asociar.', 'destructive');
+      return;
+    }
+    await saveToPersonal(selectedPersonal);
+  };
   
   const onScanSuccess = useCallback((decodedText: string, decodedResult: any) => {
     if (!scannerActive || Date.now() - lastScanTimeRef.current < MIN_SCAN_INTERVAL || !isAttendanceValid) return;
@@ -1269,14 +1268,6 @@ const deleteRow = (codeToDelete: string) => {
       return;
     }
     setIsPrintDialogOpen(true);
-  };
-
-  const handleManualAssociate = async () => {
-    if (!selectedPersonal) {
-      showModalNotification('Falta Personal', 'Por favor, selecciona al personal para asociar.', 'destructive');
-      return;
-    }
-    await saveToPersonal(selectedPersonal);
   };
 
   const ticketData = useMemo(() => {
