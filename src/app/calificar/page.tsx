@@ -92,7 +92,7 @@ type InventoryCategory = {
 };
 
 export default function CalificarPage() {
-  const { profile } = useAuth();
+  const { profile, user } = useAuth();
   const [isMounted, setIsMounted] = useState(false);
   const [message, setMessage] = useState({ text: 'Apunte la cámara a un código QR.', type: 'info', show: false });
   const [lastScannedResult, setLastScannedResult] = useState<ScanResult | null>(null);
@@ -170,6 +170,32 @@ export default function CalificarPage() {
     fetchEncargados();
   }, []);
 
+  // Vincular encargado con el perfil de usuario logueado o buscar en empleados
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const fetchNameFromEmployees = async () => {
+        try {
+            const { data, error } = await supabaseEtiquetas
+                .from('empleados')
+                .select('nombres, apellido_paterno, apellido_materno')
+                .eq('id', user.id)
+                .maybeSingle();
+
+            if (data) {
+                const fullName = [data.nombres, data.apellido_paterno, data.apellido_materno].filter(Boolean).join(' ');
+                setEncargado(fullName);
+            } else if (profile?.name) {
+                setEncargado(profile.name);
+            }
+        } catch (err) {
+            console.error("Error fetching name for calificar encargado:", err);
+        }
+    };
+
+    fetchNameFromEmployees();
+  }, [user, profile]);
+
   const fetchInventoryItems = useCallback(async (query: string = '') => {
     setLoadingInventory(true);
     try {
@@ -214,17 +240,13 @@ export default function CalificarPage() {
     return () => clearTimeout(timer);
   }, [searchQueryDespachado, fetchInventoryItems, isInventoryPopoverOpen]);
 
-  useEffect(() => {
-    if (profile?.name) {
-      setEncargado(profile.name);
-    }
-  }, [profile]);
-
   const groupedEncargadoOptions = useMemo(() => {
     let list = [...encargadosList];
-    if (profile?.name && !list.some(e => e.name === profile.name)) {
-        list.push({ name: profile.name, rol: 'Control de calidad', organization: 'Usuario Actual' });
+    
+    if (encargado && !list.some(e => e.name === encargado)) {
+        list.push({ name: encargado, rol: 'Control de calidad', organization: 'Usuario Actual' });
     }
+
     if (list.length === 0) return [];
     const grouped = list.reduce((acc, person) => {
         const org = person.organization || 'Sin Empresa';
@@ -236,7 +258,7 @@ export default function CalificarPage() {
         label: org,
         options: grouped[org].sort((a, b) => a.label.localeCompare(b.label))
     }));
-  }, [encargadosList, profile]);
+  }, [encargadosList, encargado]);
 
   useEffect(() => {
     let interval: NodeJS.Timeout | null = null;
@@ -953,6 +975,7 @@ const triggerMassQualify = async () => {
                             />
                             <Button
                                 type="button"
+                                id="lote-load-btn"
                                 onClick={handleLoadLote}
                                 size="icon"
                                 className="h-8 w-8 bg-blue-600 hover:bg-blue-700 text-white rounded-md mr-1"
@@ -1164,4 +1187,3 @@ const triggerMassQualify = async () => {
     </>
   );
 }
-

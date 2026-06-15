@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useEffect, useState, useRef, useMemo } from 'react';
@@ -53,6 +52,7 @@ import {
 } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { Badge } from '@/components/ui/badge';
+import { useAuth } from '@/components/AuthProvider';
 
 const PREDEFINED_RESPONSABLES = [
   "GENARO VÁZQUEZ",
@@ -80,6 +80,7 @@ const SewingMachineIcon = ({ className }: { className?: string }) => (
 );
 
 export default function SewingTicketsPage() {
+  const { profile, user } = useAuth();
   const { 
     tickets, 
     loading, 
@@ -123,6 +124,34 @@ export default function SewingTicketsPage() {
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
   }, [fetchTickets]);
+
+  // Vincular responsable con el perfil de usuario logueado o buscar en empleados
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const fetchNameFromEmployees = async () => {
+        try {
+            const { data, error } = await supabaseEtiquetas
+                .from('empleados')
+                .select('nombres, apellido_paterno, apellido_materno')
+                .eq('id', user.id)
+                .maybeSingle();
+
+            if (data) {
+                const fullName = [data.nombres, data.apellido_paterno, data.apellido_materno].filter(Boolean).join(' ');
+                setResponsable(fullName);
+                localStorage.setItem('sewing_responsable', fullName);
+            } else if (profile?.name) {
+                setResponsable(profile.name);
+                localStorage.setItem('sewing_responsable', profile.name);
+            }
+        } catch (err) {
+            console.error("Error fetching name for sewing responsable:", err);
+        }
+    };
+
+    fetchNameFromEmployees();
+  }, [user, profile]);
 
   useEffect(() => {
     const fetchCategories = async () => {
@@ -462,7 +491,13 @@ export default function SewingTicketsPage() {
               <div className="space-y-2">
                 <Label htmlFor="responsable" className="flex items-center gap-2 font-bold text-xs text-starbucks-dark"><UserCircle className="h-4 w-4" /> Responsable de Vaciado</Label>
                 <div className="relative group">
-                  <Input id="responsable" placeholder="Nombre..." value={responsable} onChange={handleResponsableChange} className="uppercase font-bold text-xs" />
+                  <Input 
+                    id="responsable" 
+                    placeholder="Selecciona responsable..." 
+                    value={responsable} 
+                    readOnly 
+                    className="uppercase font-bold text-xs bg-gray-50 cursor-default" 
+                  />
                   <Popover open={isResponsableListOpen} onOpenChange={setIsResponsableListOpen}>
                     <PopoverTrigger asChild>
                       <Button variant="ghost" size="sm" className="absolute right-0 top-0 h-full px-3 text-gray-400"><ChevronsUpDown className="h-4 w-4" /></Button>
