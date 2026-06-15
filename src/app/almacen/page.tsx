@@ -2,7 +2,7 @@
 import {useEffect, useRef, useState, useCallback, useMemo} from 'react';
 import Head from 'next/head';
 import { Html5Qrcode, Html5QrcodeScannerState } from 'html5-qrcode';
-import { supabase } from '@/lib/supabaseClient';
+import { supabase, supabaseEtiquetas } from '@/lib/supabaseClient';
 import {
   Dialog,
   DialogContent,
@@ -53,7 +53,7 @@ type Encargado = {
 };
 
 export default function AlmacenPage() {
-  const { profile } = useAuth();
+  const { profile, user } = useAuth();
   const [isMounted, setIsMounted] = useState(false);
   const [message, setMessage] = useState({ text: 'Apunte la cámara a un código QR.', type: 'info' as 'info' | 'success' | 'error' | 'warning', show: false });
   const [lastScannedResult, setLastScannedResult] = useState<ScanResult | null>(null);
@@ -110,21 +110,40 @@ export default function AlmacenPage() {
     fetchEncargados();
   }, []);
 
-  // Vincular encargado con el perfil de usuario logueado
+  // Vincular encargado con el perfil de usuario logueado o buscar en empleados
   useEffect(() => {
-    if (profile?.name) {
-      setEncargado(profile.name);
-    } else if (isMounted && !encargado) {
-       setEncargado('Almacenista');
-    }
-  }, [profile, isMounted]);
+    if (!user?.id) return;
+
+    const fetchNameFromEmployees = async () => {
+        try {
+            const { data, error } = await supabaseEtiquetas
+                .from('empleados')
+                .select('nombres, apellido_paterno, apellido_materno')
+                .eq('id', user.id)
+                .maybeSingle();
+
+            if (data) {
+                const fullName = [data.nombres, data.apellido_paterno, data.apellido_materno].filter(Boolean).join(' ');
+                setEncargado(fullName);
+            } else if (profile?.name) {
+                setEncargado(profile.name);
+            } else if (isMounted && !encargado) {
+                setEncargado('Almacenista');
+            }
+        } catch (err) {
+            console.error("Error fetching name for almacen encargado:", err);
+        }
+    };
+
+    fetchNameFromEmployees();
+  }, [user, profile, isMounted]);
 
   const groupedEncargadoOptions = useMemo(() => {
     let list = [...encargadosList];
     
     // Asegurar que el usuario logueado esté en las opciones
-    if (profile?.name && !list.some(e => e.name === profile.name)) {
-        list.push({ name: profile.name, rol: 'almacenista', organization: 'Usuario Actual' });
+    if (encargado && !list.some(e => e.name === encargado)) {
+        list.push({ name: encargado, rol: 'almacenista', organization: 'Usuario Actual' });
     }
 
     if (list.length === 0) return [];
@@ -140,7 +159,7 @@ export default function AlmacenPage() {
         label: org,
         options: grouped[org].sort((a, b) => a.label.localeCompare(b.label))
     }));
-  }, [encargadosList, profile]);
+  }, [encargadosList, encargado]);
 
   const playBeep = () => {
     const context = new (window.AudioContext || (window as any).webkitAudioContext)();

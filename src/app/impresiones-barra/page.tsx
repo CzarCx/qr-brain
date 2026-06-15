@@ -2,7 +2,7 @@
 import {useEffect, useRef, useState, useCallback} from 'react';
 import Head from 'next/head';
 import { Html5Qrcode, Html5QrcodeScannerState } from 'html5-qrcode';
-import { supabase } from '@/lib/supabaseClient';
+import { supabase, supabaseEtiquetas } from '@/lib/supabaseClient';
 import {
   Dialog,
   DialogContent,
@@ -57,7 +57,7 @@ type Encargado = {
 };
 
 export default function ImpresionesBarraPage() {
-  const { profile } = useAuth();
+  const { profile, user } = useAuth();
   const [isMounted, setIsMounted] = useState(false);
   const [message, setMessage] = useState({ text: 'Apunte la cámara a un código QR.', type: 'info', show: false });
   const [lastScannedResult, setLastScannedResult] = useState<ScanResult | null>(null);
@@ -122,12 +122,31 @@ export default function ImpresionesBarraPage() {
     fetchEncargados();
   }, []);
 
-  // Vincular encargado con el perfil de usuario logueado
+  // Vincular encargado con el perfil de usuario logueado o buscar en empleados
   useEffect(() => {
-    if (profile?.name) {
-      setEncargado(profile.name);
-    }
-  }, [profile]);
+    if (!user?.id) return;
+
+    const fetchNameFromEmployees = async () => {
+        try {
+            const { data, error } = await supabaseEtiquetas
+                .from('empleados')
+                .select('nombres, apellido_paterno, apellido_materno')
+                .eq('id', user.id)
+                .maybeSingle();
+
+            if (data) {
+                const fullName = [data.nombres, data.apellido_paterno, data.apellido_materno].filter(Boolean).join(' ');
+                setEncargado(fullName);
+            } else if (profile?.name) {
+                setEncargado(profile.name);
+            }
+        } catch (err) {
+            console.error("Error fetching name for impresiones encargado:", err);
+        }
+    };
+
+    fetchNameFromEmployees();
+  }, [user, profile]);
 
   const playBeep = () => {
     const context = new (window.AudioContext || (window as any).webkitAudioContext)();
@@ -574,7 +593,7 @@ const handleMassQualify = async () => {
                 )}
             </div>
 
-            {isMobile && scannerActive && selectedScannerMode === 'camara' && cameraCapabilities && (
+            {isMounted && isMobile && scannerActive && selectedScannerMode === 'camara' && cameraCapabilities && (
                 <div id="camera-controls" className="flex items-center gap-4 mt-4 p-2 rounded-lg bg-gray-200">
                     {cameraCapabilities.torch && (
                         <Button variant="ghost" size="icon" onClick={() => setIsFlashOn(prev => !prev)} className={isFlashOn ? 'bg-yellow-400' : ''}>
