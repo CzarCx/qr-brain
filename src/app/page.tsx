@@ -434,21 +434,19 @@ export default function Home() {
 
             const todayStr = new Date().toLocaleDateString('en-CA'); 
 
+            // Nueva validación: ¿Tiene al menos una entrada hoy?
             const { data: attendanceData, error: attendanceError } = await supabaseEtiquetas
                 .from('registro_checador')
-                .select('tipo_registro')
+                .select('id')
                 .eq('id_empleado', user.id)
                 .eq('fecha', todayStr)
-                .order('id', { ascending: false })
+                .eq('tipo_registro', 'entrada')
                 .limit(1);
 
             if (attendanceError) throw attendanceError;
 
-            if (attendanceData && attendanceData.length > 0) {
-                setIsAttendanceValid(attendanceData[0].tipo_registro === 'entrada');
-            } else {
-                setIsAttendanceValid(false);
-            }
+            setIsAttendanceValid(attendanceData && attendanceData.length > 0);
+            
         } catch (err) {
             console.error("Error checking user attendance/name:", err);
             setIsAttendanceValid(false);
@@ -501,21 +499,19 @@ export default function Home() {
         try {
             const todayStr = new Date().toLocaleDateString('en-CA');
 
+            // Nueva validación para el objetivo: ¿Tiene al menos una entrada hoy?
             const { data, error } = await supabaseEtiquetas
                 .from('registro_checador')
-                .select('tipo_registro')
+                .select('id')
                 .eq('id_empleado', selectedPersonal)
                 .eq('fecha', todayStr)
-                .order('id', { ascending: false })
+                .eq('tipo_registro', 'entrada')
                 .limit(1);
 
             if (error) throw error;
 
-            if (data && data.length > 0) {
-                setIsTargetPersonAttending(data[0].tipo_registro === 'entrada');
-            } else {
-                setIsTargetPersonAttending(false);
-            }
+            setIsTargetPersonAttending(data && data.length > 0);
+
         } catch (err) {
             console.error("Error checking target attendance:", err);
             setIsTargetPersonAttending(false);
@@ -727,7 +723,7 @@ export default function Home() {
 
   const saveToPersonal = async (personIdOrName: string) => {
       if (!isGuest && !isTargetPersonAttending) {
-          showModalNotification('Operario sin Asistencia', 'No es posible asociar etiquetas porque la persona seleccionada no tiene una entrada activa registrada para el día de hoy.', 'destructive');
+          showModalNotification('Operario sin Asistencia', 'No es posible asociar etiquetas porque la persona seleccionada no tiene una entrada registrada el día de hoy.', 'destructive');
           return;
       }
 
@@ -833,7 +829,7 @@ export default function Home() {
 
  const processScan = useCallback(async (decodedText: string) => {
     if (!isGuest && !isAttendanceValid) {
-        showModalNotification('Asistencia Requerida', 'Tú (el encargado) debes haber registrado entrada hoy para operar el sistema.', 'destructive');
+        showModalNotification('Asistencia Requerida', 'Tú (el encargado) debes tener un registro de entrada hoy para operar el sistema.', 'destructive');
         return;
     }
 
@@ -929,16 +925,17 @@ export default function Home() {
             
             if (!isGuest) {
                 const todayStr = new Date().toLocaleDateString('en-CA');
+                // Nueva validación para operario escaneado: Al menos una entrada hoy
                 const { data: attData } = await supabaseEtiquetas
                     .from('registro_checador')
-                    .select('tipo_registro')
+                    .select('id')
                     .eq('id_empleado', employee.id)
                     .eq('fecha', todayStr)
-                    .order('id', { ascending: false })
+                    .eq('tipo_registro', 'entrada')
                     .limit(1);
 
-                if (!attData || attData.length === 0 || attData[0].tipo_registro !== 'entrada') {
-                    showModalNotification('Operario sin Asistencia', `${employee.name} no ha registrado entrada hoy. No puedes asociarle etiquetas en tiempo real.`, 'destructive');
+                if (!attData || attData.length === 0) {
+                    showModalNotification('Operario sin Asistencia', `${employee.name} no ha registrado entrada hoy.`, 'destructive');
                     setLoading(false);
                     return;
                 }
@@ -1184,7 +1181,7 @@ export default function Home() {
       return;
     }
     if (!isGuest && !isAttendanceValid) {
-        showModalNotification('Asistencia Requerida', 'Tú (encargado) debes haber registrado entrada hoy para operar.', 'destructive');
+        showModalNotification('Asistencia Requerida', 'Tú (encargado) debes tener un registro de entrada hoy para operar.', 'destructive');
         return;
     }
 
@@ -1558,16 +1555,17 @@ const deleteRow = (codeToDelete: string) => {
     
     if (!isGuest) {
         const todayStr = new Date().toLocaleDateString('en-CA');
+        // Nueva validación para carga programada: Al menos una entrada hoy
         const { data: attData } = await supabaseEtiquetas
             .from('registro_checador')
-            .select('tipo_registro')
+            .select('id')
             .eq('id_empleado', personToAssign)
             .eq('fecha', todayStr)
-            .order('id', { ascending: false })
+            .eq('tipo_registro', 'entrada')
             .limit(1);
 
-        if (!attData || attData.length === 0 || attData[0].tipo_registro !== 'entrada') {
-            showModalNotification('Operario sin Asistencia', 'El operario seleccionado para la carga no ha registrado entrada hoy.', 'destructive');
+        if (!attData || attData.length === 0) {
+            showModalNotification('Operario sin Asistencia', 'El operario seleccionado no tiene un registro de entrada hoy.', 'destructive');
             return;
         }
     }
