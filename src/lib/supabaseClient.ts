@@ -17,5 +17,25 @@ if (!supabaseEtiquetasUrl || !supabaseEtiquetasAnonKey) {
   throw new Error('Faltan las credenciales de Supabase para la base de datos de etiquetas en el archivo .env');
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey)
-export const supabaseEtiquetas = createClient(supabaseEtiquetasUrl, supabaseEtiquetasAnonKey);
+// Configuración común para persistencia y refresco automático
+const authConfig = {
+  persistSession: true,
+  autoRefreshToken: true,
+  detectSessionInUrl: true,
+};
+
+// Instancia para la base de datos principal (Producción)
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    ...authConfig,
+    storageKey: 'inmatmex-main-session', // Llave única para evitar conflictos
+  }
+});
+
+// Instancia para la base de datos de etiquetas (Auth & Metadata)
+export const supabaseEtiquetas = createClient(supabaseEtiquetasUrl, supabaseEtiquetasAnonKey, {
+  auth: {
+    ...authConfig,
+    storageKey: 'inmatmex-labels-session', // Llave única para la sesión de Auth principal
+  }
+});

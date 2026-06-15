@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { createContext, useContext, useEffect, useState, useRef, useCallback } from 'react';
@@ -50,20 +51,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [isGuest, setIsGuest] = useState(false);
   const [isMetadataLoaded, setIsMetadataLoaded] = useState(false);
+  
   const router = useRouter();
   const pathname = usePathname();
+  
   const isSyncing = useRef(false);
+  const lastSyncedUserId = useRef<string | null>(null);
 
+  /**
+   * Sincroniza el perfil y roles del usuario desde la base de datos de etiquetas.
+   */
   const syncProfileAndRoles = useCallback(async (currentUser: User) => {
-    if (isSyncing.current) return;
+    // Evitar múltiples sincronizaciones simultáneas o redundantes para el mismo usuario
+    if (isSyncing.current || (lastSyncedUserId.current === currentUser.id && isMetadataLoaded)) {
+      setLoading(false);
+      return;
+    }
+
     isSyncing.current = true;
+    console.log("[AuthProvider] Sincronizando metadatos para:", currentUser.email);
 
     try {
-      // Consulta en paralelo para mayor velocidad
+      // Consultas en paralelo para optimizar tiempo de carga
       const [profileRes, rolesRes] = await Promise.all([
         supabaseEtiquetas.from('table_profiles').select('*').eq('id', currentUser.id).maybeSingle(),
         supabaseEtiquetas.from('user_roles').select('roles(code)').eq('user_id', currentUser.id)
       ]);
+
+      if (profileRes.error) console.warn("[AuthProvider] Error cargando perfil:", profileRes.error.message);
+      if (rolesRes.error) console.warn("[AuthProvider] Error cargando roles:", rolesRes.error.message);
 
       if (profileRes.data) {
         setProfile(profileRes.data as Profile);
@@ -74,19 +90,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           .map((r: any) => r.roles?.code)
           .filter(Boolean);
         setRoles(codes);
+        console.log("[AuthProvider] Roles cargados:", codes);
       }
       
+      lastSyncedUserId.current = currentUser.id;
       setIsMetadataLoaded(true);
     } catch (err) {
-      console.error("Error en sincronización de sesión:", err);
+      console.error("[AuthProvider] Excepción crítica en sincronización:", err);
     } finally {
       isSyncing.current = false;
       setLoading(false);
     }
-  }, []);
+  }, [isMetadataLoaded]);
 
   useEffect(() => {
-    // Verificar modo invitado primero
+    // 1. Verificación de modo invitado (prioridad alta para flujo rápido)
     const guestMode = localStorage.getItem('auth_guest_mode') === 'true';
     if (guestMode) {
       setIsGuest(true);
@@ -94,11 +112,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
+    // 2. Fallback de seguridad: Si después de 12 segundos el sistema sigue bloqueado, forzar desbloqueo.
+    // Esto previene que una consulta colgada o una red lenta bloquee la app permanentemente.
+    const safetyTimeout = setTimeout(() => {
+      if (loading) {
+        console.warn("[AuthProvider] Tiempo de espera de inicialización agotado. Forzando desbloqueo de UI.");
+        setLoading(false);
+      }
+    }, 12000);
+
+    // 3. Inicialización proactiva de sesión
     const initAuth = async () => {
       try {
-        // Recuperar sesión local de forma instantánea
-        const { data: { session: initialSession } } = await supabaseEtiquetas.auth.getSession();
+        const { data: { session: initialSession }, error } = await supabaseEtiquetas.auth.getSession();
         
+        if (error) throw error;
+
         if (initialSession) {
           setSession(initialSession);
           setUser(initialSession.user);
@@ -107,36 +136,66 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setLoading(false);
         }
       } catch (err) {
-        console.error("Auth init error:", err);
+        console.error("[AuthProvider] Error en inicialización proactiva:", err);
         setLoading(false);
       }
     };
 
     initAuth();
 
+    // 4. Escuchador de cambios de estado de autenticación (Maneja login, logout y refresco de tokens)
     const { data: { subscription } } = supabaseEtiquetas.auth.onAuthStateChange(async (event, currentSession) => {
+      console.log("[AuthProvider] Evento de Auth detectado:", event);
+
       if (currentSession) {
         setSession(currentSession);
         setUser(currentSession.user);
-        if (!isMetadataLoaded && !isSyncing.current) {
-          await syncProfileAndRoles(currentSession.user);
+        
+        // Sincronizar en eventos clave si no se ha hecho
+        if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION' || event === 'TOKEN_REFRESHED') {
+          if (lastSyncedUserId.current !== currentSession.user.id) {
+            await syncProfileAndRoles(currentSession.user);
+          }
         }
-      } else if (event === 'SIGNED_OUT') {
+      } else {
+        // Limpieza de estados si no hay sesión
         setSession(null);
         setUser(null);
         setProfile(null);
         setRoles([]);
         setLoading(false);
         setIsMetadataLoaded(false);
+        lastSyncedUserId.current = null;
       }
     });
 
-    return () => subscription.unsubscribe();
-  }, [syncProfileAndRoles, isMetadataLoaded]);
+    return () => {
+      clearTimeout(safetyTimeout);
+      subscription.unsubscribe();
+    };
+  }, [syncProfileAndRoles]); // Dependencia estable
 
-  const hasRole = (code: string) => {
-    if (isGuest) return true;
-    return roles.includes('ADMIN') || roles.includes(code);
+  /**
+   * Cierre de sesión seguro.
+   */
+  const signOut = async () => {
+    setLoading(true);
+    try {
+      localStorage.removeItem('auth_guest_mode');
+      setIsGuest(false);
+      await supabaseEtiquetas.auth.signOut();
+      setSession(null);
+      setUser(null);
+      setProfile(null);
+      setRoles([]);
+      lastSyncedUserId.current = null;
+      setIsMetadataLoaded(false);
+      router.replace('/login');
+    } catch (err) {
+      console.error("[AuthProvider] Error al cerrar sesión:", err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const continueAsGuest = () => {
@@ -146,19 +205,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     router.push('/main');
   };
 
-  const signOut = async () => {
-    setLoading(true);
-    localStorage.removeItem('auth_guest_mode');
-    setIsGuest(false);
-    await supabaseEtiquetas.auth.signOut();
-    setSession(null);
-    setUser(null);
-    setProfile(null);
-    setRoles([]);
-    setLoading(false);
-    router.replace('/login');
+  const hasRole = (code: string) => {
+    if (isGuest) return true;
+    return roles.includes('ADMIN') || roles.includes(code);
   };
 
+  /**
+   * Lógica de protección de rutas y redirecciones.
+   */
   useEffect(() => {
     if (loading) return;
 
@@ -179,12 +233,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    // Validación de rutas por rol (solo si no es invitado)
+    // Validación de permisos por ruta
     if (isMetadataLoaded && !roles.includes('ADMIN')) {
       const requiredRoles = ROUTE_PERMISSIONS[pathname];
       if (requiredRoles && requiredRoles.length > 0) {
         const hasPermission = requiredRoles.some(r => roles.includes(r));
         if (!hasPermission && pathname !== '/main') {
+          console.warn(`[AuthProvider] Acceso denegado a ${pathname}. Redirigiendo...`);
           router.replace('/main');
         }
       }
