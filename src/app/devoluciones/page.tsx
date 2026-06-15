@@ -52,7 +52,7 @@ type ReturnItem = {
 };
 
 export default function DevolucionesPage() {
-  const { profile } = useAuth();
+  const { profile, user } = useAuth();
   const [isMounted, setIsMounted] = useState(false);
   const [message, setMessage] = useState({ text: 'Apunte la cámara a un código QR.', type: 'info' as 'info' | 'success' | 'error' | 'warning', show: false });
   const [scannerActive, setScannerActive] = useState(false);
@@ -119,19 +119,38 @@ export default function DevolucionesPage() {
     fetchEncargados();
   }, []);
 
-  // Vincular encargado con el perfil de usuario logueado
+  // Vincular encargado con el perfil de usuario logueado o buscar en empleados
   useEffect(() => {
-    if (profile?.name) {
-      setEncargado(profile.name);
-    }
-  }, [profile]);
+    if (!user?.id) return;
+
+    const fetchNameFromEmployees = async () => {
+        try {
+            const { data, error } = await supabaseEtiquetas
+                .from('empleados')
+                .select('nombres, apellido_paterno, apellido_materno')
+                .eq('id', user.id)
+                .maybeSingle();
+
+            if (data) {
+                const fullName = [data.nombres, data.apellido_paterno, data.apellido_materno].filter(Boolean).join(' ');
+                setEncargado(fullName);
+            } else if (profile?.name) {
+                setEncargado(profile.name);
+            }
+        } catch (err) {
+            console.error("Error fetching name for devoluciones encargado:", err);
+        }
+    };
+
+    fetchNameFromEmployees();
+  }, [user, profile]);
 
   const groupedEncargadoOptions = useMemo(() => {
     let list = [...encargadosList];
     
     // Asegurar que el usuario logueado esté en las opciones
-    if (profile?.name && !list.some(e => e.name === profile.name)) {
-        list.push({ name: profile.name, rol: 'entrega', organization: 'Usuario Actual' });
+    if (encargado && !list.some(e => e.name === encargado)) {
+        list.push({ name: encargado, rol: 'entrega', organization: 'Usuario Actual' });
     }
 
     if (list.length === 0) return [];
@@ -149,7 +168,7 @@ export default function DevolucionesPage() {
         label: org,
         options: grouped[org].sort((a, b) => a.label.localeCompare(b.label))
     }));
-  }, [encargadosList, profile]);
+  }, [encargadosList, encargado]);
 
 
   const playBeep = () => {
