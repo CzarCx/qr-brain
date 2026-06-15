@@ -65,7 +65,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const checkConnectivity = useCallback(async () => {
     setDbStatus('checking');
     try {
-      // Intento de consulta simple para verificar disponibilidad real
       const { error } = await supabaseEtiquetas.from('roles').select('id').limit(1);
       if (error) throw error;
       
@@ -118,14 +117,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [isMetadataLoaded]);
 
-  // Efecto principal de arranque y conectividad
   useEffect(() => {
     if (dbStatus === 'checking') {
       checkConnectivity();
     }
   }, [dbStatus, checkConnectivity]);
 
-  // Efecto de inicialización de Auth (Solo si hay conexión)
   useEffect(() => {
     if (dbStatus !== 'connected') return;
 
@@ -135,13 +132,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setLoading(false);
       return;
     }
-
-    const safetyTimeout = setTimeout(() => {
-      if (loading) {
-        console.warn("[AuthProvider] Fail-safe activado.");
-        setLoading(false);
-      }
-    }, 12000);
 
     const initAuth = async () => {
       try {
@@ -177,33 +167,46 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setLoading(false);
         setIsMetadataLoaded(false);
         lastSyncedUserId.current = null;
-        if (event === 'SIGNED_OUT') router.replace('/login');
+        
+        // Redirigir solo si el evento es explícitamente SIGNED_OUT y no es un cambio por modo invitado
+        if (event === 'SIGNED_OUT' && !localStorage.getItem('auth_guest_mode')) {
+          router.replace('/login');
+        }
       }
     });
 
     return () => {
-      clearTimeout(safetyTimeout);
       subscription.unsubscribe();
     };
-  }, [dbStatus, syncProfileAndRoles, router, loading]);
+  }, [dbStatus, syncProfileAndRoles, router]);
 
   const signOut = async () => {
     setLoading(true);
     try {
+      // 1. Limpiar rastro de invitado
       localStorage.removeItem('auth_guest_mode');
       setIsGuest(false);
+      
+      // 2. Limpiar rastro de Supabase (intentar cerrar sesión global)
       await supabaseEtiquetas.auth.signOut();
+      
+      // 3. Resetear estados de memoria inmediatamente para evitar flujos erróneos
       setSession(null);
       setUser(null);
       setProfile(null);
       setRoles([]);
       lastSyncedUserId.current = null;
       setIsMetadataLoaded(false);
+      
+      // 4. Redirección limpia
       router.replace('/login');
     } catch (err) {
-      console.error("[AuthProvider] Error logout:", err);
+      console.error("[AuthProvider] Error durante logout:", err);
+      // Fallback: Redirección forzada por si Supabase o el Router fallaron
+      window.location.href = '/login';
     } finally {
-      setLoading(false);
+      // Retardo para asegurar que la redirección inició antes de quitar el spinner
+      setTimeout(() => setLoading(false), 500);
     }
   };
 
@@ -219,9 +222,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return roles.includes('ADMIN') || roles.includes(code);
   };
 
-  /**
-   * Protección de rutas
-   */
   useEffect(() => {
     if (loading || dbStatus !== 'connected') return;
 
@@ -253,7 +253,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [user, loading, isMetadataLoaded, pathname, roles, router, isGuest, dbStatus]);
 
-  // Pantalla de Validación de Conexión
   if (dbStatus === 'checking') {
     return (
       <div className="fixed inset-0 flex flex-col items-center justify-center bg-background z-[9999]">
@@ -271,7 +270,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     );
   }
 
-  // Pantalla de Error de Conexión
   if (dbStatus === 'error') {
     return (
       <div className="fixed inset-0 flex items-center justify-center bg-[#f5f7f9] p-4 z-[9999]">

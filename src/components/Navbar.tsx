@@ -19,7 +19,7 @@ import {
   User as UserIcon,
   LayoutGrid,
   ExternalLink,
-  ChevronRight
+  ShieldAlert
 } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
@@ -40,6 +40,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 const mainNavLinks = [
   { href: '/', label: 'Asignar', icon: <UserCheck className="h-5 w-5" /> },
@@ -88,7 +89,7 @@ const externalLinks = [
 export default function Navbar() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
-  const { session, profile, roles, hasRole, signOut } = useAuth();
+  const { session, profile, roles, hasRole, signOut, isGuest } = useAuth();
 
   if (pathname === '/login') return null;
 
@@ -167,28 +168,36 @@ export default function Navbar() {
                 </DropdownMenu>
              </div>
 
-             {session && (
+             {(session || isGuest) && (
                <DropdownMenu>
                  <DropdownMenuTrigger asChild>
                     <Button variant="ghost" className="relative h-10 w-10 rounded-full">
                       <Avatar className="h-9 w-9 border-2 border-starbucks-green/20">
                         <AvatarFallback className="bg-starbucks-cream text-starbucks-green font-black">
-                          {profile?.email?.[0].toUpperCase() ?? 'U'}
+                          {isGuest ? 'I' : (profile?.email?.[0].toUpperCase() ?? 'U')}
                         </AvatarFallback>
                       </Avatar>
                     </Button>
                  </DropdownMenuTrigger>
-                 <DropdownMenuContent className="w-56" align="end" forceMount>
+                 <DropdownMenuContent className="w-64" align="end" forceMount>
                     <DropdownMenuLabel className="font-normal">
                       <div className="flex flex-col space-y-1">
-                        <p className="text-sm font-black leading-none text-starbucks-dark">{profile?.email}</p>
-                        <p className="text-[10px] font-bold leading-none text-muted-foreground uppercase tracking-widest mt-1">
-                          Roles: {roles.length > 0 ? roles.join(', ') : 'SIN ROLES'}
+                        <p className="text-sm font-black leading-none text-starbucks-dark">
+                            {isGuest ? 'Sesión de Invitado' : (profile?.email || 'Usuario')}
                         </p>
+                        {isGuest ? (
+                            <p className="text-[10px] font-bold leading-none text-amber-600 uppercase tracking-widest mt-1">
+                                ACCESO TOTAL SIN CUENTA
+                            </p>
+                        ) : (
+                            <p className="text-[10px] font-bold leading-none text-muted-foreground uppercase tracking-widest mt-1">
+                                Roles: {roles.length > 0 ? roles.join(', ') : 'SIN ROLES'}
+                            </p>
+                        )}
                       </div>
                     </DropdownMenuLabel>
                     <DropdownMenuSeparator />
-                    {hasRole('ADMIN') && (
+                    {hasRole('ADMIN') && !isGuest && (
                       <DropdownMenuItem asChild>
                          <Link href="/registro-personal" className="cursor-pointer font-bold">
                             <UserPlus className="mr-2 h-4 w-4" />
@@ -199,7 +208,7 @@ export default function Navbar() {
                     <DropdownMenuSeparator />
                     <DropdownMenuItem onClick={signOut} className="text-red-600 cursor-pointer focus:text-red-600 focus:bg-red-50">
                       <LogOut className="mr-2 h-4 w-4" />
-                      <span>Cerrar Sesión</span>
+                      <span>{isGuest ? 'Cerrar Sesión de Invitado' : 'Cerrar Sesión'}</span>
                     </DropdownMenuItem>
                  </DropdownMenuContent>
                </DropdownMenu>
@@ -222,6 +231,14 @@ export default function Navbar() {
                   </SheetHeader>
                   
                   <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-6">
+                    {isGuest && (
+                        <Alert className="bg-amber-50 border-amber-200 py-3">
+                            <ShieldAlert className="h-4 w-4 text-amber-600" />
+                            <AlertDescription className="text-[10px] font-black text-amber-800 uppercase leading-none">
+                                Sesión de Invitado Activa
+                            </AlertDescription>
+                        </Alert>
+                    )}
                     <div className="space-y-1">
                         <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4 mb-2">Módulos de Control</p>
                         {visibleLinks.map((link) => {
@@ -270,7 +287,7 @@ export default function Navbar() {
                   </div>
 
                   <div className="p-4 border-t bg-gray-50 space-y-2">
-                    {hasRole('ADMIN') && (
+                    {hasRole('ADMIN') && !isGuest && (
                       <Link
                         href="/registro-personal"
                         onClick={() => setOpen(false)}
@@ -295,7 +312,7 @@ export default function Navbar() {
                       <div className="p-2 rounded-lg bg-white shadow-sm">
                         <LogOut className="h-5 w-5" />
                       </div>
-                      Cerrar Sesión
+                      {isGuest ? 'Cerrar Sesión Invitado' : 'Cerrar Sesión'}
                     </Button>
                   </div>
                 </SheetContent>
