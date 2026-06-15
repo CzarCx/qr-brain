@@ -59,6 +59,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     isSyncing.current = true;
 
     try {
+      // Consulta en paralelo para mayor velocidad
       const [profileRes, rolesRes] = await Promise.all([
         supabaseEtiquetas.from('table_profiles').select('*').eq('id', currentUser.id).maybeSingle(),
         supabaseEtiquetas.from('user_roles').select('roles(code)').eq('user_id', currentUser.id)
@@ -85,7 +86,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    // Check for guest mode first
+    // Verificar modo invitado primero
     const guestMode = localStorage.getItem('auth_guest_mode') === 'true';
     if (guestMode) {
       setIsGuest(true);
@@ -95,6 +96,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const initAuth = async () => {
       try {
+        // Recuperar sesión local de forma instantánea
         const { data: { session: initialSession } } = await supabaseEtiquetas.auth.getSession();
         
         if (initialSession) {
@@ -130,10 +132,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
 
     return () => subscription.unsubscribe();
-  }, [syncProfileAndRoles]);
+  }, [syncProfileAndRoles, isMetadataLoaded]);
 
   const hasRole = (code: string) => {
-    if (isGuest) return true; // Guests can see everything for workflow speed if requested
+    if (isGuest) return true;
     return roles.includes('ADMIN') || roles.includes(code);
   };
 
@@ -177,7 +179,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    // Role check logic
+    // Validación de rutas por rol (solo si no es invitado)
     if (isMetadataLoaded && !roles.includes('ADMIN')) {
       const requiredRoles = ROUTE_PERMISSIONS[pathname];
       if (requiredRoles && requiredRoles.length > 0) {

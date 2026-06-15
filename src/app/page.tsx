@@ -87,7 +87,7 @@ type VerificationResult = {
 
 
 export default function Home() {
-  const { profile, user } = useAuth();
+  const { profile, user, isGuest } = useAuth();
   const [isMounted, setIsMounted] = useState(false);
   const [message, setMessage] = useState<{text: React.ReactNode, type: 'info' | 'success' | 'duplicate', show: boolean}>({text: 'Esperando para escanear...', type: 'info', show: false});
   const [lastScannedCode, setLastScannedCode] = useState<string | null>(null);
@@ -726,7 +726,7 @@ export default function Home() {
   }, [encargado, selectedArea]);
 
   const saveToPersonal = async (personIdOrName: string) => {
-      if (!isTargetPersonAttending) {
+      if (!isGuest && !isTargetPersonAttending) {
           showModalNotification('Operario sin Asistencia', 'No es posible asociar etiquetas porque la persona seleccionada no tiene una entrada activa registrada para el día de hoy.', 'destructive');
           return;
       }
@@ -817,7 +817,7 @@ export default function Home() {
   };
   
   const onScanSuccess = useCallback((decodedText: string, decodedResult: any) => {
-    if (!scannerActive || Date.now() - lastScanTimeRef.current < MIN_SCAN_INTERVAL || !isAttendanceValid) return;
+    if (!scannerActive || Date.now() - lastScanTimeRef.current < MIN_SCAN_INTERVAL || (!isGuest && !isAttendanceValid)) return;
     lastScanTimeRef.current = Date.now();
     
     let finalCode = decodedText;
@@ -829,10 +829,10 @@ export default function Home() {
     } catch (e) {}
     
     setLastScannedCode(finalCode);
-  }, [scannerActive, isAttendanceValid]);
+  }, [scannerActive, isAttendanceValid, isGuest]);
 
  const processScan = useCallback(async (decodedText: string) => {
-    if (!isAttendanceValid) {
+    if (!isGuest && !isAttendanceValid) {
         showModalNotification('Asistencia Requerida', 'Tú (el encargado) debes haber registrado entrada hoy para operar el sistema.', 'destructive');
         return;
     }
@@ -927,19 +927,21 @@ export default function Home() {
                 return;
             }
             
-            const todayStr = new Date().toLocaleDateString('en-CA');
-            const { data: attData } = await supabaseEtiquetas
-                .from('registro_checador')
-                .select('tipo_registro')
-                .eq('id_empleado', employee.id)
-                .eq('fecha', todayStr)
-                .order('id', { ascending: false })
-                .limit(1);
+            if (!isGuest) {
+                const todayStr = new Date().toLocaleDateString('en-CA');
+                const { data: attData } = await supabaseEtiquetas
+                    .from('registro_checador')
+                    .select('tipo_registro')
+                    .eq('id_empleado', employee.id)
+                    .eq('fecha', todayStr)
+                    .order('id', { ascending: false })
+                    .limit(1);
 
-            if (!attData || attData.length === 0 || attData[0].tipo_registro !== 'entrada') {
-                showModalNotification('Operario sin Asistencia', `${employee.name} no ha registrado entrada hoy. No puedes asociarle etiquetas en tiempo real.`, 'destructive');
-                setLoading(false);
-                return;
+                if (!attData || attData.length === 0 || attData[0].tipo_registro !== 'entrada') {
+                    showModalNotification('Operario sin Asistencia', `${employee.name} no ha registrado entrada hoy. No puedes asociarle etiquetas en tiempo real.`, 'destructive');
+                    setLoading(false);
+                    return;
+                }
             }
 
             const missingTimeRows = scannedData.map((item, index) => (item.esti_time === null || item.esti_time === undefined ? index + 1 : null)).filter(Boolean) as number[];
@@ -1044,7 +1046,7 @@ export default function Home() {
     } finally {
         setLoading(false);
     }
-}, [addCodeAndUpdateCounters, scannedData, personalList, scanMode, selectedArea, skipAreaSelection, isAttendanceValid]);
+}, [addCodeAndUpdateCounters, scannedData, personalList, scanMode, selectedArea, skipAreaSelection, isAttendanceValid, isGuest]);
 
 
   useEffect(() => {
@@ -1181,7 +1183,7 @@ export default function Home() {
       showModalNotification('Falta Encargado', 'Por favor, ingresa el nombre del encargado.', 'destructive');
       return;
     }
-    if (!isAttendanceValid) {
+    if (!isGuest && !isAttendanceValid) {
         showModalNotification('Asistencia Requerida', 'Tú (encargado) debes haber registrado entrada hoy para operar.', 'destructive');
         return;
     }
@@ -1554,18 +1556,20 @@ const deleteRow = (codeToDelete: string) => {
         return;
     }
     
-    const todayStr = new Date().toLocaleDateString('en-CA');
-    const { data: attData } = await supabaseEtiquetas
-        .from('registro_checador')
-        .select('tipo_registro')
-        .eq('id_empleado', personToAssign)
-        .eq('fecha', todayStr)
-        .order('id', { ascending: false })
-        .limit(1);
+    if (!isGuest) {
+        const todayStr = new Date().toLocaleDateString('en-CA');
+        const { data: attData } = await supabaseEtiquetas
+            .from('registro_checador')
+            .select('tipo_registro')
+            .eq('id_empleado', personToAssign)
+            .eq('fecha', todayStr)
+            .order('id', { ascending: false })
+            .limit(1);
 
-    if (!attData || attData.length === 0 || attData[0].tipo_registro !== 'entrada') {
-        showModalNotification('Operario sin Asistencia', 'El operario seleccionado para la carga no ha registrado entrada hoy.', 'destructive');
-        return;
+        if (!attData || attData.length === 0 || attData[0].tipo_registro !== 'entrada') {
+            showModalNotification('Operario sin Asistencia', 'El operario seleccionado para la carga no ha registrado entrada hoy.', 'destructive');
+            return;
+        }
     }
 
     setLoading(true);
@@ -1792,7 +1796,7 @@ const deleteRow = (codeToDelete: string) => {
       info: 'bg-blue-500/80 text-white'
   };
   
-  const isAssociationDisabled = scannedData.length === 0 || loading || (!selectedArea && !skipAreaSelection) || !selectedPersonal || !isTargetPersonAttending || !isAttendanceValid;
+  const isAssociationDisabled = scannedData.length === 0 || loading || (!selectedArea && !skipAreaSelection) || !selectedPersonal || (!isGuest && !isTargetPersonAttending) || (!isGuest && !isAttendanceValid);
 
   const totalEstimatedTime = useMemo(() => {
     return scannedData.reduce((acc, item) => acc + (item.esti_time || 0), 0);

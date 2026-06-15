@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useCallback } from 'react';
-import { supabase } from '@/lib/supabaseClient';
+import { supabaseEtiquetas } from '@/lib/supabaseClient';
 import { SewingProcessTime } from '@/types/sewing';
 import { useToast } from '@/hooks/use-toast';
 
@@ -13,7 +13,8 @@ export function useSewingProduction() {
   const fetchProcessTimes = useCallback(async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase
+      // Usamos supabaseEtiquetas ya que estas tablas residen en la DB de etiquetas
+      const { data, error } = await supabaseEtiquetas
         .from('sewing_ticket_process_times')
         .select('*')
         .order('created_at', { ascending: false });
@@ -30,7 +31,7 @@ export function useSewingProduction() {
   const saveProcessTime = async (record: Omit<SewingProcessTime, 'id' | 'created_at'>) => {
     setLoading(true);
     try {
-      const { error } = await supabase
+      const { error } = await supabaseEtiquetas
         .from('sewing_ticket_process_times')
         .insert([record]);
 
