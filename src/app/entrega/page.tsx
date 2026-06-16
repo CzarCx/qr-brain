@@ -467,7 +467,8 @@ export default function Home() {
             status: 'ENTREGADO', 
             date_entre: deliveryTimestamp,
             driver_name: driverName,
-            driver_plate: driverPlate 
+            driver_plate: driverPlate,
+            name_entrega: encargado || 'N/A'
         })
         .in('code', codesToUpdate);
       
@@ -701,7 +702,11 @@ export default function Home() {
                       const updatePromises = codesToUpdate.map(code => 
                           supabase
                               .from('personal')
-                              .update({ status: 'ENTREGADO', date_entre: csvDataMap.get(code) })
+                              .update({ 
+                                  status: 'ENTREGADO', 
+                                  date_entre: csvDataMap.get(code),
+                                  name_entrega: encargado || 'N/A'
+                              })
                               .eq('code', code)
                       );
 

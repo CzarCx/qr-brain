@@ -170,7 +170,6 @@ export default function CalificarPage() {
     fetchEncargados();
   }, []);
 
-  // Vincular encargado con el perfil de usuario logueado o buscar en empleados
   useEffect(() => {
     if (!user?.id) return;
 
@@ -413,6 +412,7 @@ export default function CalificarPage() {
                         date: qualificationTimestamp.toISOString(),
                         date_cal: qualificationTimestamp.toISOString(),
                         details: result.details,
+                        name_cali: encargado || 'N/A'
                     };
                     const { error: insertError } = await supabase.from('personal').insert(newPersonalRecord);
                     if (insertError) throw insertError;
@@ -629,7 +629,12 @@ export default function CalificarPage() {
     try {
         const qualificationTimestamp = new Date();
         if (isNextDayDelivery) qualificationTimestamp.setDate(qualificationTimestamp.getDate() + 1);
-        const { error } = await supabase.from('personal').update({ status: 'CALIFICADO', details: null, date_cal: qualificationTimestamp.toISOString() }).eq('code', lastScannedResult.code);
+        const { error } = await supabase.from('personal').update({ 
+            status: 'CALIFICADO', 
+            details: null, 
+            date_cal: qualificationTimestamp.toISOString(),
+            name_cali: encargado || 'N/A'
+        }).eq('code', lastScannedResult.code);
         if (error) throw error;
         await saveKpiData(encargado, 1, elapsedTime);
         alert('Calificación guardada correctamente.');
@@ -647,12 +652,33 @@ const handleMassQualify = async () => {
         const codesToUpdate = massScannedCodes.filter(item => !item.isNew).map(item => item.code);
         let successCount = 0;
         if (recordsToInsert.length > 0) {
-            const payload = recordsToInsert.map(item => ({ code: item.code, name: item.name, name_inc: encargado || 'N/A', sku: item.sku, product: item.product, quantity: item.quantity, organization: item.organization, sales_num: item.sales_num, status: 'CALIFICADO', date: qualificationTimestamp.toISOString(), date_cal: qualificationTimestamp.toISOString(), details: item.details, lote: loteId }));
+            const payload = recordsToInsert.map(item => ({ 
+                code: item.code, 
+                name: item.name, 
+                name_inc: encargado || 'N/A', 
+                sku: item.sku, 
+                product: item.product, 
+                quantity: item.quantity, 
+                organization: item.organization, 
+                sales_num: item.sales_num, 
+                status: 'CALIFICADO', 
+                date: qualificationTimestamp.toISOString(), 
+                date_cal: qualificationTimestamp.toISOString(), 
+                details: item.details, 
+                lote: loteId,
+                name_cali: encargado || 'N/A'
+            }));
             const { error: insErr } = await supabase.from('personal').insert(payload);
             if (!insErr) successCount += recordsToInsert.length;
         }
         if (codesToUpdate.length > 0) {
-            const { error: updErr } = await supabase.from('personal').update({ status: 'CALIFICADO', details: null, date_cal: qualificationTimestamp.toISOString(), lote: loteId }).in('code', codesToUpdate);
+            const { error: updErr } = await supabase.from('personal').update({ 
+                status: 'CALIFICADO', 
+                details: null, 
+                date_cal: qualificationTimestamp.toISOString(), 
+                lote: loteId,
+                name_cali: encargado || 'N/A'
+            }).in('code', codesToUpdate);
             if (!updErr) successCount += codesToUpdate.length;
         }
         alert(`Se procesaron ${successCount} etiquetas correctamente.`);
