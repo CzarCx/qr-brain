@@ -4,9 +4,11 @@ import React, { createContext, useContext, useEffect, useState, useRef, useCallb
 import { useRouter, usePathname } from 'next/navigation';
 import { supabaseEtiquetas } from '@/lib/supabaseClient';
 import { Session, User } from '@supabase/supabase-js';
-import { Loader2, Database, WifiOff, RefreshCw } from 'lucide-react';
+import { Loader2, Database, WifiOff, RefreshCw, UserCircle2, Save, UserCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Input } from '@/components/ui/input';
+import { cn } from '@/lib/utils';
 
 export const ROUTE_PERMISSIONS: Record<string, string[]> = {
   '/': ['BAR_MANAGER'],
@@ -53,6 +55,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isGuest, setIsGuest] = useState(false);
   const [isMetadataLoaded, setIsMetadataLoaded] = useState(false);
   
+  // State for missing name prompt
+  const [showNamePrompt, setShowNamePrompt] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [isSavingName, setIsSavingName] = useState(false);
+  
   const router = useRouter();
   const pathname = usePathname();
   
@@ -98,6 +105,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (profileRes.data) {
         setProfile(profileRes.data as Profile);
+        // Show prompt if name is missing AND it's not guest mode
+        if (!profileRes.data.name) {
+          setShowNamePrompt(true);
+        }
       }
 
       if (rolesRes.data) {
@@ -168,7 +179,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setIsMetadataLoaded(false);
         lastSyncedUserId.current = null;
         
-        // Redirigir solo si el evento es explícitamente SIGNED_OUT y no es un cambio por modo invitado
         if (event === 'SIGNED_OUT' && !localStorage.getItem('auth_guest_mode')) {
           router.replace('/login');
         }
@@ -183,29 +193,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signOut = async () => {
     setLoading(true);
     try {
-      // 1. Limpiar rastro de invitado
       localStorage.removeItem('auth_guest_mode');
       setIsGuest(false);
-      
-      // 2. Limpiar rastro de Supabase (intentar cerrar sesión global)
       await supabaseEtiquetas.auth.signOut();
-      
-      // 3. Resetear estados de memoria inmediatamente para evitar flujos erróneos
       setSession(null);
       setUser(null);
       setProfile(null);
       setRoles([]);
       lastSyncedUserId.current = null;
       setIsMetadataLoaded(false);
-      
-      // 4. Redirección limpia
+      setShowNamePrompt(false);
       router.replace('/login');
     } catch (err) {
       console.error("[AuthProvider] Error durante logout:", err);
-      // Fallback: Redirección forzada por si Supabase o el Router fallaron
       window.location.href = '/login';
     } finally {
-      // Retardo para asegurar que la redirección inició antes de quitar el spinner
       setTimeout(() => setLoading(false), 500);
     }
   };
@@ -220,6 +222,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const hasRole = (code: string) => {
     if (isGuest) return true;
     return roles.includes('ADMIN') || roles.includes(code);
+  };
+
+  const handleSaveName = async () => {
+    if (!newName.trim() || !user) return;
+    
+    setIsSavingName(true);
+    try {
+      const { error } = await supabaseEtiquetas
+        .from('table_profiles')
+        .update({ name: newName.trim().toUpperCase() })
+        .eq('id', user.id);
+
+      if (error) throw error;
+
+      setProfile(prev => prev ? { ...prev, name: newName.trim().toUpperCase() } : null);
+      setShowNamePrompt(false);
+    } catch (err: any) {
+      alert("No se pudo guardar el nombre: " + err.message);
+    } finally {
+      setIsSavingName(false);
+    }
   };
 
   useEffect(() => {
@@ -301,7 +324,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               REINTENTAR CONEXIÓN
             </Button>
           </div>
-          <p className="text-center text-[10px] font-black text-gray-300 uppercase tracking-[0.4em]">INMATMEX • INFRAESTRUCTURA</p>
         </div>
       </div>
     );
@@ -325,7 +347,52 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           </div>
         </div>
       ) : (
-        <>{children}</>
+        <>
+          {children}
+          
+          {/* Global Modal for missing Name in Profile */}
+          {showNamePrompt && !isGuest && (
+            <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex justify-center items-center z-[1000] p-4">
+              <div className="bg-white rounded-[2.5rem] shadow-2xl p-8 w-full max-w-[340px] animate-in fade-in zoom-in duration-300">
+                <div className="flex flex-col items-center text-center space-y-6">
+                  <div className="p-4 rounded-3xl bg-starbucks-cream text-starbucks-green">
+                    <UserCircle2 className="h-10 w-10" />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <h3 className="text-xl font-black text-gray-900 tracking-tight">Completar Perfil</h3>
+                    <p className="text-sm text-gray-500 font-medium leading-relaxed">
+                      Para continuar, por favor ingresa tu <span className="font-bold">nombre completo</span>. Este se usará para tus registros en el sistema.
+                    </p>
+                  </div>
+
+                  <div className="w-full space-y-4">
+                    <Input 
+                      placeholder="Ej. Juan Pérez García" 
+                      value={newName}
+                      onChange={(e) => setNewName(e.target.value)}
+                      className="h-12 rounded-2xl font-bold text-center uppercase focus-visible:ring-starbucks-green/20"
+                      onKeyDown={(e) => e.key === 'Enter' && handleSaveName()}
+                    />
+                    
+                    <Button 
+                      onClick={handleSaveName}
+                      disabled={isSavingName || !newName.trim()}
+                      className="w-full h-12 rounded-2xl bg-starbucks-green hover:bg-starbucks-dark text-white font-black text-xs tracking-widest transition-all shadow-lg shadow-starbucks-green/20"
+                    >
+                      {isSavingName ? <Loader2 className="h-4 w-4 animate-spin" /> : (
+                        <div className="flex items-center gap-2">
+                          <UserCheck className="h-4 w-4" />
+                          GUARDAR Y CONTINUAR
+                        </div>
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </>
       )}
     </AuthContext.Provider>
   );
