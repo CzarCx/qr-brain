@@ -342,6 +342,28 @@ export default function SewingStatusScannerPage() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [selectedScannerMode, scannerActive, handleProcessCode]);
 
+  const applyCameraConstraints = useCallback((track: MediaStreamTrack) => {
+    if (!isMobile || !track || track.readyState !== 'live') return;
+    track.applyConstraints({
+      advanced: [{ zoom: zoom, torch: isFlashOn }]
+    }).catch(e => {
+      if (!String(e).includes('ConstraintNotSatisfiedError')) {
+        console.error("Failed to apply constraints", e);
+      }
+    });
+  }, [zoom, isFlashOn, isMobile]);
+
+  useEffect(() => {
+    if (selectedScannerMode === 'camara' && scannerActive && html5QrCodeRef.current?.getState() === Html5QrcodeScannerState.SCANNING) {
+      const videoElement = readerRef.current?.querySelector('video');
+      if (videoElement && videoElement.srcObject) {
+        const stream = videoElement.srcObject as MediaStream;
+        const track = stream.getVideoTracks()[0];
+        if (track) applyCameraConstraints(track);
+      }
+    }
+  }, [zoom, isFlashOn, scannerActive, selectedScannerMode, applyCameraConstraints, loading, scanLogs.length]);
+
   useEffect(() => {
     if (!isMounted || !readerRef.current || selectedScannerMode !== 'camara' || !scannerActive) return;
 
@@ -385,20 +407,6 @@ export default function SewingStatusScannerPage() {
       cleanup();
     };
   }, [scannerActive, selectedScannerMode, isMounted, handleProcessCode]);
-
-  useEffect(() => {
-    if (selectedScannerMode === 'camara' && scannerActive && html5QrCodeRef.current?.isScanning) {
-      const videoElement = readerRef.current?.querySelector('video');
-      if (videoElement && videoElement.srcObject) {
-        const track = (videoElement.srcObject as MediaStream).getVideoTracks()[0];
-        if (track) {
-          track.applyConstraints({
-            advanced: [{ zoom, torch: isFlashOn }] as any
-          }).catch(() => {});
-        }
-      }
-    }
-  }, [zoom, isFlashOn, scannerActive, selectedScannerMode]);
 
   const filteredPpcOrders = useMemo(() => {
     if (!searchPpc.trim()) return ppcOrders;

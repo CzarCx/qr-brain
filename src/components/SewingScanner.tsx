@@ -20,6 +20,7 @@ export function SewingScanner({ onScan, disabled }: SewingScannerProps) {
   const [cameraCapabilities, setCameraCapabilities] = useState<any>(null);
   const [isMounted, setIsMounted] = useState(false);
   const [message, setMessage] = useState({ text: '', show: false });
+  const [scanCounter, setScanCounter] = useState(0);
   
   const readerRef = useRef<HTMLDivElement>(null);
   const html5QrCodeRef = useRef<Html5Qrcode | null>(null);
@@ -67,6 +68,7 @@ export function SewingScanner({ onScan, disabled }: SewingScannerProps) {
     const success = await onScanRef.current(text.trim());
     if (success) {
         showAppMessage(`Éxito: ${text}`);
+        setScanCounter(prev => prev + 1);
     }
   }, []);
 
@@ -90,6 +92,28 @@ export function SewingScanner({ onScan, disabled }: SewingScannerProps) {
     }
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [selectedScannerMode, scannerActive, handleScan]);
+
+  const applyCameraConstraints = useCallback((track: MediaStreamTrack) => {
+    if (!isMobile || !track || track.readyState !== 'live') return;
+    track.applyConstraints({
+      advanced: [{ zoom: zoom, torch: isFlashOn }]
+    }).catch(e => {
+      if (!String(e).includes('ConstraintNotSatisfiedError')) {
+        console.error("Failed to apply constraints", e);
+      }
+    });
+  }, [zoom, isFlashOn, isMobile]);
+
+  useEffect(() => {
+    if (isMobile && scannerActive && selectedScannerMode === 'camara' && html5QrCodeRef.current?.getState() === Html5QrcodeScannerState.SCANNING) {
+      const videoElement = readerRef.current?.querySelector('video');
+      if (videoElement && videoElement.srcObject) {
+        const stream = videoElement.srcObject as MediaStream;
+        const track = stream.getVideoTracks()[0];
+        if (track) applyCameraConstraints(track);
+      }
+    }
+  }, [zoom, isFlashOn, scannerActive, selectedScannerMode, isMobile, applyCameraConstraints, scanCounter]);
 
   useEffect(() => {
     if (!isMounted || !readerRef.current) return;
@@ -149,21 +173,7 @@ export function SewingScanner({ onScan, disabled }: SewingScannerProps) {
     return () => {
       cleanup();
     };
-  }, [scannerActive, selectedScannerMode, isMounted, handleScan]);
-
-  useEffect(() => {
-    if (selectedScannerMode === 'camara' && scannerActive && html5QrCodeRef.current?.isScanning) {
-        const videoElement = readerRef.current?.querySelector('video');
-        if (videoElement && videoElement.srcObject) {
-            const track = (videoElement.srcObject as MediaStream).getVideoTracks()[0];
-            if (track) {
-                track.applyConstraints({
-                    advanced: [{ zoom, torch: isFlashOn }] as any
-                }).catch(() => {});
-            }
-        }
-    }
-  }, [zoom, isFlashOn, selectedScannerMode, scannerActive]);
+  }, [scannerActive, selectedScannerMode, isMounted, handleScan, isMobile]);
 
   if (!isMounted) return null;
 
@@ -238,7 +248,7 @@ export function SewingScanner({ onScan, disabled }: SewingScannerProps) {
         {selectedScannerMode === 'camara' && scannerActive && isMounted && isMobile && cameraCapabilities && (
             <div className="absolute bottom-4 left-4 right-4 bg-black/60 p-3 rounded-lg flex items-center gap-4 text-white z-10">
                 {cameraCapabilities.torch && (
-                    <Button variant="ghost" size="icon" onClick={() => setIsFlashOn(!isFlashOn)} className={isFlashOn ? 'text-yellow-400' : 'text-white'}>
+                    <Button variant="ghost" size="icon" onClick={() => setIsFlashOn(!isFlashOn)} className={cn("h-10 w-10", isFlashOn ? 'text-yellow-400 bg-white/10' : 'text-white')}>
                         <Zap className="h-5 w-5" />
                     </Button>
                 )}
@@ -253,7 +263,7 @@ export function SewingScanner({ onScan, disabled }: SewingScannerProps) {
                             step={0.1} 
                             value={zoom} 
                             onChange={(e) => setZoom(parseFloat(e.target.value))}
-                            className="w-full"
+                            className="w-full h-2 bg-white/20 rounded-lg appearance-none cursor-pointer accent-starbucks-green"
                         />
                     </div>
                 )}

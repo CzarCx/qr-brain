@@ -38,6 +38,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useAuth } from '@/components/AuthProvider';
+import { cn } from '@/lib/utils';
 
 type Encargado = {
   name: string;
@@ -377,26 +378,26 @@ export default function DevolucionesPage() {
   }, [scannerActive, selectedScannerMode, onScanSuccess]);
 
   const applyCameraConstraints = useCallback((track: MediaStreamTrack) => {
+    if (!isMobile || !track || track.readyState !== 'live') return;
     track.applyConstraints({
-      advanced: [{
-        zoom: zoom,
-        torch: isFlashOn
-      }]
-    }).catch(e => console.error("Failed to apply constraints", e));
-  }, [zoom, isFlashOn]);
+      advanced: [{ zoom: zoom, torch: isFlashOn }]
+    }).catch(e => {
+      if (!String(e).includes('ConstraintNotSatisfiedError')) {
+        console.error("Failed to apply constraints", e);
+      }
+    });
+  }, [zoom, isFlashOn, isMobile]);
   
   useEffect(() => {
     if (isMobile && scannerActive && selectedScannerMode === 'camara' && html5QrCodeRef.current?.getState() === Html5QrcodeScannerState.SCANNING) {
-      const videoElement = document.getElementById('reader')?.querySelector('video');
+      const videoElement = readerRef.current?.querySelector('video');
       if (videoElement && videoElement.srcObject) {
         const stream = videoElement.srcObject as MediaStream;
         const track = stream.getVideoTracks()[0];
-        if (track) {
-          applyCameraConstraints(track);
-        }
+        if (track) applyCameraConstraints(track);
       }
     }
-  }, [zoom, isFlashOn, scannerActive, selectedScannerMode, isMobile, applyCameraConstraints]);
+  }, [zoom, isFlashOn, scannerActive, selectedScannerMode, isMobile, applyCameraConstraints, loading, returnsList.length]);
   
   useEffect(() => {
     if (!isMounted || !readerRef.current) return;
@@ -432,7 +433,7 @@ export default function DevolucionesPage() {
         qrCode.start({ facingMode: "environment" }, config, onScanSuccess, (e: any) => {})
         .then(() => {
             if (isMobile) {
-              const videoElement = document.getElementById('reader')?.querySelector('video');
+              const videoElement = readerRef.current?.querySelector('video');
               const stream = videoElement?.srcObject as MediaStream;
               const track = stream?.getVideoTracks()[0];
               if (track) {
@@ -576,22 +577,22 @@ export default function DevolucionesPage() {
                     {isMounted && isMobile && scannerActive && selectedScannerMode === 'camara' && cameraCapabilities && (
                         <div id="camera-controls" className="flex items-center gap-4 mt-4 p-2 rounded-lg bg-gray-200">
                             {cameraCapabilities.torch && (
-                                <Button variant="ghost" size="icon" onClick={() => setIsFlashOn(prev => !prev)} className={isFlashOn ? 'bg-yellow-400' : ''}>
+                                <Button variant="ghost" size="icon" onClick={() => setIsFlashOn(prev => !prev)} className={cn("h-10 w-10", isFlashOn ? 'text-yellow-400 bg-white/10' : 'text-white')}>
                                     <Zap className="h-5 w-5" />
                                 </Button>
                             )}
                             {cameraCapabilities.zoom && (
-                                 <div className="flex-1 flex items-center gap-2">
-                                    <ZoomIn className="h-5 w-5" />
+                                 <div className="flex-1 flex items-center gap-4">
+                                    <ZoomIn className="h-5 w-5 text-gray-400" />
                                     <input
                                         id="zoom-slider"
                                         type="range"
                                         min={cameraCapabilities.zoom.min}
                                         max={cameraCapabilities.zoom.max}
-                                        step={cameraCapabilities.zoom.step}
+                                        step={0.1}
                                         value={zoom}
                                         onChange={(e) => setZoom(parseFloat(e.target.value))}
-                                        className="w-full"
+                                        className="w-full h-2 bg-white/20 rounded-lg appearance-none cursor-pointer accent-starbucks-green"
                                     />
                                 </div>
                             )}
