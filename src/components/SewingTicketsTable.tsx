@@ -91,17 +91,47 @@ export function SewingTicketsTable({ tickets, onUpdateTicket, onDeleteTicket, on
   const [isTimeModalOpen, setIsTimeModalOpen] = useState(false);
   const [selectedTicketForTime, setSelectedTicketForTime] = useState<SewingTicket | null>(null);
 
-  // Helper to format date string YYYY-MM-DD without UTC conversion
+  // Helper para fechas tipo DATE (sin hora, no requiere conversión UTC)
   const formatDateLocal = (dateStr: string | null | undefined, pattern: string = "dd/MM/yyyy") => {
     if (!dateStr) return '---';
     try {
-      // Expecting YYYY-MM-DD
       const parts = dateStr.split('-');
       if (parts.length !== 3) return dateStr;
       const [year, month, day] = parts.map(Number);
-      // month is 0-indexed in Date constructor
       const date = new Date(year, month - 1, day);
       return format(date, pattern, { locale: es });
+    } catch (e) {
+      return dateStr;
+    }
+  };
+
+  // Helper para fechas tipo TIMESTAMPTZ (con hora UTC, requiere conversión a MX)
+  const formatDateMX = (dateStr: string | null | undefined, pattern: string = "dd/MM/yyyy") => {
+    if (!dateStr) return '---';
+    try {
+      // Asegurar que se interprete como UTC si no tiene offset
+      const cleanDateStr = dateStr.includes('T') || dateStr.includes(' ') 
+        ? (dateStr.endsWith('Z') || dateStr.includes('+') || dateStr.includes('-') ? dateStr : `${dateStr.replace(' ', 'T')}Z`)
+        : dateStr;
+        
+      const date = new Date(cleanDateStr);
+      if (isNaN(date.getTime())) return dateStr;
+      
+      const options: Intl.DateTimeFormatOptions = {
+        timeZone: 'America/Mexico_City',
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric'
+      };
+      
+      const mxDate = new Intl.DateTimeFormat('es-MX', options).format(date);
+      
+      if (pattern === "dd/MM/yy") {
+          const parts = mxDate.split('/');
+          return `${parts[0]}/${parts[1]}/${parts[2].slice(-2)}`;
+      }
+      
+      return mxDate;
     } catch (e) {
       return dateStr;
     }
@@ -320,6 +350,7 @@ export function SewingTicketsTable({ tickets, onUpdateTicket, onDeleteTicket, on
                 renderBoolean={renderBoolean}
                 prodStatusMap={prodStatusMap}
                 formatDateLocal={formatDateLocal}
+                formatDateMX={formatDateMX}
               />
             ))
           ) : (
@@ -500,7 +531,7 @@ export function SewingTicketsTable({ tickets, onUpdateTicket, onDeleteTicket, on
                       {ticket.responsable_impresion || '---'}
                     </TableCell>
                     <TableCell className="text-xs text-gray-500">
-                      {ticket.fecha_impresion ? format(new Date(ticket.fecha_impresion), "dd/MM/yyyy", { locale: es }) : '---'}
+                      {formatDateMX(ticket.fecha_impresion)}
                     </TableCell>
                     <TableCell className="text-xs truncate">
                       {ticket.asignada_a || '---'}
@@ -636,7 +667,8 @@ function CardItem({
   RecolectorSelector,
   renderBoolean,
   prodStatusMap,
-  formatDateLocal
+  formatDateLocal,
+  formatDateMX
 }: any) {
   const estTime = skuMetadata && ticket.sku && skuMetadata[ticket.sku] ? `${skuMetadata[ticket.sku].time}m` : (ticket.esti_time ? `${ticket.esti_time}m` : '---');
   const prodStatus = prodStatusMap?.[ticket.codigo_barra];
@@ -853,7 +885,7 @@ function CardItem({
                                 {renderBoolean(ticket.impresa)}
                                 <div className="text-right">
                                     <p className="text-[9px] font-bold text-gray-400">RESP: {ticket.responsable_impresion || '---'}</p>
-                                    <p className="text-[9px] font-bold text-gray-400">FECHA: {ticket.fecha_impresion ? format(new Date(ticket.fecha_impresion), "dd/MM/yy", { locale: es }) : '---'}</p>
+                                    <p className="text-[9px] font-bold text-gray-400">FECHA: {formatDateMX(ticket.fecha_impresion, "dd/MM/yy")}</p>
                                 </div>
                              </div>
                         </div>
