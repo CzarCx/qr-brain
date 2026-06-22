@@ -91,7 +91,6 @@ export function SewingTicketsTable({ tickets, onUpdateTicket, onDeleteTicket, on
   const [isTimeModalOpen, setIsTimeModalOpen] = useState(false);
   const [selectedTicketForTime, setSelectedTicketForTime] = useState<SewingTicket | null>(null);
 
-  // Helper para fechas tipo DATE (sin hora, no requiere conversión UTC)
   const formatDateLocal = (dateStr: string | null | undefined, pattern: string = "dd/MM/yyyy") => {
     if (!dateStr) return '---';
     try {
@@ -105,32 +104,31 @@ export function SewingTicketsTable({ tickets, onUpdateTicket, onDeleteTicket, on
     }
   };
 
-  // Helper para fechas tipo TIMESTAMPTZ (con hora UTC, requiere conversión a MX)
   const formatDateMX = (dateStr: string | null | undefined, pattern: string = "dd/MM/yyyy") => {
     if (!dateStr) return '---';
     try {
-      // Asegurar que se interprete como UTC si no tiene offset
-      const cleanDateStr = dateStr.includes('T') || dateStr.includes(' ') 
-        ? (dateStr.endsWith('Z') || dateStr.includes('+') || dateStr.includes('-') ? dateStr : `${dateStr.replace(' ', 'T')}Z`)
-        : dateStr;
-        
-      const date = new Date(cleanDateStr);
+      if (dateStr.length === 10 && /^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+          const [y, m, d] = dateStr.split('-').map(Number);
+          const day = String(d).padStart(2, '0');
+          const month = String(m).padStart(2, '0');
+          const year = String(y);
+          return pattern === "dd/MM/yy" ? `${day}/${month}/${year.slice(-2)}` : `${day}/${month}/${year}`;
+      }
+
+      const date = new Date(dateStr);
       if (isNaN(date.getTime())) return dateStr;
       
-      const options: Intl.DateTimeFormatOptions = {
+      const mxDate = new Intl.DateTimeFormat('es-MX', {
         timeZone: 'America/Mexico_City',
         day: '2-digit',
         month: '2-digit',
         year: 'numeric'
-      };
-      
-      const mxDate = new Intl.DateTimeFormat('es-MX', options).format(date);
+      }).format(date);
       
       if (pattern === "dd/MM/yy") {
           const parts = mxDate.split('/');
           return `${parts[0]}/${parts[1]}/${parts[2].slice(-2)}`;
       }
-      
       return mxDate;
     } catch (e) {
       return dateStr;

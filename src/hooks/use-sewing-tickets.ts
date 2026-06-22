@@ -71,7 +71,7 @@ export function useSewingTickets() {
       // 1. Consultar en etiquetas_i para validación y mapeo automático (Soportando múltiples registros)
       const { data: tagDataArray, error: tagError } = await supabaseEtiquetas
         .from('etiquetas_i')
-        .select('product, pack_id, sales_num, sku, personal_inc, organization, created_at, quantity, deli_date')
+        .select('product, pack_id, sales_num, sku, personal_inc, organization, created_at, quantity, deli_date, imp_date')
         .eq('code', finalBarcode);
 
       if (tagError) {
@@ -93,6 +93,12 @@ export function useSewingTickets() {
       const firstRow = tagDataArray[0];
       const allSkus = tagDataArray.map(item => item.sku).filter(Boolean).join(' | ');
       const totalQuantity = tagDataArray.reduce((acc, curr) => acc + (curr.quantity || 0), 0);
+
+      // Calcular fecha de impresión real en México para el guardado
+      const printDateSource = firstRow.imp_date || firstRow.created_at;
+      const mxDateStr = printDateSource 
+        ? new Date(printDateSource).toLocaleDateString('en-CA', { timeZone: 'America/Mexico_City' }) 
+        : null;
 
       // --- SINCRONIZACIÓN AUTOMÁTICA CON TABLA 'PERSONAL' (Main DB) ---
       const numericCode = parseFloat(finalBarcode);
@@ -168,7 +174,7 @@ export function useSewingTickets() {
         sku: allSkus,
         responsable_impresion: firstRow.personal_inc,
         cuenta: firstRow.organization,
-        fecha_impresion: firstRow.created_at ? new Date(firstRow.created_at).toISOString().split('T')[0] : null,
+        fecha_impresion: mxDateStr,
         cantidad: totalQuantity,
         impreso: false,
         hora_vaciado: new Date().toLocaleTimeString('es-MX', { hour12: false }),
