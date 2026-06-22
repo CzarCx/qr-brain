@@ -1,3 +1,4 @@
+
 'use client';
 
 import { SewingTicket } from '@/types/sewing';
@@ -89,6 +90,22 @@ export function SewingTicketsTable({ tickets, onUpdateTicket, onDeleteTicket, on
   
   const [isTimeModalOpen, setIsTimeModalOpen] = useState(false);
   const [selectedTicketForTime, setSelectedTicketForTime] = useState<SewingTicket | null>(null);
+
+  // Helper to format date string YYYY-MM-DD without UTC conversion
+  const formatDateLocal = (dateStr: string | null | undefined, pattern: string = "dd/MM/yyyy") => {
+    if (!dateStr) return '---';
+    try {
+      // Expecting YYYY-MM-DD
+      const parts = dateStr.split('-');
+      if (parts.length !== 3) return dateStr;
+      const [year, month, day] = parts.map(Number);
+      // month is 0-indexed in Date constructor
+      const date = new Date(year, month - 1, day);
+      return format(date, pattern, { locale: es });
+    } catch (e) {
+      return dateStr;
+    }
+  };
 
   const skuCounts = useMemo(() => {
     return tickets.reduce((acc, ticket) => {
@@ -240,9 +257,9 @@ export function SewingTicketsTable({ tickets, onUpdateTicket, onDeleteTicket, on
             variant="outline"
             role="combobox"
             aria-expanded={open}
-            className={cn("h-8 w-full justify-between text-[10px] font-bold border-gray-200 bg-white uppercase px-2 overflow-hidden", className)}
+            className={cn("h-8 w-full justify-between text-left font-normal border-gray-200 bg-white px-2 overflow-hidden", className)}
           >
-            <span className="truncate">{value || "PENDIENTE"}</span>
+            <span className="truncate text-[10px] font-bold uppercase">{value || "PENDIENTE"}</span>
             <ChevronsUpDown className="ml-2 h-3 w-3 shrink-0 opacity-50" />
           </Button>
         </PopoverTrigger>
@@ -302,6 +319,7 @@ export function SewingTicketsTable({ tickets, onUpdateTicket, onDeleteTicket, on
                 RecolectorSelector={RecolectorSelector}
                 renderBoolean={renderBoolean}
                 prodStatusMap={prodStatusMap}
+                formatDateLocal={formatDateLocal}
               />
             ))
           ) : (
@@ -530,7 +548,7 @@ export function SewingTicketsTable({ tickets, onUpdateTicket, onDeleteTicket, on
                       />
                     </TableCell>
                     <TableCell className="text-xs text-gray-500">
-                      {ticket.fecha_entrega_paquete ? format(new Date(ticket.fecha_entrega_paquete), "dd/MM/yyyy", { locale: es }) : '---'}
+                      {formatDateLocal(ticket.fecha_entrega_paquete)}
                     </TableCell>
                     <TableCell className="text-[10px] text-gray-400">
                       {ticket.created_at ? format(new Date(ticket.created_at), "dd/MM HH:mm:ss", { locale: es }) : '---'}
@@ -617,7 +635,8 @@ function CardItem({
   TriStateSelect,
   RecolectorSelector,
   renderBoolean,
-  prodStatusMap
+  prodStatusMap,
+  formatDateLocal
 }: any) {
   const estTime = skuMetadata && ticket.sku && skuMetadata[ticket.sku] ? `${skuMetadata[ticket.sku].time}m` : (ticket.esti_time ? `${ticket.esti_time}m` : '---');
   const prodStatus = prodStatusMap?.[ticket.codigo_barra];
@@ -710,7 +729,7 @@ function CardItem({
                 <div className="text-right">
                     <p className="text-[9px] font-bold text-gray-400 uppercase">Entrega:</p>
                     <p className="text-[10px] font-black text-starbucks-green">
-                        {ticket.fecha_entrega_paquete ? format(new Date(ticket.fecha_entrega_paquete), "dd/MM/yy", { locale: es }) : '---'}
+                        {formatDateLocal(ticket.fecha_entrega_paquete, "dd/MM/yy")}
                     </p>
                 </div>
             </div>
