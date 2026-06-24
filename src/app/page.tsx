@@ -1,3 +1,4 @@
+
 'use client';
 import React, {useEffect, useRef, useState, useCallback, useMemo} from 'react';
 import Head from 'next/head';
@@ -533,11 +534,23 @@ export default function Home() {
         if (error) {
             setDbError('Error al cargar empleados operativos.');
         } else if (data) {
-             setPersonalList(data.map(e => ({
+             // Mapeo inicial de los datos
+             const fullList = data.map(e => ({
                 id: e.id,
-                name: [e.nombres, e.apellido_paterno, e.apellido_materno].filter(Boolean).join(' '),
+                name: [e.nombres, e.apellido_paterno, e.apellido_materno].filter(Boolean).join(' ').trim().toUpperCase(),
                 email: e.email
-             })));
+             }));
+
+             // Filtrado de duplicados por nombre completo
+             // Utilizamos un Map para mantener solo el primer registro encontrado para cada nombre único
+             const uniqueMap = new Map();
+             fullList.forEach(item => {
+                 if (!uniqueMap.has(item.name)) {
+                     uniqueMap.set(item.name, item);
+                 }
+             });
+
+             setPersonalList(Array.from(uniqueMap.values()));
         }
     };
     const fetchEncargados = async () => {
@@ -1479,6 +1492,7 @@ const deleteRow = (codeToDelete: string) => {
         console.error("Error al guardar producción programada:", error);
         showModalNotification('Error', `Error al guardar: ${error.message}`, 'destructive');
     } finally {
+        // Corrección del espacio tipográfico por sintaxis
         setLoading(false);
     }
 };
@@ -2312,10 +2326,10 @@ const deleteRow = (codeToDelete: string) => {
                         )}
                         
                         <div id="scanner-controls" className="mt-4 flex flex-wrap gap-2 justify-center">
-                            <button onClick={startScanner} disabled={scannerActive || loading || !encargado} className="px-4 py-2 text-white font-semibold rounded-lg shadow-md transition-colors duration-200 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-sm">
+                            <button onClick={startScanner} disabled={scannerActive || loading || !encargado} className="px-4 py-2 text-white font-semibold rounded-lg shadow-sm transition-colors duration-200 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-sm">
                                 Iniciar
                             </button>
-                            <button onClick={stopScanner} disabled={!scannerActive} className="px-4 py-2 text-white font-semibold rounded-lg shadow-md transition-colors duration-200 bg-red-600 hover:bg-red-700 disabled:bg-gray-400 text-sm">
+                            <button onClick={stopScanner} disabled={!scannerActive} className="px-4 py-2 text-white font-semibold rounded-lg shadow-sm transition-colors duration-200 bg-red-600 hover:bg-red-700 disabled:bg-gray-400 text-sm">
                                 Detener
                             </button>
                         </div>
