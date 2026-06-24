@@ -82,7 +82,10 @@ export function Combobox({ options, groupedOptions, value, onValueChange, placeh
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-[--radix-popover-trigger-width] p-0 z-[100]">
-        <Command>
+        <Command filter={(value, search) => {
+            if (value.toLowerCase().includes(search.toLowerCase())) return 1
+            return 0
+        }}>
           <CommandInput placeholder="Buscar..." />
           <CommandList>
             <CommandEmpty>{emptyMessage}</CommandEmpty>
