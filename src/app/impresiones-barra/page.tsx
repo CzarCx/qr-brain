@@ -1,3 +1,4 @@
+
 'use client';
 import {useEffect, useRef, useState, useCallback} from 'react';
 import Head from 'next/head';
@@ -122,20 +123,20 @@ export default function ImpresionesBarraPage() {
     fetchEncargados();
   }, []);
 
-  // Vincular encargado con el perfil de usuario logueado o buscar en empleados
+  // Vincular encargado con el perfil de usuario logueado o buscar en empleados por email
   useEffect(() => {
-    if (!user?.id) return;
+    if (!user?.email) return;
 
     const fetchNameFromEmployees = async () => {
         try {
             const { data, error } = await supabaseEtiquetas
                 .from('empleados')
                 .select('nombres, apellido_paterno, apellido_materno')
-                .eq('id', user.id)
+                .eq('email', user.email)
                 .maybeSingle();
 
             if (data) {
-                const fullName = [data.nombres, data.apellido_paterno, data.apellido_materno].filter(Boolean).join(' ');
+                const fullName = [data.nombres, data.apellido_paterno, data.apellido_materno].filter(Boolean).join(' ').toUpperCase();
                 setEncargado(fullName);
             } else if (profile?.name) {
                 setEncargado(profile.name);
@@ -541,7 +542,7 @@ const handleMassQualify = async () => {
           <div className="space-y-4">
               <div>
                   <label htmlFor="encargado" className="block text-sm font-bold text-starbucks-dark mb-1">Nombre del Encargado:</label>
-                   <Select onValueChange={setEncargado} value={encargado} disabled={scannerActive}>
+                   <Select onValueChange={setEncargado} value={encargado} disabled={true}>
                       <SelectTrigger className="bg-transparent hover:bg-gray-50 border border-input">
                           <SelectValue placeholder="Selecciona un encargado" />
                       </SelectTrigger>

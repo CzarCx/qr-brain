@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useEffect, useState, useRef, useMemo } from 'react';
@@ -125,20 +126,20 @@ export default function SewingTicketsPage() {
     return () => window.removeEventListener('scroll', handleScroll);
   }, [fetchTickets]);
 
-  // Vincular responsable con el perfil de usuario logueado o buscar en empleados
+  // Vincular responsable con el perfil de usuario logueado o buscar en empleados por email
   useEffect(() => {
-    if (!user?.id) return;
+    if (!user?.email) return;
 
     const fetchNameFromEmployees = async () => {
         try {
             const { data, error } = await supabaseEtiquetas
                 .from('empleados')
                 .select('nombres, apellido_paterno, apellido_materno')
-                .eq('id', user.id)
+                .eq('email', user.email)
                 .maybeSingle();
 
             if (data) {
-                const fullName = [data.nombres, data.apellido_paterno, data.apellido_materno].filter(Boolean).join(' ');
+                const fullName = [data.nombres, data.apellido_paterno, data.apellido_materno].filter(Boolean).join(' ').toUpperCase();
                 setResponsable(fullName);
                 localStorage.setItem('sewing_responsable', fullName);
             } else if (profile?.name) {
@@ -422,7 +423,7 @@ export default function SewingTicketsPage() {
   return (
     <>
       <Head><title>Bitácora de Costura | Pendientes</title></Head>
-      <main className="w-full max-w-[1600px] mx-auto p-2 md:p-8 space-y-4 md:space-y-6 animate-in fade-in duration-500 overflow-x-hidden relative">
+      <main className="w-full max-w-[1600px] mx-auto p-2 md:p-8 space-y-4 md:space-y-6 animate-in fade-in duration-500 border-x-hidden relative">
         <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 px-2">
           <div className="space-y-1">
             <div className="flex items-center gap-3">
@@ -500,7 +501,7 @@ export default function SewingTicketsPage() {
                   />
                   <Popover open={isResponsableListOpen} onOpenChange={setIsResponsableListOpen}>
                     <PopoverTrigger asChild>
-                      <Button variant="ghost" size="sm" className="absolute right-0 top-0 h-full px-3 text-gray-400"><ChevronsUpDown className="h-4 w-4" /></Button>
+                      <Button variant="ghost" size="sm" className="absolute right-0 top-0 h-full px-3 text-gray-400" disabled={true}><ChevronsUpDown className="h-4 w-4" /></Button>
                     </PopoverTrigger>
                     <PopoverContent className="w-[300px] p-0" align="end">
                       <Command><CommandList><CommandGroup heading="Frecuentes">

@@ -1,3 +1,4 @@
+
 'use client';
 import {useEffect, useRef, useState, useCallback, useMemo} from 'react';
 import Head from 'next/head';
@@ -111,20 +112,20 @@ export default function AlmacenPage() {
     fetchEncargados();
   }, []);
 
-  // Vincular encargado con el perfil de usuario logueado o buscar en empleados
+  // Vincular encargado con el perfil de usuario logueado o buscar en empleados por email
   useEffect(() => {
-    if (!user?.id) return;
+    if (!user?.email) return;
 
     const fetchNameFromEmployees = async () => {
         try {
             const { data, error } = await supabaseEtiquetas
                 .from('empleados')
                 .select('nombres, apellido_paterno, apellido_materno')
-                .eq('id', user.id)
+                .eq('email', user.email)
                 .maybeSingle();
 
             if (data) {
-                const fullName = [data.nombres, data.apellido_paterno, data.apellido_materno].filter(Boolean).join(' ');
+                const fullName = [data.nombres, data.apellido_paterno, data.apellido_materno].filter(Boolean).join(' ').toUpperCase();
                 setEncargado(fullName);
             } else if (profile?.name) {
                 setEncargado(profile.name);
@@ -350,7 +351,7 @@ export default function AlmacenPage() {
                       onValueChange={setEncargado}
                       placeholder="Selecciona almacenista..."
                       emptyMessage="No se encontró."
-                      disabled={scannerActive}
+                      disabled={true}
                   />
               </div>
 

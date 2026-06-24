@@ -418,24 +418,26 @@ export default function Home() {
   }, [fetchCreatedLotes, fetchWorkForceCapacity, fetchRequiredWorkload]);
 
   useEffect(() => {
-    if (!user?.id) return;
+    if (!user?.email) return;
 
     const checkAttendanceAndFetchName = async () => {
         try {
             const { data: empData, error: empError } = await supabaseEtiquetas
                 .from('empleados')
                 .select('nombres, apellido_paterno, apellido_materno')
-                .eq('id', user.id)
+                .eq('email', user.email)
                 .maybeSingle();
 
             if (empData) {
-                const fullName = [empData.nombres, empData.apellido_paterno, empData.apellido_materno].filter(Boolean).join(' ');
+                const fullName = [empData.nombres, empData.apellido_paterno, empData.apellido_materno].filter(Boolean).join(' ').toUpperCase();
                 setEncargado(fullName);
+            } else if (profile?.name) {
+                setEncargado(profile.name);
             }
 
             const todayStr = new Date().toLocaleDateString('en-CA'); 
 
-            // Nueva validación: ¿Tiene al menos una entrada hoy?
+            // Validación de asistencia
             const { data: attendanceData, error: attendanceError } = await supabaseEtiquetas
                 .from('registro_checador')
                 .select('id')
@@ -457,7 +459,7 @@ export default function Home() {
     };
 
     checkAttendanceAndFetchName();
-  }, [user]);
+  }, [user, profile]);
 
   useEffect(() => {
     if (isMounted) {
@@ -542,7 +544,6 @@ export default function Home() {
              }));
 
              // Filtrado de duplicados por nombre completo
-             // Utilizamos un Map para mantener solo el primer registro encontrado para cada nombre único
              const uniqueMap = new Map();
              fullList.forEach(item => {
                  if (!uniqueMap.has(item.name)) {
@@ -938,7 +939,6 @@ export default function Home() {
             
             if (!isGuest) {
                 const todayStr = new Date().toLocaleDateString('en-CA');
-                // Nueva validación para operario escaneado: Al menos una entrada hoy
                 const { data: attData } = await supabaseEtiquetas
                     .from('registro_checador')
                     .select('id')
@@ -1492,7 +1492,6 @@ const deleteRow = (codeToDelete: string) => {
         console.error("Error al guardar producción programada:", error);
         showModalNotification('Error', `Error al guardar: ${error.message}`, 'destructive');
     } finally {
-        // Corrección del espacio tipográfico por sintaxis
         setLoading(false);
     }
 };
@@ -1570,7 +1569,6 @@ const deleteRow = (codeToDelete: string) => {
     
     if (!isGuest) {
         const todayStr = new Date().toLocaleDateString('en-CA');
-        // Nueva validación para carga programada: Al menos una entrada hoy
         const { data: attData } = await supabaseEtiquetas
             .from('registro_checador')
             .select('id')
@@ -2220,7 +2218,7 @@ const deleteRow = (codeToDelete: string) => {
                         placeholder="Selecciona un encargado..."
                         emptyMessage="No se encontró encargado."
                         buttonClassName="bg-transparent hover:bg-gray-50 border-input"
-                        disabled={scannerActive}
+                        disabled={true}
                     />
                 </div>
 
