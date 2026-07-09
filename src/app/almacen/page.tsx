@@ -1,0 +1,413 @@
+
+
+'use client';
+import {useEffect, useRef, useState, useCallback, useMemo} from 'react';
+import Head from 'next/head';
+import { Html5Qrcode, Html5QrcodeScannerState } from 'html5-qrcode';
+import { supabase, supabaseEtiquetas } from '@/lib/supabaseClient';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { Button } from "@/components/ui/button"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { AlertTriangle, Trash2, Zap, ZoomIn, PackageSearch, CheckCircle2, Boxes } from 'lucide-react';
+import { useIsMobile } from '@/hooks/use-mobile';
+import { Combobox } from '@/components/ui/combobox';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { useAuth } from '@/components/AuthProvider';
+import { cn } from '@/lib/utils';
+
+type ScanResult = {
+    name: string | null;
+    product: string | null;
+    code: string;
+    found: boolean;
+    error?: string;
+    status?: string | null;
+    quantity?: number | null;
+    organization?: string | null;
+};
+
+export default function AlmacenPage() {
+  const { profile, user } = useAuth();
+  const [isMounted, setIsMounted] = useState(false);
+  const [message, setMessage] = useState({ text: 'Apunte la cámara a un código QR.', type: 'info' as 'info' | 'success' | 'error' | 'warning', show: false });
+  const [lastScannedResult, setLastScannedResult] = useState<ScanResult | null>(null);
+  const [scannerActive, setScannerActive] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [selectedScannerMode, setSelectedScannerMode] = useState('camara');
+  const [encargado, setEncargado] = useState(''); 
+  const [scanMode, setScanMode] = useState('individual');
+  const [massScannedCodes, setMassScannedCodes] = useState<ScanResult[]>([]);
+  const [cameraCapabilities, setCameraCapabilities] = useState<any>(null);
+  const [isFlashOn, setIsFlashOn] = useState(false);
+  const [zoom, setZoom] = useState(1);
+  const isMobile = useIsMobile();
+
+  const messageTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const html5QrCodeRef = useRef<Html5Qrcode | null>(null);
+  const readerRef = useRef<HTMLDivElement>(null);
+  const lastScanTimeRef = useRef(Date.now());
+  const MIN_SCAN_INTERVAL = 1500;
+  const massScannedCodesRef = useRef(new Set<string>());
+  const physicalScannerInputRef = useRef<HTMLInputElement | null>(null);
+  // Refleja `loading` sin ser dependencia reactiva de onScanSuccess: si estuviera
+  // en las deps de ese useCallback, su identidad cambiaría en cada escaneo y
+  // reiniciaría el efecto que arranca/detiene la cámara, apagando flash/zoom.
+  const loadingRef = useRef(false);
+  useEffect(() => { loadingRef.current = loading; }, [loading]);
+  const bufferRef = useRef('');
+
+   const showAppMessage = (text: string, type: 'success' | 'error' | 'info' | 'warning') => {
+    if (messageTimeoutRef.current) {
+      clearTimeout(messageTimeoutRef.current);
+    }
+    setMessage({ text, type, show: true });
+    messageTimeoutRef.current = setTimeout(() => {
+      setMessage(prev => ({ ...prev, show: false }));
+    }, 2500);
+  };
+
+   useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  // Vincular encargado con el perfil de usuario logueado o buscar en empleados por email
+  useEffect(() => {
+    if (!user?.email) return;
+
+    const fetchNameFromEmployees = async () => {
+        try {
+            const { data, error } = await supabaseEtiquetas
+                .from('empleados')
+                .select('nombres, apellido_paterno, apellido_materno')
+                .eq('email', user.email)
+                .maybeSingle();
+
+            if (data) {
+                const fullName = [data.nombres, data.apellido_paterno, data.apellido_materno].filter(Boolean).join(' ').toUpperCase();
+                setEncargado(fullName);
+            } else if (profile?.name) {
+                setEncargado(profile.name.toUpperCase());
+            }
+        } catch (err) {
+            console.error("Error fetching name for almacen encargado:", err);
+        }
+    };
+
+    fetchNameFromEmployees();
+  }, [user, profile]);
+
+  const playBeep = () => {
+    const context = new (window.AudioContext || (window as any).webkitAudioContext)();
+    const oscillator = context.createOscillator();
+    const gainNode = context.createGain();
+    oscillator.type = 'square';
+    oscillator.frequency.setValueAtTime(880, context.currentTime);
+    gainNode.gain.setValueAtTime(0.5, context.currentTime);
+    gainNode.gain.exponentialRampToValueAtTime(0.00001, context.currentTime + 0.1);
+    oscillator.connect(gainNode);
+    gainNode.connect(context.destination);
+    oscillator.start();
+    oscillator.stop(context.currentTime + 0.1);
+  };
+
+  const applyCameraConstraints = useCallback((track: MediaStreamTrack) => {
+    if (!isMobile || !track || track.readyState !== 'live') return;
+    track.applyConstraints({
+      advanced: [{ zoom: zoom, torch: isFlashOn }]
+    }).catch(e => {
+      if (!String(e).includes('ConstraintNotSatisfiedError')) {
+        console.error("Failed to apply constraints", e);
+      }
+    });
+  }, [zoom, isFlashOn, isMobile]);
+
+  useEffect(() => {
+    if (isMobile && scannerActive && selectedScannerMode === 'camara' && html5QrCodeRef.current?.getState() === Html5QrcodeScannerState.SCANNING) {
+      const videoElement = readerRef.current?.querySelector('video');
+      if (videoElement && videoElement.srcObject) {
+        const stream = videoElement.srcObject as MediaStream;
+        const track = stream.getVideoTracks()[0];
+        if (track) {
+          applyCameraConstraints(track);
+        }
+      }
+    }
+  }, [zoom, isFlashOn, scannerActive, selectedScannerMode, isMobile, applyCameraConstraints, loading, massScannedCodes.length]);
+
+  const onScanSuccess = useCallback(async (decodedText: string) => {
+    if (loadingRef.current || Date.now() - lastScanTimeRef.current < MIN_SCAN_INTERVAL) return;
+    
+    lastScanTimeRef.current = Date.now();
+    setLoading(true);
+    showAppMessage('Validando código...', 'info');
+
+    let finalCode = decodedText.trim();
+    try {
+        const parsed = JSON.parse(decodedText);
+        if (parsed && parsed.id) finalCode = String(parsed.id);
+    } catch (e) {}
+
+    if (scanMode === 'masivo' && massScannedCodesRef.current.has(finalCode)) {
+        showAppMessage(`Duplicado: ${finalCode}`, 'warning');
+        setLoading(false);
+        return;
+    }
+
+    try {
+        const { data, error } = await supabaseEtiquetas
+            .from('personal')
+            .select('name, product, status, quantity, organization')
+            .eq('code', finalCode)
+            .single();
+
+        if (error && error.code !== 'PGRST116') throw error;
+
+        if (data) {
+            playBeep();
+            const result: ScanResult = {
+                name: data.name,
+                product: data.product,
+                code: finalCode,
+                found: true,
+                status: data.status,
+                quantity: data.quantity,
+                organization: data.organization
+            };
+
+            if (data.status === 'SURTIDO') {
+                showAppMessage(`Ya marcado como SURTIDO.`, 'warning');
+                setLastScannedResult(result);
+            } else {
+                 if (scanMode === 'individual') {
+                    setLastScannedResult(result);
+                    showAppMessage('Código validado correctamente.', 'success');
+                } else {
+                    setMassScannedCodes(prev => [result, ...prev]);
+                    massScannedCodesRef.current.add(finalCode);
+                    showAppMessage(`Añadido: ${finalCode}`, 'success');
+                }
+            }
+        } else {
+            showAppMessage('Etiqueta no encontrada en producción.', 'error');
+        }
+    } catch (e: any) {
+        showAppMessage(`Error: ${e.message}`, 'error');
+    } finally {
+        setLoading(false);
+    }
+  }, [scanMode]);
+
+  const handleSurtir = async () => {
+    if (!lastScannedResult?.code) return;
+    setLoading(true);
+    try {
+        const { error } = await supabaseEtiquetas
+            .from('personal')
+            .update({ status: 'SURTIDO', date_surtido: new Date().toISOString(), name_surtido: encargado, id_empleado_despacha: user?.id ?? null })
+            .eq('code', lastScannedResult.code);
+
+        if (error) throw error;
+        showAppMessage('Paquete marcado como SURTIDO.', 'success');
+        setLastScannedResult(null);
+    } catch (e: any) {
+        alert(`Error al actualizar: ${e.message}`);
+    } finally {
+        setLoading(false);
+    }
+  };
+
+  const handleMassSurtir = async () => {
+    if (massScannedCodes.length === 0) return;
+    setLoading(true);
+    try {
+        const codes = massScannedCodes.map(item => item.code);
+        const { error } = await supabaseEtiquetas
+            .from('personal')
+            .update({ status: 'SURTIDO', date_surtido: new Date().toISOString(), name_surtido: encargado, id_empleado_despacha: user?.id ?? null })
+            .in('code', codes);
+
+        if (error) throw error;
+        alert(`Se marcaron ${codes.length} paquetes como SURTIDO.`);
+        setMassScannedCodes([]);
+        massScannedCodesRef.current.clear();
+    } catch (e: any) {
+        alert(`Error: ${e.message}`);
+    } finally {
+        setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!isMounted || !readerRef.current) return;
+    if (!html5QrCodeRef.current) html5QrCodeRef.current = new Html5Qrcode(readerRef.current.id, false);
+    const qrCode = html5QrCodeRef.current;
+
+    if (scannerActive && selectedScannerMode === 'camara') {
+      qrCode.start({ facingMode: "environment" }, { fps: 10, qrbox: 250 }, onScanSuccess, () => {})
+      .then(() => {
+        if (isMobile) {
+          const videoElement = readerRef.current?.querySelector('video');
+          const stream = videoElement?.srcObject as MediaStream;
+          const track = stream?.getVideoTracks()[0];
+          if (track) setCameraCapabilities(track.getCapabilities());
+        }
+      })
+      .catch(err => {
+          console.error(err);
+          setScannerActive(false);
+      });
+    } else {
+      if (qrCode.isScanning) qrCode.stop();
+    }
+    return () => { if (qrCode.isScanning) qrCode.stop(); };
+  }, [scannerActive, selectedScannerMode, isMounted, onScanSuccess, isMobile]);
+
+  return (
+    <>
+      <Head><title>Módulo de Almacén</title></Head>
+      <main className="text-starbucks-dark flex items-center justify-center p-4">
+        <div className="w-full max-w-2xl mx-auto bg-starbucks-white rounded-xl shadow-2xl p-4 md:p-6 space-y-6">
+          <header className="text-center">
+            <div className="inline-block p-3 bg-starbucks-cream rounded-full mb-2">
+                <Boxes className="h-8 w-8 text-starbucks-green" />
+            </div>
+            <h1 className="text-xl md:text-2xl font-bold text-starbucks-green">Módulo de Almacén</h1>
+            <p className="text-gray-600 text-sm">Escanea bultos para validar el surtido.</p>
+          </header>
+
+          <div className="space-y-4">
+              <div className="p-4 bg-gray-50 border rounded-lg">
+                  <Label className="text-sm font-bold text-starbucks-dark mb-2 block">Nombre del Encargado:</Label>
+                  <Input value={isMounted ? encargado : ''} disabled={true} className="bg-white border-input uppercase font-bold text-starbucks-green" />
+                  <p className="text-[10px] text-gray-400 mt-1 uppercase font-bold">Identidad vinculada a la sesión activa</p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                  <Button variant={selectedScannerMode === 'camara' ? 'default' : 'outline'} onClick={() => setSelectedScannerMode('camara')} disabled={scannerActive}>CÁMARA</Button>
+                  <Button variant={selectedScannerMode === 'fisico' ? 'default' : 'outline'} onClick={() => setSelectedScannerMode('fisico')} disabled={scannerActive}>ESCÁNER USB</Button>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                  <Button variant={scanMode === 'individual' ? 'secondary' : 'outline'} onClick={() => setScanMode('individual')} disabled={scannerActive}>Individual</Button>
+                  <Button variant={scanMode === 'masivo' ? 'secondary' : 'outline'} onClick={() => setScanMode('masivo')} disabled={scannerActive}>Masivo</Button>
+              </div>
+          </div>
+
+          <div className="bg-starbucks-cream p-4 rounded-lg">
+            <div className="scanner-container relative min-h-[200px] border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center">
+                <div id="reader" ref={readerRef} className="w-full" style={{ display: scannerActive && selectedScannerMode === 'camara' ? 'block' : 'none' }}></div>
+                {!scannerActive && <p className="text-gray-500">Escáner inactivo</p>}
+                {message.show && <div className={`scanner-message absolute inset-0 flex items-center justify-center bg-black/50 text-white z-50 rounded-lg`}>{message.text}</div>}
+            </div>
+            <div className="mt-4 flex justify-center gap-2">
+                <Button onClick={() => setScannerActive(true)} disabled={scannerActive || !encargado} className="bg-blue-600">Iniciar</Button>
+                <Button onClick={() => setScannerActive(false)} variant="destructive" disabled={!scannerActive}>Detener</Button>
+            </div>
+          </div>
+
+          {isMounted && isMobile && scannerActive && selectedScannerMode === 'camara' && cameraCapabilities && (
+                <div id="camera-controls" className="flex items-center gap-4 mt-4 p-2 rounded-lg bg-gray-200">
+                    {cameraCapabilities.torch && (
+                        <Button variant="ghost" size="icon" onClick={() => setIsFlashOn(prev => !prev)} className={cn("h-10 w-10", isFlashOn ? 'text-yellow-400 bg-white/10' : 'text-white')}>
+                            <Zap className="h-5 w-5" />
+                        </Button>
+                    )}
+                    {cameraCapabilities.zoom && (
+                         <div className="flex-1 flex items-center gap-4">
+                            <ZoomIn className="h-5 w-5 text-gray-400" />
+                            <input
+                                id="zoom-slider"
+                                type="range"
+                                min={cameraCapabilities.zoom.min}
+                                max={cameraCapabilities.zoom.max}
+                                step={0.1}
+                                value={zoom}
+                                onChange={(e) => setZoom(parseFloat(e.target.value))}
+                                className="w-full h-2 bg-white/20 rounded-lg appearance-none cursor-pointer accent-starbucks-green"
+                            />
+                        </div>
+                    )}
+                </div>
+            )}
+
+          {lastScannedResult && scanMode === 'individual' && (
+              <div className="p-4 border rounded-lg bg-white shadow-sm space-y-3">
+                  <div className="flex justify-between items-start">
+                      <div>
+                          <h3 className="text-xs font-bold text-gray-500 uppercase">Código</h3>
+                          <p className="font-mono text-lg">{lastScannedResult.code}</p>
+                      </div>
+                      <div className="text-right">
+                          <h3 className="text-xs font-bold text-gray-500 uppercase">Estado Actual</h3>
+                          <span className={`text-xs px-2 py-1 rounded-full font-bold ${lastScannedResult.status === 'SURTIDO' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                              {lastScannedResult.status || 'PENDIENTE'}
+                          </span>
+                      </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                      <div>
+                          <h3 className="text-xs font-bold text-gray-500 uppercase">Producto</h3>
+                          <p className="text-sm">{lastScannedResult.product}</p>
+                      </div>
+                      <div>
+                          <h3 className="text-xs font-bold text-gray-500 uppercase">Cantidad</h3>
+                          <p className="text-sm font-bold">{lastScannedResult.quantity} pzas</p>
+                      </div>
+                  </div>
+                  <Button onClick={handleSurtir} disabled={loading || lastScannedResult.status === 'SURTIDO'} className="w-full bg-starbucks-green">
+                      <CheckCircle2 className="mr-2 h-4 w-4" /> Marcar como SURTIDO
+                  </Button>
+              </div>
+          )}
+
+          {scanMode === 'masivo' && (
+              <div className="space-y-4">
+                  <div className="flex justify-between items-center">
+                      <h2 className="font-bold">Lista Masiva ({massScannedCodes.length})</h2>
+                      <Button onClick={handleMassSurtir} disabled={loading || massScannedCodes.length === 0} className="bg-starbucks-green">Surtir Todos</Button>
+                  </div>
+                  <div className="max-h-60 overflow-auto border rounded-md">
+                      <Table>
+                          <TableHeader><TableRow><TableHead>Código</TableHead><TableHead>Producto</TableHead><TableHead>Cant</TableHead></TableRow></TableHeader>
+                          <TableBody>
+                              {massScannedCodes.map(item => (
+                                  <TableRow key={item.code}>
+                                      <TableCell className="font-mono text-xs">{item.code}</TableCell>
+                                      <TableCell className="text-xs">{item.product}</TableCell>
+                                      <TableCell className="text-xs">{item.quantity}</TableCell>
+                                  </TableRow>
+                              ))}
+                          </TableBody>
+                      </Table>
+                  </div>
+              </div>
+          )}
+        </div>
+      </main>
+    </>
+  );
+}
+
