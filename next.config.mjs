@@ -6,6 +6,9 @@ const withSerwist = withSerwistInit({
   // La cola de sincronización offline maneja la reconexión por su cuenta; un
   // reload forzado interrumpiría un escaneo o un flush de la cola en curso.
   reloadOnOnline: false,
+  // En dev, next dev sirve chunks sin hash estable y con fast refresh; un SW
+  // cacheándolos sirve JS viejo y produce falsos "sigue fallando" tras un fix.
+  disable: process.env.NODE_ENV === 'development',
 });
 
 /** @type {import('next').NextConfig} */
