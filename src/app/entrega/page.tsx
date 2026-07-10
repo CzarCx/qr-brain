@@ -23,7 +23,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import Papa from 'papaparse';
 import { Combobox } from '@/components/ui/combobox';
 import { useAuth } from '@/components/AuthProvider';
-import { cn } from '@/lib/utils';
+import { cn, getCameraCapabilitiesWithRetry } from '@/lib/utils';
 import { useOnlineStatus } from '@/hooks/use-online-status';
 import { useOfflineSync, SyncOutcome } from '@/hooks/use-offline-sync';
 import { enqueue, mergeSnapshotEntries, getSnapshotEntries, updateQueueItem, SnapshotEntry, QueueItem } from '@/lib/offlineDb';
@@ -396,8 +396,13 @@ export default function Home() {
       html5QrCodeRef.current = new Html5Qrcode(readerRef.current.id, false);
     }
     const qrCode = html5QrCodeRef.current;
+    // El resultado de getCameraCapabilitiesWithRetry puede tardar hasta ~1.5s;
+    // si el usuario detiene (o reinicia) la cámara antes de que resuelva, esa
+    // promesa vieja no debe pisar el estado con datos de un track ya muerto.
+    let cancelled = false;
 
     const cleanup = () => {
+        cancelled = true;
         if (qrCode && qrCode.isScanning) {
             return qrCode.stop().catch(err => {
                 if (!String(err).includes('not started')) {
@@ -427,8 +432,7 @@ export default function Home() {
               const stream = videoElement?.srcObject as MediaStream;
               const track = stream?.getVideoTracks()[0];
               if (track) {
-                const capabilities = track.getCapabilities();
-                setCameraCapabilities(capabilities);
+                getCameraCapabilitiesWithRetry(track).then(caps => { if (!cancelled) setCameraCapabilities(caps); });
               }
             }
         })

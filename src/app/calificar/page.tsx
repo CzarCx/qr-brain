@@ -50,7 +50,7 @@ import { Switch } from '@/components/ui/switch';
 import { Combobox } from '@/components/ui/combobox';
 import { useAuth } from '@/components/AuthProvider';
 import { Textarea } from '@/components/ui/textarea';
-import { cn } from '@/lib/utils';
+import { cn, getCameraCapabilitiesWithRetry } from '@/lib/utils';
 
 type ScanResult = {
     name: string | null;
@@ -65,6 +65,7 @@ type ScanResult = {
     organization?: string | null;
     sales_num?: string | number | null;
     isNew?: boolean;
+    id_empleado_entrega?: string | null;
 };
 
 type ReportReason = {
@@ -372,7 +373,7 @@ export default function CalificarPage() {
     try {
         const { data: personalData, error: personalError } = await supabaseEtiquetas
             .from('personal')
-            .select('name, product, status, details, sku, quantity')
+            .select('name, product, status, details, sku, quantity, id_empleado_entrega')
             .eq('code', finalCode);
 
         if (personalError) throw personalError;
@@ -393,6 +394,7 @@ export default function CalificarPage() {
                 details: firstP.details,
                 sku: firstP.sku,
                 quantity: firstP.quantity,
+                id_empleado_entrega: firstP.id_empleado_entrega,
             };
 
             if (firstP.status === 'CALIFICADO') {
@@ -543,7 +545,12 @@ export default function CalificarPage() {
     if (!isMounted || !readerRef.current) return;
     if (!html5QrCodeRef.current) html5QrCodeRef.current = new Html5Qrcode(readerRef.current.id, false);
     const qrCode = html5QrCodeRef.current;
+    // El resultado de getCameraCapabilitiesWithRetry puede tardar hasta ~1.5s;
+    // si el usuario detiene (o reinicia) la cámara antes de que resuelva, esa
+    // promesa vieja no debe pisar el estado con datos de un track ya muerto.
+    let cancelled = false;
     const cleanup = () => {
+        cancelled = true;
         if (qrCode && qrCode.isScanning) {
             return qrCode.stop().catch(err => { if (!String(err).includes('not started')) console.error("Fallo al detener el escáner:", err); }).finally(() => {
               if (isMobile) { setCameraCapabilities(null); setIsFlashOn(false); setZoom(1); }
@@ -559,7 +566,7 @@ export default function CalificarPage() {
               const videoElement = readerRef.current?.querySelector('video');
               const stream = videoElement?.srcObject as MediaStream;
               const track = stream?.getVideoTracks()[0];
-              if (track) setCameraCapabilities(track.getCapabilities());
+              if (track) getCameraCapabilitiesWithRetry(track).then(caps => { if (!cancelled) setCameraCapabilities(caps); });
             }
         })
         .catch(err => {
@@ -654,13 +661,17 @@ export default function CalificarPage() {
           const record = {
               fecha: now.toISOString().split('T')[0],
               hora: now.toLocaleTimeString('en-GB', { hour12: false }),
-              id_producto_solicitado: null,
+              id_producto_solicitado: itemToReport.sku ?? null,
+              // bigint: no se puede mandar la subcategoria (texto) directo.
+              // Pendiente saber a qué tabla referencia para resolver el id real.
               id_producto_despachado: null,
               piezas_solicitadas: isNaN(pSolicitadas) ? 0 : pSolicitadas,
               piezas_despachadas: isNaN(pDespachadas) ? 0 : pDespachadas,
               observaciones: observacionesIncidencia || '',
-              id_empleado: null, 
+              id_empleado: itemToReport.id_empleado_entrega ?? null,
               id_capturista: null,
+              id_reportador: user?.id ?? null,
+              bar_code: itemToReport.code,
               firma_empleado: false
           };
 
@@ -821,7 +832,7 @@ const triggerMassQualify = async () => {
       const { data, error } = await supabaseEtiquetas.from('personal').select('*').eq('lote', loteToLoad.trim());
       if (error) throw error;
       if (!data || data.length === 0) { showAppMessage(`No se encontraron paquetes.`, 'warning'); return; }
-      const newItems: ScanResult[] = data.map(item => ({ code: item.code, name: item.name, product: item.product, status: item.status, details: item.details, sku: item.sku, quantity: item.quantity, organization: item.organization, sales_num: item.sales_num, found: true, isNew: false }));
+      const newItems: ScanResult[] = data.map(item => ({ code: item.code, name: item.name, product: item.product, status: item.status, details: item.details, sku: item.sku, quantity: item.quantity, organization: item.organization, sales_num: item.sales_num, found: true, isNew: false, id_empleado_entrega: item.id_empleado_entrega }));
       const currentCodes = new Set(massScannedCodes.map(c => c.code));
       const itemsToAdd = newItems.filter(item => { if (!currentCodes.has(item.code)) { massScannedCodesRef.current.add(item.code); return true; } return false; });
       setMassScannedCodes(prev => [...prev, ...itemsToAdd]);

@@ -46,7 +46,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useAuth } from '@/components/AuthProvider';
-import { cn } from '@/lib/utils';
+import { cn, getCameraCapabilitiesWithRetry } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 
 type ReturnItem = {
@@ -483,7 +483,12 @@ export default function DevolucionesPage() {
     if (!isMounted || !readerRef.current) return;
     if (!html5QrCodeRef.current) html5QrCodeRef.current = new Html5Qrcode(readerRef.current.id, false);
     const qrCode = html5QrCodeRef.current;
+    // El resultado de getCameraCapabilitiesWithRetry puede tardar hasta ~1.5s;
+    // si el usuario detiene (o reinicia) la cámara antes de que resuelva, esa
+    // promesa vieja no debe pisar el estado con datos de un track ya muerto.
+    let cancelled = false;
     const cleanup = () => {
+        cancelled = true;
         if (qrCode && qrCode.isScanning) {
             return qrCode.stop().catch(err => { if (!String(err).includes('not started')) console.error(err); }).finally(() => {
               if (isMobile) { setCameraCapabilities(null); setIsFlashOn(false); setZoom(1); }
@@ -498,7 +503,7 @@ export default function DevolucionesPage() {
             if (isMobile) {
               const videoElement = readerRef.current?.querySelector('video');
               const track = (videoElement?.srcObject as MediaStream)?.getVideoTracks()[0];
-              if (track) setCameraCapabilities(track.getCapabilities());
+              if (track) getCameraCapabilitiesWithRetry(track).then(caps => { if (!cancelled) setCameraCapabilities(caps); });
             }
         }).catch(err => { console.error(err); setScannerActive(false); });
       }

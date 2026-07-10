@@ -32,7 +32,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { cn } from '@/lib/utils';
+import { cn, getCameraCapabilitiesWithRetry } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import {
@@ -398,13 +398,22 @@ export default function SewingStatusScannerPage() {
       html5QrCodeRef.current = new Html5Qrcode(readerRef.current.id, false);
     }
     const qrCode = html5QrCodeRef.current;
+    // El resultado de getCameraCapabilitiesWithRetry puede tardar hasta ~1.5s;
+    // si el usuario detiene (o reinicia) la cámara antes de que resuelva, esa
+    // promesa vieja no debe pisar el estado con datos de un track ya muerto.
+    let cancelled = false;
 
     const cleanup = async () => {
+      cancelled = true;
       if (qrCode.isScanning) {
         try {
           await qrCode.stop();
         } catch (e) {
           // Ignore
+        } finally {
+          setCameraCapabilities(null);
+          setIsFlashOn(false);
+          setZoom(1);
         }
       }
     };
@@ -420,7 +429,7 @@ export default function SewingStatusScannerPage() {
         const videoElement = readerRef.current?.querySelector('video');
         if (videoElement && videoElement.srcObject) {
           const track = (videoElement.srcObject as MediaStream).getVideoTracks()[0];
-          if (track) setCameraCapabilities(track.getCapabilities?.() || null);
+          if (track) getCameraCapabilitiesWithRetry(track).then(caps => { if (!cancelled) setCameraCapabilities(caps); });
         }
       }).catch(err => {
         if (!String(err).includes('transition')) {

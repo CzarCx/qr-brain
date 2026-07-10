@@ -36,7 +36,7 @@ import { Combobox } from '@/components/ui/combobox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useAuth } from '@/components/AuthProvider';
-import { cn } from '@/lib/utils';
+import { cn, getCameraCapabilitiesWithRetry } from '@/lib/utils';
 
 type ScanResult = {
     name: string | null;
@@ -264,6 +264,10 @@ export default function AlmacenPage() {
     if (!isMounted || !readerRef.current) return;
     if (!html5QrCodeRef.current) html5QrCodeRef.current = new Html5Qrcode(readerRef.current.id, false);
     const qrCode = html5QrCodeRef.current;
+    // El resultado de getCameraCapabilitiesWithRetry puede tardar hasta ~1.5s;
+    // si el usuario detiene (o reinicia) la cámara antes de que resuelva, esa
+    // promesa vieja no debe pisar el estado con datos de un track ya muerto.
+    let cancelled = false;
 
     if (scannerActive && selectedScannerMode === 'camara') {
       qrCode.start({ facingMode: "environment" }, { fps: 10, qrbox: 250 }, onScanSuccess, () => {})
@@ -272,7 +276,7 @@ export default function AlmacenPage() {
           const videoElement = readerRef.current?.querySelector('video');
           const stream = videoElement?.srcObject as MediaStream;
           const track = stream?.getVideoTracks()[0];
-          if (track) setCameraCapabilities(track.getCapabilities());
+          if (track) getCameraCapabilitiesWithRetry(track).then(caps => { if (!cancelled) setCameraCapabilities(caps); });
         }
       })
       .catch(err => {
@@ -280,9 +284,10 @@ export default function AlmacenPage() {
           setScannerActive(false);
       });
     } else {
+      cancelled = true;
       if (qrCode.isScanning) qrCode.stop();
     }
-    return () => { if (qrCode.isScanning) qrCode.stop(); };
+    return () => { cancelled = true; if (qrCode.isScanning) qrCode.stop(); };
   }, [scannerActive, selectedScannerMode, isMounted, onScanSuccess, isMobile]);
 
   return (

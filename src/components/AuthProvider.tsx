@@ -54,13 +54,21 @@ function writeAuthCache(cache: AuthCache) {
 // pero eso vive en su capa: si la petición se cuelga ahí (o en cualquier otro
 // punto de la red) sin llegar a resolver ni rechazar, el catch de quien la llama
 // nunca se dispara y la UI queda cargando para siempre. Este timeout garantiza
-// que, cuelgue donde cuelgue, la promesa siempre termine rechazando.
+// que, cuelgue donde cuelgue, la promesa siempre termine rechazando. Los `ms` que
+// se usan al llamarlo deben ser mayores a esos 10s del SW: si son más cortos, una
+// conexión lenta-pero-real pierde la carrera contra este timeout antes de que el
+// SW complete su propio intento de red, y se reporta "sin conexión" por error.
 function withTimeout<T>(promise: PromiseLike<T>, ms: number): Promise<T> {
   return Promise.race([
     Promise.resolve(promise),
     new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Tiempo de espera agotado')), ms)),
   ]);
 }
+
+// Debe quedar por encima de los 10s del NetworkFirst del service worker (ver
+// comentario arriba) — un único lugar para ese invariante en vez de repetir
+// el número en cada llamada a withTimeout.
+const SUPABASE_TIMEOUT_MS = 15000;
 
 type AuthContextType = {
   session: Session | null;
@@ -103,7 +111,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const checkConnectivity = useCallback(async () => {
     setDbStatus('checking');
     try {
-      const { error } = await withTimeout(supabaseEtiquetas.from('roles').select('id').limit(1), 8000);
+      const { error } = await withTimeout(supabaseEtiquetas.from('roles').select('id').limit(1), SUPABASE_TIMEOUT_MS);
       if (error) throw error;
       
       setDbStatus('connected');
@@ -137,7 +145,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const [profileRes, rolesRes] = await withTimeout(Promise.all([
         supabaseEtiquetas.from('table_profiles').select('id, email, name, last_seen').eq('id', currentUser.id).maybeSingle(),
         supabaseEtiquetas.from('user_roles').select('roles(code)').eq('user_id', currentUser.id)
-      ]), 8000);
+      ]), SUPABASE_TIMEOUT_MS);
 
       const profile = (profileRes.data as Profile | null) ?? null;
       const codes = rolesRes.data

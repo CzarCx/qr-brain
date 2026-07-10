@@ -37,7 +37,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { Textarea } from '@/components/ui/textarea';
 import { useAuth } from '@/components/AuthProvider';
-import { cn } from '@/lib/utils';
+import { cn, getCameraCapabilitiesWithRetry } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 
@@ -1082,8 +1082,13 @@ export default function Home() {
         html5QrCodeRef.current = new Html5Qrcode(readerRef.current.id, false);
     }
     const qrCode = html5QrCodeRef.current;
+    // El resultado de getCameraCapabilitiesWithRetry puede tardar hasta ~1.5s;
+    // si el usuario detiene (o reinicia) la cámara antes de que resuelva, esa
+    // promesa vieja no debe pisar el estado con datos de un track ya muerto.
+    let cancelled = false;
 
     const cleanup = async () => {
+        cancelled = true;
         if (qrCode && qrCode.isScanning) {
             try {
                 await qrCode.stop();
@@ -1115,8 +1120,7 @@ export default function Home() {
               const stream = videoElement?.srcObject as MediaStream;
               const track = stream?.getVideoTracks()[0];
               if (track) {
-                const capabilities = track.getCapabilities();
-                setCameraCapabilities(capabilities);
+                getCameraCapabilitiesWithRetry(track).then(caps => { if (!cancelled) setCameraCapabilities(caps); });
               }
             }
         })
@@ -1452,7 +1456,7 @@ const deleteRow = (codeToDelete: string) => {
                 place: skipAreaSelection ? null : selectedArea,
                 product: item.producto,
                 quantity: item.cantidad,
-                organization: item.organization,
+                organization: item.empresa,
                 sales_num: item.venta && !isNaN(Number(item.venta)) ? Number(item.venta) : null,
                 date: new Date().toISOString(),
                 esti_time: item.esti_time,

@@ -4,3 +4,24 @@ import { twMerge } from "tailwind-merge"
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
+
+// En Android, justo tras iniciar el stream la cámara a veces todavía no reporta
+// `torch` en sus capabilities (el hardware tarda un momento en exponerlo) aunque
+// sí lo soporte. Se reintenta unas veces antes de aceptar el resultado como final.
+export async function getCameraCapabilitiesWithRetry(
+  track: MediaStreamTrack,
+  attempts = 5,
+  delayMs = 300
+): Promise<MediaTrackCapabilities | null> {
+  let caps: MediaTrackCapabilities | null = null;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      caps = track.getCapabilities?.() ?? null;
+    } catch {
+      caps = null;
+    }
+    if (caps && (caps as any).torch) return caps;
+    if (i < attempts - 1) await new Promise(resolve => setTimeout(resolve, delayMs));
+  }
+  return caps;
+}

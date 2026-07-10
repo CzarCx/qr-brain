@@ -5,7 +5,7 @@ import { Html5Qrcode, Html5QrcodeScannerState } from 'html5-qrcode';
 import { Button } from '@/components/ui/button';
 import { Zap, ZoomIn, Camera, Keyboard } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { cn } from '@/lib/utils';
+import { cn, getCameraCapabilitiesWithRetry } from '@/lib/utils';
 
 interface SewingScannerProps {
   onScan: (barcode: string) => Promise<boolean | undefined>;
@@ -122,8 +122,13 @@ export function SewingScanner({ onScan, disabled }: SewingScannerProps) {
         html5QrCodeRef.current = new Html5Qrcode(readerRef.current.id, false);
     }
     const qrCode = html5QrCodeRef.current;
+    // El resultado de getCameraCapabilitiesWithRetry puede tardar hasta ~1.5s;
+    // si el usuario detiene (o reinicia) la cámara antes de que resuelva, esa
+    // promesa vieja no debe pisar el estado con datos de un track ya muerto.
+    let cancelled = false;
 
     const cleanup = async () => {
+        cancelled = true;
         if (qrCode && qrCode.isScanning) {
             try {
                 await qrCode.stop();
@@ -153,7 +158,7 @@ export function SewingScanner({ onScan, disabled }: SewingScannerProps) {
               const stream = videoElement.srcObject as MediaStream;
               const track = stream.getVideoTracks()[0];
               if (track) {
-                setCameraCapabilities(track.getCapabilities?.() || null);
+                getCameraCapabilitiesWithRetry(track).then(caps => { if (!cancelled) setCameraCapabilities(caps); });
               }
             }
         })
