@@ -78,9 +78,32 @@ export default function RootLayout({
     const blockGesture = (e: Event) => e.preventDefault();
     document.addEventListener('gesturestart', blockGesture);
     document.addEventListener('gesturechange', blockGesture);
+
+    // Respaldo cross-browser: `touch-action` y `gesturestart` dependen de que
+    // el motor los soporte bien (WebKit tiene historial de bugs con esto sobre
+    // elementos con su propia capa, como el <video> de la cámara). Bloquear
+    // cualquier touchmove de 2+ dedos a nivel de documento corta el pellizco
+    // en la capa de eventos táctiles, sin depender de esas dos APIs.
+    const blockMultiTouch = (e: TouchEvent) => {
+      if (e.touches.length > 1) e.preventDefault();
+    };
+    document.addEventListener('touchmove', blockMultiTouch, { passive: false });
+
+    // Doble-tap-zoom: si dos `touchend` caen muy cerca en el tiempo sobre el
+    // mismo punto, Safari lo interpreta como doble-tap y hace zoom.
+    let lastTouchEnd = 0;
+    const blockDoubleTapZoom = (e: TouchEvent) => {
+      const now = Date.now();
+      if (now - lastTouchEnd <= 300) e.preventDefault();
+      lastTouchEnd = now;
+    };
+    document.addEventListener('touchend', blockDoubleTapZoom, { passive: false });
+
     return () => {
       document.removeEventListener('gesturestart', blockGesture);
       document.removeEventListener('gesturechange', blockGesture);
+      document.removeEventListener('touchmove', blockMultiTouch);
+      document.removeEventListener('touchend', blockDoubleTapZoom);
     };
   }, []);
 
