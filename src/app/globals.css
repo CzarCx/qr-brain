@@ -7,6 +7,14 @@ body {
   font-family: 'Inter', sans-serif;
 }
 
+/* Bloquea el gesto de pellizco (pinch-zoom) y el doble-tap-zoom a nivel de
+   navegador; `user-scalable=0` del <meta viewport> no basta porque Safari en
+   iOS lo ignora desde iOS 10. pan-x/pan-y siguen permitiendo scroll normal. */
+html,
+body {
+  touch-action: pan-x pan-y;
+}
+
 @layer base {
   :root {
     --background: 0 0% 100%;

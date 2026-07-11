@@ -71,6 +71,20 @@ export default function RootLayout({
   };
 
   useEffect(() => {
+    // Safari en iOS ignora `user-scalable=0`/`maximum-scale` del viewport
+    // (decisión de accesibilidad desde iOS 10): el pinch-zoom sigue activo
+    // pese al meta tag. `gesturestart` es el evento no-estándar que Safari
+    // dispara al iniciar un pellizco; bloquearlo evita el zoom real.
+    const blockGesture = (e: Event) => e.preventDefault();
+    document.addEventListener('gesturestart', blockGesture);
+    document.addEventListener('gesturechange', blockGesture);
+    return () => {
+      document.removeEventListener('gesturestart', blockGesture);
+      document.removeEventListener('gesturechange', blockGesture);
+    };
+  }, []);
+
+  useEffect(() => {
     const savedTime = localStorage.getItem('unassignedReportTime');
     if (savedTime) {
       setReportTime(savedTime);
