@@ -262,6 +262,17 @@ body {
   @apply shadow-inner appearance-none border rounded-lg w-full py-2 px-3 text-base md:text-sm text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-starbucks-accent;
 }
 
+/* iOS hace zoom automático al enfocar inputs con font-size < 16px, aunque
+   el viewport tenga user-scalable=0. Se fuerza 16px en móvil para que ningún
+   input/select/textarea deforme la interfaz al recibir foco. */
+@media (max-width: 767px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
+
 .scanner-message {
   @apply absolute inset-0 flex items-center justify-center p-4 rounded-lg text-center font-semibold text-lg pointer-events-none;
   animation: fade-in-out 2.5s ease-in-out forwards;
