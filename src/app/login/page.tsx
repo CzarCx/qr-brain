@@ -170,6 +170,10 @@ export default function LoginPage() {
                 </Button>
               </form>
 
+              {/* Modo invitado deshabilitado: saltaba por completo la validación de
+                  ROUTE_PERMISSIONS y, al no tener `user`, dejaba campos como
+                  id_empleado_asigna guardados en null en cualquier asignación
+                  hecha desde este modo.
               <div className="relative">
                 <div className="absolute inset-0 flex items-center">
                   <span className="w-full border-t border-gray-100" />
@@ -179,8 +183,8 @@ export default function LoginPage() {
                 </div>
               </div>
 
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
                 onClick={continueAsGuest}
                 className="w-full h-14 border-2 border-gray-100 hover:border-[#006241]/20 hover:bg-gray-50 rounded-2xl font-black text-xs text-gray-500 tracking-widest transition-all gap-2"
                 disabled={loading}
@@ -188,6 +192,7 @@ export default function LoginPage() {
                 <UserCircle2 className="h-5 w-5" />
                 MODO INVITADO
               </Button>
+              */}
             </CardContent>
             
             <CardFooter className="flex flex-col items-center justify-center pt-8 space-y-4">

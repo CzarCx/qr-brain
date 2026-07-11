@@ -141,6 +141,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     isSyncing.current = true;
 
+    // Entrada optimista: si ya hay datos cacheados de este mismo usuario, se
+    // aplican de inmediato y se desbloquea `loading` sin esperar a la red — la
+    // sincronización en vivo de abajo sigue corriendo y los reemplaza cuando
+    // llegue. Evita que una red lenta deje al usuario mirando la pantalla de
+    // carga cuando ya hay con qué trabajar.
+    const cached = readAuthCache();
+    const hasCacheForUser = cached?.userId === currentUser.id;
+    if (hasCacheForUser) {
+      if (cached.profile) setProfile(cached.profile);
+      setRoles(cached.roles);
+      setIsMetadataLoaded(true);
+      setLoading(false);
+    }
+
     try {
       const [profileRes, rolesRes] = await withTimeout(Promise.all([
         supabaseEtiquetas.from('table_profiles').select('id, email, name, last_seen').eq('id', currentUser.id).maybeSingle(),
@@ -167,12 +181,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch (err) {
       console.error("[AuthProvider] Error en sincronización:", err);
       // Sin red: reutilizar el último perfil/roles conocidos para este mismo usuario
-      // en vez de dejarlos vacíos y bloquear el acceso por permisos.
-      const cached = readAuthCache();
-      if (cached?.userId === currentUser.id) {
-        if (cached.profile) setProfile(cached.profile);
-        setRoles(cached.roles);
-      }
+      // en vez de dejarlos vacíos y bloquear el acceso por permisos (ya aplicado
+      // arriba si `hasCacheForUser`; esto solo cubre cuando no se aplicó antes).
+      if (hasCacheForUser && cached.profile) setProfile(cached.profile);
+      if (hasCacheForUser) setRoles(cached.roles);
       lastSyncedUserId.current = currentUser.id;
       setIsMetadataLoaded(true);
     } finally {
@@ -182,21 +194,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    if (dbStatus === 'checking') {
-      checkConnectivity();
-    }
+    checkConnectivity();
+  }, [checkConnectivity]);
+
+  // Si falla, se reintenta sola cada 10s en vez de quedarse pegada en el
+  // estado de error hasta que alguien refresque la página o toque "reintentar"
+  // a mano — checkConnectivity() vuelve a poner dbStatus en 'checking' en cada
+  // intento, así que este efecto se vuelve a disparar solo si vuelve a fallar.
+  useEffect(() => {
+    if (dbStatus !== 'error') return;
+    const retryTimer = setTimeout(() => { checkConnectivity(); }, 10000);
+    return () => clearTimeout(retryTimer);
   }, [dbStatus, checkConnectivity]);
 
   useEffect(() => {
-    // No se condiciona a dbStatus === 'connected': la sesión persistida (o el modo
-    // invitado) se resuelve localmente y debe permitir entrar aunque el ping de
+    // No se condiciona a dbStatus === 'connected': la sesión persistida se
+    // resuelve localmente y debe permitir entrar aunque el ping de
     // conectividad todavía no haya terminado o esté fallando.
-    const guestMode = typeof window !== 'undefined' && localStorage.getItem('auth_guest_mode') === 'true';
-    if (guestMode) {
-      setIsGuest(true);
-      setLoading(false);
-      return;
-    }
+    //
+    // Modo invitado deshabilitado: saltaba ROUTE_PERMISSIONS por completo y,
+    // al no tener `user`, dejaba campos como id_empleado_asigna en null en
+    // cualquier asignación. Se ignora el flag aunque ya esté en localStorage
+    // de sesiones anteriores, para forzar el login real.
+    // const guestMode = typeof window !== 'undefined' && localStorage.getItem('auth_guest_mode') === 'true';
+    // if (guestMode) {
+    //   setIsGuest(true);
+    //   setLoading(false);
+    //   return;
+    // }
 
     const initAuth = async () => {
       try {

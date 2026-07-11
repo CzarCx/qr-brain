@@ -5,6 +5,7 @@ import { useState, useCallback } from 'react';
 import { supabase, supabaseEtiquetas } from '@/lib/supabaseClient';
 import { SewingTicket } from '@/types/sewing';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/components/AuthProvider';
 
 /**
  * Hook personalizado para gestionar la lógica de negocio de los tickets de costura.
@@ -14,6 +15,7 @@ export function useSewingTickets() {
   const [tickets, setTickets] = useState<SewingTicket[]>([]);
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
+  const { user } = useAuth();
 
   const fetchTickets = useCallback(async (isHistory: boolean = false) => {
     setLoading(true);
@@ -139,6 +141,7 @@ export function useSewingTickets() {
                 sku: allSkus,
                 name: responsable,
                 name_inc: responsable,
+                id_empleado_asigna: user?.id ?? null,
                 product: firstRow.product,
                 quantity: totalQuantity,
                 organization: firstRow.organization,

@@ -226,7 +226,7 @@ export default function AlmacenPage() {
     try {
         const { error } = await supabaseEtiquetas
             .from('personal')
-            .update({ status: 'SURTIDO', date_surtido: new Date().toISOString(), name_surtido: encargado, id_empleado_despacha: user?.id ?? null })
+            .update({ status: 'SURTIDO', date_surtido: new Date().toISOString(), name_surtido: encargado })
             .eq('code', lastScannedResult.code);
 
         if (error) throw error;
@@ -246,7 +246,7 @@ export default function AlmacenPage() {
         const codes = massScannedCodes.map(item => item.code);
         const { error } = await supabaseEtiquetas
             .from('personal')
-            .update({ status: 'SURTIDO', date_surtido: new Date().toISOString(), name_surtido: encargado, id_empleado_despacha: user?.id ?? null })
+            .update({ status: 'SURTIDO', date_surtido: new Date().toISOString(), name_surtido: encargado })
             .in('code', codes);
 
         if (error) throw error;
