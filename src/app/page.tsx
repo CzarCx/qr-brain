@@ -60,6 +60,7 @@ type ScannedItem = {
 type CreatedLote = {
   lote_p: string;
   name_inc: string;
+  name: string;
   date: string;
   count: number;
   total_esti_time: number;
@@ -291,14 +292,14 @@ export default function Home() {
   const fetchCreatedLotes = useCallback(async () => {
     const { data, error } = await supabaseEtiquetas
       .from('personal_prog')
-      .select('lote_p, name_inc, date, esti_time')
+      .select('lote_p, name_inc, name, date, esti_time')
       .not('lote_p', 'is', null);
-  
+
     if (error) {
       console.error('Error fetching created lotes:', error);
     } else if (data) {
-      const lotesAggr: { [key: string]: { name_inc: string; date: string; count: number; total_esti_time: number; } } = {};
-  
+      const lotesAggr: { [key: string]: { name_inc: string; name: string; date: string; count: number; total_esti_time: number; } } = {};
+
       for (const item of data) {
         if (item.lote_p) {
           if (lotesAggr[item.lote_p]) {
@@ -307,6 +308,7 @@ export default function Home() {
           } else {
             lotesAggr[item.lote_p] = {
               name_inc: item.name_inc,
+              name: item.name,
               date: item.date,
               count: 1,
               total_esti_time: item.esti_time || 0,
@@ -2120,8 +2122,10 @@ const deleteRow = (codeToDelete: string) => {
                             <TableRow>
                                 <TableHead>Lote</TableHead>
                                 <TableHead>Creado por</TableHead>
+                                <TableHead>Asignado a</TableHead>
                                 <TableHead>Fecha</TableHead>
                                 <TableHead>Cantidad</TableHead>
+                                <TableHead>Tiempo Asignado</TableHead>
                                 <TableHead className="text-right">Acciones</TableHead>
                             </TableRow>
                         </TableHeader>
@@ -2130,8 +2134,10 @@ const deleteRow = (codeToDelete: string) => {
                                 <TableRow key={lote.lote_p}>
                                     <TableCell className="font-mono">{lote.lote_p}</TableCell>
                                     <TableCell>{lote.name_inc}</TableCell>
+                                    <TableCell>{lote.name}</TableCell>
                                     <TableCell>{new Date(lote.date).toLocaleString('es-MX')}</TableCell>
                                     <TableCell className="font-semibold">{lote.count}</TableCell>
+                                    <TableCell>{formatTotalTime(lote.total_esti_time) || '---'}</TableCell>
                                     <TableCell className="text-right">
                                       <Button variant="ghost" size="icon" onClick={() => openDeleteLoteModal(lote.lote_p)} className="text-red-500 hover:text-red-600 h-8 w-8">
                                           <Trash2 className="h-4 w-4" />
@@ -2140,7 +2146,7 @@ const deleteRow = (codeToDelete: string) => {
                                 </TableRow>
                             )) : (
                                 <TableRow>
-                                    <TableCell colSpan={5} className="text-center text-gray-500 py-4">
+                                    <TableCell colSpan={7} className="text-center text-gray-500 py-4">
                                         No hay lotes programados.
                                     </TableCell>
                                 </TableRow>

@@ -6,6 +6,7 @@ import { supabaseEtiquetas } from '@/lib/supabaseClient';
 import { Button } from "@/components/ui/button";
 import { Input } from '@/components/ui/input';
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { 
   AlertTriangle, 
   Zap, 
@@ -60,6 +61,7 @@ type ReturnItem = {
   subcategoria?: string | null;
   product?: string | null;
   organization?: string | null;
+  tiendaAlreadySet?: boolean;
 };
 
 const STORAGE_KEY = 'devoluciones_session_data';
@@ -280,7 +282,7 @@ export default function DevolucionesPage() {
 
         const { data: devRecords, error: devError } = await supabaseEtiquetas
             .from('devoluciones_ml')
-            .select('entregado, num_venta, code')
+            .select('entregado, num_venta, code, tienda')
             .or(orFilters.join(','));
 
         if (devError) throw devError;
@@ -300,6 +302,11 @@ export default function DevolucionesPage() {
         }
 
         const devData = devRecords && devRecords.length > 0 ? devRecords[0] : null;
+        // devoluciones_ml.tienda es la fuente de verdad si ya tiene valor: se
+        // extrae y se muestra tal cual, sin pisarla. Si viene NULL (o no hay
+        // registro previo), se usa la empresa de etiquetas_i como valor a
+        // guardar cuando se finalice.
+        const existingTienda = devData?.tienda || null;
 
         // Búsqueda de Subcategoría (Cruce sku_alterno -> sku_m)
         let subcategoria = '---';
@@ -336,7 +343,8 @@ export default function DevolucionesPage() {
             sku: tagData?.sku || '---',
             subcategoria: subcategoria,
             product: tagData?.product || '---',
-            organization: tagData?.organization || '---'
+            organization: existingTienda || tagData?.organization || '---',
+            tiendaAlreadySet: !!existingTienda,
         };
 
         setReturnsList(prev => [newItem, ...prev]);
@@ -383,6 +391,12 @@ export default function DevolucionesPage() {
     }
   };
 
+  const EMPRESA_OPTIONS = ['MTM', 'PALO DE ROSA', 'TOLEXAL', 'TAL', 'DOMESKA', 'SUPER OFERTAS'];
+
+  const handleOrganizationChange = (code: string, organization: string) => {
+      setReturnsList(prev => prev.map(item => item.code === code ? { ...item, organization } : item));
+  };
+
   const removeFromList = (code: string) => {
       setReturnsList(prev => prev.filter(item => item.code !== code));
       scannedCodesSetRef.current.delete(code);
@@ -392,6 +406,13 @@ export default function DevolucionesPage() {
   const handleOpenFinalizeModal = () => {
       if (returnsList.length === 0) {
           showAppMessage('No hay códigos en la lista.', 'warning');
+          return;
+      }
+      // Todo registro sin empresa ya asignada en devoluciones_ml.tienda debe
+      // llenarse manualmente (Select en la tabla) antes de poder finalizar.
+      const missingOrganization = returnsList.some(item => !item.tiendaAlreadySet && (!item.organization || item.organization === '---'));
+      if (missingOrganization) {
+          showModalNotification('Falta Empresa', 'Selecciona la empresa de cada registro marcado en amarillo antes de finalizar.', 'destructive');
           return;
       }
       const hasUnknown = returnsList.some(item => item.isUnknown);
@@ -409,22 +430,33 @@ export default function DevolucionesPage() {
       const existingReturns = returnsList.filter(i => !i.isNewInDev);
       const newReturns = returnsList.filter(i => i.isNewInDev);
 
+      // Solo se manda un valor real de empresa; el placeholder '---' (sin dato
+      // en etiquetas_i) no debe grabarse literal en devoluciones_ml.tienda.
+      const resolveTienda = (org?: string | null) => (org && org !== '---' ? org : null);
+
       try {
           if (existingReturns.length > 0) {
-              const updatePromises = existingReturns.map(item => 
-                  supabaseEtiquetas
+              const updatePromises = existingReturns.map(item => {
+                  const updatePayload: Record<string, any> = {
+                      entregado: true,
+                      name_inc: user?.id,
+                      driver_name: driverName,
+                      driver_plate: driverPlate,
+                      date_entregado: new Date().toISOString(),
+                      code: item.code,
+                      registro: !item.isUnknown,
+                  };
+                  // Si devoluciones_ml.tienda ya tenía valor, no se toca; solo
+                  // se llena cuando estaba en NULL.
+                  if (!item.tiendaAlreadySet) {
+                      const tienda = resolveTienda(item.organization);
+                      if (tienda) updatePayload.tienda = tienda;
+                  }
+                  return supabaseEtiquetas
                     .from('devoluciones_ml')
-                    .update({ 
-                        entregado: true, 
-                        name_inc: user?.id, 
-                        driver_name: driverName,
-                        driver_plate: driverPlate,
-                        date_entregado: new Date().toISOString(),
-                        code: item.code,
-                        registro: !item.isUnknown
-                    })
-                    .eq('num_venta', String(item.sales_num))
-              );
+                    .update(updatePayload)
+                    .eq('num_venta', String(item.sales_num));
+              });
               await Promise.all(updatePromises);
           }
 
@@ -432,12 +464,12 @@ export default function DevolucionesPage() {
               const insertData = newReturns.map(item => ({
                   num_venta: item.isUnknown ? null : (item.sales_num ? String(item.sales_num) : null),
                   entregado: true,
-                  name_inc: user?.id, 
+                  name_inc: user?.id,
                   driver_name: driverName,
                   driver_plate: driverPlate,
                   date_entregado: new Date().toISOString(),
                   sku: item.sku,
-                  tienda: item.organization,
+                  tienda: resolveTienda(item.organization),
                   code: item.code,
                   registro: !item.isUnknown
               }));
@@ -621,7 +653,28 @@ export default function DevolucionesPage() {
                                       <TableCell className="py-2"><span className="font-mono text-[10px] font-black text-starbucks-green">{item.sales_num || '---'}</span></TableCell>
                                       <TableCell className="py-2"><div className="flex items-center gap-1"><Tag className="h-2.5 w-2.5 text-gray-400" /><span className="text-[9px] font-bold text-gray-600">{item.sku}</span></div></TableCell>
                                       <TableCell className="py-2"><div className="flex items-center gap-1"><Layers className="h-2.5 w-2.5 text-amber-400" /><span className="text-[9px] font-black text-amber-700 uppercase">{item.subcategoria}</span></div></TableCell>
-                                      <TableCell className="py-2"><div className="flex items-center gap-1"><Building2 className="h-2.5 w-2.5 text-gray-400" /><Badge variant="outline" className="text-[8px] font-black border-starbucks-green/30 text-starbucks-green py-0 h-4">{item.organization}</Badge></div></TableCell>
+                                      <TableCell className="py-2">
+                                          <div className="flex items-center gap-1">
+                                              <Building2 className="h-2.5 w-2.5 text-gray-400 shrink-0" />
+                                              {item.tiendaAlreadySet ? (
+                                                  <Badge variant="outline" className="text-[8px] font-black border-starbucks-green/30 text-starbucks-green py-0 h-4">{item.organization}</Badge>
+                                              ) : (
+                                                  <Select
+                                                      value={item.organization && item.organization !== '---' ? item.organization : undefined}
+                                                      onValueChange={(val) => handleOrganizationChange(item.code, val)}
+                                                  >
+                                                      <SelectTrigger className="h-6 w-[120px] text-[8px] font-bold px-2 border-amber-300 bg-amber-50">
+                                                          <SelectValue placeholder="Elegir empresa..." />
+                                                      </SelectTrigger>
+                                                      <SelectContent>
+                                                          {EMPRESA_OPTIONS.map(org => (
+                                                              <SelectItem key={org} value={org} className="text-[10px]">{org}</SelectItem>
+                                                          ))}
+                                                      </SelectContent>
+                                                  </Select>
+                                              )}
+                                          </div>
+                                      </TableCell>
                                       <TableCell className="py-2 text-right"><Button variant="ghost" size="icon" onClick={() => removeFromList(item.code)} className="text-red-400 hover:text-red-600 h-7 w-7"><Trash2 className="h-3.5 w-3.5" /></Button></TableCell>
                                   </TableRow>
                               )) : <TableRow><TableCell colSpan={6} className="text-center text-gray-400 py-20 text-[10px] uppercase font-bold">Esperando registros...</TableCell></TableRow>}
