@@ -16,7 +16,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Zap, ZoomIn, UserPlus, PlusCircle, Clock, AlertTriangle, Wifi, WifiOff, Search, XCircle, CheckCircle, Trash2, Lock, Unlock, FileText, Printer, Download, FileUp, FileSpreadsheet, Loader2, Copy, ChevronDown, ChevronUp, Users, Info, ShoppingCart, UserCheck, MoreVertical } from 'lucide-react';
+import { Zap, ZoomIn, UserPlus, PlusCircle, Clock, AlertTriangle, Wifi, WifiOff, Search, XCircle, CheckCircle, Trash2, Lock, Unlock, FileText, Printer, Download, FileUp, FileSpreadsheet, Loader2, Copy, ChevronDown, ChevronUp, Users, Info, ShoppingCart, UserCheck } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Combobox } from '@/components/ui/combobox';
 import {
@@ -208,7 +208,7 @@ function MobilePendingRow({
                 en addCodeAndUpdateCounters, mismo dato que ve la tabla de escritorio. */}
             <div className="min-w-0 flex-1 flex flex-col gap-0.5">
               <span className="font-mono text-xs font-bold text-starbucks-dark whitespace-nowrap">{data.code}</span>
-              <span className="text-[11px] font-semibold text-starbucks-accent truncate">{data.subcategoria || data.sku || '—'}</span>
+              <span className="text-[9px] font-medium text-starbucks-accent truncate">{data.subcategoria || data.sku || '—'}</span>
             </div>
             <div className="flex items-center gap-1 shrink-0">
               <Input
@@ -223,13 +223,6 @@ function MobilePendingRow({
               <span className="text-[8px] text-gray-400 font-bold">min</span>
             </div>
             <span className="text-sm font-black text-starbucks-accent bg-starbucks-cream rounded px-2 py-1 tabular-nums shrink-0">×{data.cantidad}</span>
-            <button
-              onClick={(e) => { e.stopPropagation(); onOpenChange(isOpen ? null : data.code); }}
-              className="h-6 w-6 flex items-center justify-center rounded text-gray-400 hover:bg-gray-100 shrink-0"
-              aria-label="Más acciones"
-            >
-              <MoreVertical className="h-3.5 w-3.5" />
-            </button>
             <ChevronDown className={cn("h-3.5 w-3.5 text-gray-400 transition-transform flex-shrink-0", expanded && "rotate-180")} />
           </div>
           <div className="grid transition-[grid-template-rows] duration-200" style={{ gridTemplateRows: expanded ? '1fr' : '0fr' }}>
