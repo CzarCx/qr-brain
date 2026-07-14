@@ -146,6 +146,7 @@ export default function Home() {
   const readerRef = useRef<HTMLDivElement>(null);
   const scannerSectionRef = useRef<HTMLDivElement | null>(null);
   const printRef = useRef<HTMLDivElement>(null);
+  const pendingTableContainerRef = useRef<HTMLDivElement | null>(null);
 
 
   const lastScanTimeRef = useRef(Date.now());
@@ -154,6 +155,21 @@ export default function Home() {
   const bufferRef = useRef('');
   const messageTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const timerStartedRef = useRef(false);
+  // Refleja `loading` sin ser dependencia reactiva de onScanSuccess: si estuviera
+  // en sus deps, su identidad cambiaría en cada escaneo y reiniciaría el efecto
+  // que arranca/detiene la cámara. Se usa para ignorar cualquier escaneo nuevo
+  // mientras el anterior sigue en curso (capa extra contra duplicados por
+  // escaneos muy seguidos, además de la reserva síncrona en `scannedCodesRef`).
+  const loadingRef = useRef(false);
+  useEffect(() => { loadingRef.current = loading; }, [loading]);
+
+  // Cada código nuevo se agrega al final de scannedData, así que el último
+  // registro escaneado siempre es el último renglón de la tabla; se hace
+  // scroll al fondo del contenedor para que quede visible sin scrollear a mano.
+  useEffect(() => {
+    const container = pendingTableContainerRef.current;
+    if (container) container.scrollTop = container.scrollHeight;
+  }, [scannedData.length]);
 
 
   const MIN_SCAN_INTERVAL = 500;
@@ -584,14 +600,11 @@ export default function Home() {
   };
 
  const addCodeAndUpdateCounters = useCallback(async (codeToAdd: string, details: { sku: string | null; cantidad: number | null; producto: string | null; empresa: string | null; venta: string | null; deli_date: string | null; }) => {
+    // El código ya se reserva en `scannedCodesRef` desde `processScan` (antes de
+    // las consultas a etiquetas_i/v_code/personal), así que aquí no hace falta
+    // repetir el check ni el `add`: para cuando se llega aquí, ya está reservado.
     const finalCode = String(codeToAdd).trim();
 
-    if (scannedCodesRef.current.has(finalCode)) {
-      showAppMessage(<>DUPLICADO: {finalCode}</>, 'duplicate');
-      playErrorSound();
-      return false;
-    }
-    
     if (!timerStartedRef.current) {
         setTimerStartTime(new Date());
         timerStartedRef.current = true;
@@ -635,7 +648,6 @@ export default function Home() {
     }
 
 
-    scannedCodesRef.current.add(finalCode);
     lastSuccessfullyScannedCodeRef.current = finalCode;
 
     if (finalCode.startsWith('4')) {
@@ -806,7 +818,7 @@ export default function Home() {
   };
   
   const onScanSuccess = useCallback((decodedText: string, decodedResult: any) => {
-    if (!scannerActive || Date.now() - lastScanTimeRef.current < MIN_SCAN_INTERVAL || (!isGuest && !isAttendanceValid)) return;
+    if (!scannerActive || loadingRef.current || Date.now() - lastScanTimeRef.current < MIN_SCAN_INTERVAL || (!isGuest && !isAttendanceValid)) return;
     lastScanTimeRef.current = Date.now();
     
     let finalCode = decodedText;
@@ -954,6 +966,13 @@ export default function Home() {
             return;
         }
 
+        // Se reserva el código ya mismo, antes de cualquier consulta async
+        // (etiquetas_i, v_code, personal, sku_alterno/sku_m): así, si el mismo
+        // código se vuelve a escanear mientras estas consultas siguen en vuelo,
+        // el check del inicio de esta función ya lo detecta como duplicado en
+        // vez de dejarlo pasar por la ventana de carrera. Si el código termina
+        // rechazado más abajo, se libera con `scannedCodesRef.current.delete`.
+        scannedCodesRef.current.add(finalCode);
 
         const { data: etiquetaRows, error: etiquetaInfoError } = await supabaseEtiquetas
             .from('etiquetas_i')
@@ -965,6 +984,7 @@ export default function Home() {
         }
 
         if (!etiquetaRows || etiquetaRows.length === 0) {
+            scannedCodesRef.current.delete(finalCode);
             // Solo muestra modal si el código tiene más de 30 caracteres
             if (finalCode.length > 30) {
                 showModalNotification('Error de Etiqueta ML', `Este código largo (>30 carac.) no existe en la base de datos de etiquetas. Verifica su origen.`, 'destructive');
@@ -978,6 +998,7 @@ export default function Home() {
 
         const uniqueCodeIs = Array.from(new Set(etiquetaRows.map(r => r.code_i).filter(Boolean)));
         if (uniqueCodeIs.length === 0) {
+             scannedCodesRef.current.delete(finalCode);
              showModalNotification('Error de Etiqueta', `La etiqueta ${finalCode} no tiene un código de corte asociado.`, 'destructive');
              playErrorSound();
              setLoading(false);
@@ -995,6 +1016,7 @@ export default function Home() {
             }
             
             if (!vCodeRows || vCodeRows.length === 0 || vCodeRows[0].corte_etiquetas === null) {
+                scannedCodesRef.current.delete(finalCode);
                 showModalNotification('Corte no Realizado', `La etiqueta ${finalCode} no puede ser asignada porque el corte (${codeI}) aún no ha sido realizado.`, 'destructive');
                 playErrorSound();
                 setLoading(false);
@@ -1013,6 +1035,7 @@ export default function Home() {
         }
 
         if (personalRows && personalRows.length > 0) {
+            scannedCodesRef.current.delete(finalCode);
             const personalData = personalRows[0];
             playErrorSound();
             showAppMessage(
@@ -1037,6 +1060,11 @@ export default function Home() {
         });
 
     } catch (error: any) {
+        // Libera la reserva del código: si el escaneo no se completó por un
+        // error inesperado, no debe quedar bloqueado para un reintento. `delete`
+        // sobre una clave que no llegó a reservarse (error antes de esa línea)
+        // es un no-op seguro.
+        scannedCodesRef.current.delete(finalCode);
         playErrorSound();
         showAppMessage(error.message, 'duplicate');
     } finally {
@@ -2166,7 +2194,7 @@ const deleteRow = (codeToDelete: string) => {
             </div>
         )}
 
-        <div className="table-container border border-gray-200 rounded-lg mt-4">
+        <div ref={pendingTableContainerRef} className="table-container border border-gray-200 rounded-lg mt-4">
             <table className="w-full min-w-full divide-y divide-gray-200">
                 <thead className="bg-starbucks-cream sticky top-0 z-10">
                     <tr>
@@ -2297,7 +2325,7 @@ const deleteRow = (codeToDelete: string) => {
                         </div>
                         
                         {isMounted && isMobile && scannerActive && selectedScannerMode === 'camara' && cameraCapabilities && (
-                            <div className="absolute bottom-6 left-6 right-6 bg-black/70 backdrop-blur-md p-4 rounded-xl flex items-center gap-6 text-white z-10 border border-white/10">
+                            <div className="mt-3 bg-black/70 backdrop-blur-md p-4 rounded-xl flex items-center gap-6 text-white border border-white/10">
                                 {cameraCapabilities.torch && (
                                     <Button variant="ghost" size="icon" onClick={() => setIsFlashOn(!isFlashOn)} className={cn("h-10 w-10", isFlashOn ? 'text-yellow-400 bg-white/10' : 'text-white')}>
                                         <Zap className="h-6 w-6" />
