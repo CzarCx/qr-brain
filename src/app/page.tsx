@@ -247,9 +247,17 @@ function MobilePendingRow({
                     Entrega: {deliDateLabel}
                   </span>
                 )}
+                <dl className="mb-2 space-y-1.5 text-[11px]">
+                  <div>
+                    <dt className="text-[8px] font-black uppercase tracking-wide text-gray-400">SKU</dt>
+                    <dd className="font-semibold text-starbucks-dark break-words">{data.sku}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-[8px] font-black uppercase tracking-wide text-gray-400">Subcategoría</dt>
+                    <dd className="font-semibold text-starbucks-dark break-words">{data.subcategoria || 'N/A'}</dd>
+                  </div>
+                </dl>
                 <dl className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-[11px]">
-                  <div><dt className="text-[8px] font-black uppercase tracking-wide text-gray-400">SKU</dt><dd className="font-semibold text-starbucks-dark truncate">{data.sku}</dd></div>
-                  <div><dt className="text-[8px] font-black uppercase tracking-wide text-gray-400">Subcategoría</dt><dd className="font-semibold text-starbucks-dark">{data.subcategoria || 'N/A'}</dd></div>
                   <div><dt className="text-[8px] font-black uppercase tracking-wide text-gray-400">Empresa</dt><dd className="font-semibold text-starbucks-dark">{data.empresa}</dd></div>
                   <div><dt className="text-[8px] font-black uppercase tracking-wide text-gray-400">Venta</dt><dd className="font-semibold text-starbucks-dark">{data.venta}</dd></div>
                   <div><dt className="text-[8px] font-black uppercase tracking-wide text-gray-400">Hora asignación</dt><dd className="font-semibold text-starbucks-dark">{data.hora}</dd></div>
