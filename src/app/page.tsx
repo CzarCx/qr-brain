@@ -103,6 +103,18 @@ const getScheduledRows = (data: ScannedItem[]): ScheduledItem[] => {
   });
 };
 
+// deli_date suele venir como fecha pura "YYYY-MM-DD" (sin hora); parsearla
+// directo con `new Date(...)` la interpreta en UTC medianoche, que en zona
+// horaria de México (UTC-6) se corre al día anterior. Fijar el mediodía evita
+// ese desfase sin importar la zona horaria del navegador.
+const formatDeliDate = (raw?: string | null): string | null => {
+  if (!raw) return null;
+  const isDateOnly = /^\d{4}-\d{2}-\d{2}$/.test(raw);
+  const parsed = new Date(isDateOnly ? `${raw}T12:00:00` : raw);
+  if (isNaN(parsed.getTime())) return null;
+  return parsed.toLocaleDateString('es-MX', { weekday: 'short', day: '2-digit', month: 'short' });
+};
+
 type DbStatus = {
     etiquetasDb: 'connecting' | 'success' | 'error';
 };
@@ -133,6 +145,7 @@ function MobilePendingRow({
   onTimeChange: (code: string, value: string) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const deliDateLabel = formatDeliDate(data.deli_date);
   const [dragX, setDragX] = useState(isOpen ? SWIPE_OPEN_X : 0);
   const [isDragging, setIsDragging] = useState(false);
   const dragStartXRef = useRef(0);
@@ -227,14 +240,22 @@ function MobilePendingRow({
           </div>
           <div className="grid transition-[grid-template-rows] duration-200" style={{ gridTemplateRows: expanded ? '1fr' : '0fr' }}>
             <div className="overflow-hidden">
-              <dl className="grid grid-cols-2 gap-x-3 gap-y-1.5 px-2.5 pb-2.5 pt-1 pl-8 border-t border-dashed border-gray-200 mt-0.5 text-[11px]">
-                <div><dt className="text-[8px] font-black uppercase tracking-wide text-gray-400">SKU</dt><dd className="font-semibold text-starbucks-dark truncate">{data.sku}</dd></div>
-                <div><dt className="text-[8px] font-black uppercase tracking-wide text-gray-400">Producto</dt><dd className="font-semibold text-starbucks-dark">{data.producto}</dd></div>
-                <div><dt className="text-[8px] font-black uppercase tracking-wide text-gray-400">Empresa</dt><dd className="font-semibold text-starbucks-dark">{data.empresa}</dd></div>
-                <div><dt className="text-[8px] font-black uppercase tracking-wide text-gray-400">Venta</dt><dd className="font-semibold text-starbucks-dark">{data.venta}</dd></div>
-                <div><dt className="text-[8px] font-black uppercase tracking-wide text-gray-400">Hora asignación</dt><dd className="font-semibold text-starbucks-dark">{data.hora}</dd></div>
-                <div><dt className="text-[8px] font-black uppercase tracking-wide text-gray-400">Inicio → Fin</dt><dd className="font-semibold text-starbucks-dark">{data.horaInicioStr} → {data.horaFinStr}</dd></div>
-              </dl>
+              <div className="px-2.5 pb-2.5 pt-2 pl-8 border-t border-dashed border-gray-200 mt-0.5">
+                {deliDateLabel && (
+                  <span className="inline-flex items-center gap-1.5 text-sm font-black text-starbucks-accent bg-starbucks-cream rounded px-2 py-1 tabular-nums mb-2">
+                    <Clock className="h-3.5 w-3.5" />
+                    Entrega: {deliDateLabel}
+                  </span>
+                )}
+                <dl className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-[11px]">
+                  <div><dt className="text-[8px] font-black uppercase tracking-wide text-gray-400">SKU</dt><dd className="font-semibold text-starbucks-dark truncate">{data.sku}</dd></div>
+                  <div><dt className="text-[8px] font-black uppercase tracking-wide text-gray-400">Subcategoría</dt><dd className="font-semibold text-starbucks-dark">{data.subcategoria || 'N/A'}</dd></div>
+                  <div><dt className="text-[8px] font-black uppercase tracking-wide text-gray-400">Empresa</dt><dd className="font-semibold text-starbucks-dark">{data.empresa}</dd></div>
+                  <div><dt className="text-[8px] font-black uppercase tracking-wide text-gray-400">Venta</dt><dd className="font-semibold text-starbucks-dark">{data.venta}</dd></div>
+                  <div><dt className="text-[8px] font-black uppercase tracking-wide text-gray-400">Hora asignación</dt><dd className="font-semibold text-starbucks-dark">{data.hora}</dd></div>
+                  <div><dt className="text-[8px] font-black uppercase tracking-wide text-gray-400">Inicio → Fin</dt><dd className="font-semibold text-starbucks-dark">{data.horaInicioStr} → {data.horaFinStr}</dd></div>
+                </dl>
+              </div>
             </div>
           </div>
         </div>
