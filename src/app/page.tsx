@@ -16,7 +16,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Zap, ZoomIn, UserPlus, PlusCircle, Clock, AlertTriangle, Wifi, WifiOff, Search, XCircle, CheckCircle, Trash2, Lock, Unlock, FileText, Printer, Download, FileUp, FileSpreadsheet, Loader2, Copy, ChevronDown, ChevronUp, Users, Info, ShoppingCart, UserCheck } from 'lucide-react';
+import { Zap, ZoomIn, UserPlus, PlusCircle, Clock, AlertTriangle, Wifi, WifiOff, Search, XCircle, CheckCircle, Trash2, Lock, Unlock, FileText, Printer, Download, FileUp, FileSpreadsheet, Loader2, Copy, ChevronDown, ChevronUp, Users, Info, ShoppingCart, UserCheck, MoreVertical } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Combobox } from '@/components/ui/combobox';
 import {
@@ -72,6 +72,37 @@ type PersonalOperativo = {
   email?: string | null;
 };
 
+type ScheduledItem = ScannedItem & { horaInicioStr: string; horaFinStr: string };
+
+// Simula el encadenado de horarios (cada registro empieza cuando termina el
+// anterior según su tiempo estimado). Se extrae de renderPendingRecords para que
+// la tabla de escritorio y las tarjetas de móvil calculen exactamente lo mismo
+// en vez de mantener dos copias de esta lógica que podrían desincronizarse.
+const getScheduledRows = (data: ScannedItem[]): ScheduledItem[] => {
+  const renderTime = new Date();
+  let lastFinishTime: Date = renderTime;
+  const uniqueData = Array.from(new Map(data.map(item => [item.code, item])).values());
+
+  return uniqueData.map((item, index) => {
+    const startTime: Date = index === 0 ? renderTime : lastFinishTime;
+
+    let horaFin: Date | null = null;
+    if (!isNaN(startTime.getTime()) && item.esti_time) {
+      horaFin = new Date(startTime.getTime() + item.esti_time * 60000);
+    }
+    lastFinishTime = horaFin || startTime;
+
+    const horaInicioStr = !isNaN(startTime.getTime())
+      ? startTime.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })
+      : 'N/A';
+    const horaFinStr = horaFin
+      ? horaFin.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })
+      : 'N/A';
+
+    return { ...item, horaInicioStr, horaFinStr };
+  });
+};
+
 type DbStatus = {
     etiquetasDb: 'connecting' | 'success' | 'error';
 };
@@ -81,6 +112,141 @@ type VerificationResult = {
     message: string;
 };
 
+const SWIPE_OPEN_X = -84;
+
+// Definido fuera de Home: si viviera dentro, Home lo recrearía en cada render y
+// React lo trataría como un tipo de componente nuevo cada vez, perdiendo el
+// estado de arrastre/expansión de cada tarjeta constantemente.
+function MobilePendingRow({
+  data,
+  index,
+  isOpen,
+  onOpenChange,
+  onDelete,
+  onTimeChange,
+}: {
+  data: ScheduledItem;
+  index: number;
+  isOpen: boolean;
+  onOpenChange: (code: string | null) => void;
+  onDelete: (code: string) => void;
+  onTimeChange: (code: string, value: string) => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const [dragX, setDragX] = useState(isOpen ? SWIPE_OPEN_X : 0);
+  const [isDragging, setIsDragging] = useState(false);
+  const dragStartXRef = useRef(0);
+  const baseXRef = useRef(0);
+  const movedRef = useRef(false);
+
+  useEffect(() => {
+    if (!isDragging) setDragX(isOpen ? SWIPE_OPEN_X : 0);
+  }, [isOpen, isDragging]);
+
+  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    setIsDragging(true);
+    movedRef.current = false;
+    dragStartXRef.current = e.clientX;
+    baseXRef.current = isOpen ? SWIPE_OPEN_X : 0;
+    e.currentTarget.setPointerCapture(e.pointerId);
+  };
+
+  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!isDragging) return;
+    const dx = e.clientX - dragStartXRef.current;
+    if (Math.abs(dx) > 6) movedRef.current = true;
+    setDragX(Math.max(SWIPE_OPEN_X, Math.min(0, baseXRef.current + dx)));
+  };
+
+  const endDrag = () => {
+    if (!isDragging) return;
+    setIsDragging(false);
+    setDragX(current => {
+      const shouldOpen = current < SWIPE_OPEN_X / 2;
+      onOpenChange(shouldOpen ? data.code : null);
+      return shouldOpen ? SWIPE_OPEN_X : 0;
+    });
+  };
+
+  const handleHeadClick = () => {
+    if (movedRef.current) { movedRef.current = false; return; }
+    if (isOpen) { onOpenChange(null); return; }
+    setExpanded(v => !v);
+  };
+
+  return (
+    <div className="rounded-xl border border-gray-200 overflow-hidden mb-1.5 bg-starbucks-white">
+      <div className="relative">
+        <div className="absolute inset-0 flex justify-end items-stretch bg-red-100">
+          <button
+            onClick={(e) => { e.stopPropagation(); onDelete(data.code); }}
+            className="w-[84px] bg-red-600 hover:bg-red-700 text-white flex flex-col items-center justify-center gap-0.5 text-[9px] font-black uppercase tracking-wide"
+          >
+            <Trash2 className="h-4 w-4" />
+            Eliminar
+          </button>
+        </div>
+        <div
+          className="relative z-10 bg-starbucks-white"
+          style={{ transform: `translateX(${dragX}px)`, transition: isDragging ? 'none' : 'transform 0.2s ease', touchAction: 'pan-y' }}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={endDrag}
+          onPointerCancel={endDrag}
+        >
+          <div
+            className="grid items-center gap-2 px-2.5 py-2 cursor-pointer"
+            style={{ gridTemplateColumns: '18px auto 1fr auto auto auto auto' }}
+            role="button"
+            tabIndex={0}
+            aria-expanded={expanded}
+            onClick={handleHeadClick}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleHeadClick(); } }}
+          >
+            <span className="text-[10px] font-bold text-gray-400 tabular-nums">{index + 1}</span>
+            <span className="font-mono text-xs font-bold text-starbucks-dark whitespace-nowrap">{data.code}</span>
+            <div className="min-w-0 flex flex-col gap-0.5">
+              <span className="text-[11px] text-gray-500 truncate">{data.producto}</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <Input
+                type="number"
+                value={data.esti_time ?? ''}
+                onClick={(e) => e.stopPropagation()}
+                onChange={(e) => onTimeChange(data.code, e.target.value)}
+                className="w-12 h-7 px-1 text-xs text-center bg-starbucks-cream/60"
+                placeholder="min"
+                min="1"
+              />
+              <span className="text-[8px] text-gray-400 font-bold">min</span>
+            </div>
+            <span className="text-[10px] font-black text-starbucks-accent bg-starbucks-cream rounded px-1.5 py-0.5 tabular-nums">×{data.cantidad}</span>
+            <button
+              onClick={(e) => { e.stopPropagation(); onOpenChange(isOpen ? null : data.code); }}
+              className="h-6 w-6 flex items-center justify-center rounded text-gray-400 hover:bg-gray-100"
+              aria-label="Más acciones"
+            >
+              <MoreVertical className="h-3.5 w-3.5" />
+            </button>
+            <ChevronDown className={cn("h-3.5 w-3.5 text-gray-400 transition-transform flex-shrink-0", expanded && "rotate-180")} />
+          </div>
+          <div className="grid transition-[grid-template-rows] duration-200" style={{ gridTemplateRows: expanded ? '1fr' : '0fr' }}>
+            <div className="overflow-hidden">
+              <dl className="grid grid-cols-2 gap-x-3 gap-y-1.5 px-2.5 pb-2.5 pt-1 pl-9 border-t border-dashed border-gray-200 mt-0.5 text-[11px]">
+                <div><dt className="text-[8px] font-black uppercase tracking-wide text-gray-400">SKU</dt><dd className="font-semibold text-starbucks-dark truncate">{data.sku}</dd></div>
+                <div><dt className="text-[8px] font-black uppercase tracking-wide text-gray-400">Subcategoría</dt><dd className="font-semibold text-starbucks-dark">{data.subcategoria || 'N/A'}</dd></div>
+                <div><dt className="text-[8px] font-black uppercase tracking-wide text-gray-400">Empresa</dt><dd className="font-semibold text-starbucks-dark">{data.empresa}</dd></div>
+                <div><dt className="text-[8px] font-black uppercase tracking-wide text-gray-400">Venta</dt><dd className="font-semibold text-starbucks-dark">{data.venta}</dd></div>
+                <div><dt className="text-[8px] font-black uppercase tracking-wide text-gray-400">Hora asignación</dt><dd className="font-semibold text-starbucks-dark">{data.hora}</dd></div>
+                <div><dt className="text-[8px] font-black uppercase tracking-wide text-gray-400">Inicio → Fin</dt><dd className="font-semibold text-starbucks-dark">{data.horaInicioStr} → {data.horaFinStr}</dd></div>
+              </dl>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function Home() {
   const { profile, user, isGuest } = useAuth();
@@ -136,6 +302,7 @@ export default function Home() {
   const [loteIdToDelete, setLoteIdToDelete] = useState('');
   const [deleteLoteName, setDeleteLoteName] = useState('');
   const [deleteLoteReason, setDeleteLoteReason] = useState('');
+  const [deleteLoteConfirmInput, setDeleteLoteConfirmInput] = useState('');
 
   const [workForceCapacity, setWorkForceCapacity] = useState<{ minutes: number; hours: number; employeeCount: number } | null>(null);
   const [requiredWorkload, setRequiredWorkload] = useState<{ minutes: number; orderCount: number } | null>(null);
@@ -146,7 +313,15 @@ export default function Home() {
   const readerRef = useRef<HTMLDivElement>(null);
   const scannerSectionRef = useRef<HTMLDivElement | null>(null);
   const printRef = useRef<HTMLDivElement>(null);
+  // Instancia móvil (`md:hidden`) y de escritorio (`hidden md:block`) del listado
+  // de pendientes están montadas al mismo tiempo (solo una oculta por CSS), por
+  // eso cada una necesita su propio ref — antes compartían uno solo y el scroll
+  // automático terminaba aplicándose siempre a la copia oculta.
   const pendingTableContainerRef = useRef<HTMLDivElement | null>(null);
+  const pendingTableContainerDesktopRef = useRef<HTMLDivElement | null>(null);
+  // Código de la tarjeta móvil actualmente deslizada/revelada (para eliminar).
+  // Vive un nivel arriba de MobilePendingRow para que abrir una cierre la otra.
+  const [openSwipeCode, setOpenSwipeCode] = useState<string | null>(null);
 
 
   const lastScanTimeRef = useRef(Date.now());
@@ -167,8 +342,9 @@ export default function Home() {
   // registro escaneado siempre es el último renglón de la tabla; se hace
   // scroll al fondo del contenedor para que quede visible sin scrollear a mano.
   useEffect(() => {
-    const container = pendingTableContainerRef.current;
-    if (container) container.scrollTop = container.scrollHeight;
+    [pendingTableContainerRef.current, pendingTableContainerDesktopRef.current].forEach(container => {
+      if (container) container.scrollTop = container.scrollHeight;
+    });
   }, [scannedData.length]);
 
 
@@ -1780,12 +1956,24 @@ const deleteRow = (codeToDelete: string) => {
 
   const openDeleteLoteModal = (lote_p: string) => {
     setLoteIdToDelete(lote_p);
+    setDeleteLoteConfirmInput('');
     setIsDeleteLoteModalOpen(true);
   };
+
+  // Frase exacta que hay que teclear para habilitar el borrado: previene que un
+  // lote completo (todos sus registros en personal_prog) se elimine por un clic
+  // apresurado — a diferencia de borrar un solo registro escaneado, esto no tiene
+  // vuelta atrás salvo por el registro de auditoría en `drop_lote`.
+  const deleteLoteConfirmPhrase = `ELIMINAR ${loteIdToDelete}`;
+  const isDeleteLoteConfirmValid = deleteLoteConfirmInput.trim().toUpperCase() === deleteLoteConfirmPhrase.toUpperCase();
 
   const handleFinalDeleteLote = async () => {
     if (!deleteLoteName.trim() || !deleteLoteReason.trim()) {
         alert("Por favor, completa tu nombre y el motivo.");
+        return;
+    }
+    if (!isDeleteLoteConfirmValid) {
+        alert(`Escribe exactamente "${deleteLoteConfirmPhrase}" para confirmar.`);
         return;
     }
 
@@ -1815,6 +2003,7 @@ const deleteRow = (codeToDelete: string) => {
       setLoteIdToDelete('');
       setDeleteLoteName('');
       setDeleteLoteReason('');
+      setDeleteLoteConfirmInput('');
       fetchCreatedLotes();
 
     } catch (error: any) {
@@ -1868,36 +2057,7 @@ const deleteRow = (codeToDelete: string) => {
   };
 
   const renderPendingRecords = () => {
-    const renderTime = new Date();
-    let lastFinishTime: Date = renderTime;
-    
-    const uniqueData = Array.from(new Map(scannedData.map(item => [item.code, item])).values());
-
-
-    return uniqueData.map((data: ScannedItem, index: number) => {
-        let startTime: Date;
-        if (index === 0) {
-            startTime = renderTime;
-        } else {
-            startTime = lastFinishTime!;
-        }
-
-        let horaFin: Date | null = null;
-        if (!isNaN(startTime.getTime()) && data.esti_time) {
-            horaFin = new Date(startTime.getTime() + data.esti_time * 60000);
-        }
-
-        lastFinishTime = horaFin || startTime;
-
-        const horaInicioStr = !isNaN(startTime.getTime())
-            ? startTime.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })
-            : 'N/A';
-            
-        const horaFinStr = horaFin
-            ? horaFin.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })
-            : 'N/A';
-
-        return (
+    return getScheduledRows(scannedData).map((data, index) => (
         <tr key={data.code}>
             <td className="px-4 py-3 whitespace-nowrap text-sm font-semibold">{index + 1}</td>
             <td className="px-4 py-3 whitespace-nowrap font-mono text-sm">{data.code}</td>
@@ -1911,23 +2071,22 @@ const deleteRow = (codeToDelete: string) => {
                     min="1"
                 />
             </td>
+            <td className="px-4 py-3 whitespace-nowrap text-sm">{data.cantidad}</td>
             <td className="px-4 py-3 whitespace-nowrap text-sm">{data.producto}</td>
             <td className="px-4 py-3 whitespace-nowrap text-sm">{data.sku}</td>
             <td className="px-4 py-3 whitespace-nowrap text-sm">{data.subcategoria || 'N/A'}</td>
-            <td className="px-4 py-3 whitespace-nowrap text-sm">{data.cantidad}</td>
             <td className="px-4 py-3 whitespace-nowrap text-sm">{data.empresa}</td>
             <td className="px-4 py-3 whitespace-nowrap text-sm">{data.venta}</td>
             <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{data.hora}</td>
-            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{horaInicioStr}</td>
-            <td className="px-4 py-3 whitespace-nowrap text-sm">{horaFinStr}</td>
+            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{data.horaInicioStr}</td>
+            <td className="px-4 py-3 whitespace-nowrap text-sm">{data.horaFinStr}</td>
             <td className="px-4 py-3 whitespace-nowrap text-sm text-center">
                 <Button variant="ghost" size="icon" onClick={() => deleteRow(data.code)} className="text-red-500 hover:text-red-700 h-8 w-8">
                     <Trash2 className="h-4 w-4" />
                 </Button>
             </td>
         </tr>
-      );
-    })
+    ));
   };
 
   const groupedPersonalOptions = useMemo(() => {
@@ -1944,7 +2103,7 @@ const deleteRow = (codeToDelete: string) => {
   }, [personalList]);
   
 
-  const RegistrosPendientesSection = (
+  const renderRegistrosPendientesSection = (tableRef: React.RefObject<HTMLDivElement>, variant: 'mobile' | 'desktop') => (
     <div className="w-full">
         <div className="flex flex-wrap justify-between items-center mb-2 gap-2">
             <h2 className="text-lg font-bold text-starbucks-dark">Registros Pendientes</h2>
@@ -2194,30 +2353,50 @@ const deleteRow = (codeToDelete: string) => {
             </div>
         )}
 
-        <div ref={pendingTableContainerRef} className="table-container border border-gray-200 rounded-lg mt-4">
-            <table className="w-full min-w-full divide-y divide-gray-200">
-                <thead className="bg-starbucks-cream sticky top-0 z-10">
-                    <tr>
-                        <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">#</th>
-                        <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">CODIGO</th>
-                        <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">TIEMPO ESTIMADO</th>
-                        <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">PRODUCTO</th>
-                        <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">SKU</th>
-                        <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">SUBCATEGORÍA</th>
-                        <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">CANT</th>
-                        <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">EMPRESA</th>
-                        <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">Venta</th>
-                        <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">HORA DE ASIGNACION</th>
-                        <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">HORA INICIO</th>
-                        <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">HORA FIN</th>
-                        <th scope="col" className="px-4 py-2 text-center text-xs font-medium text-starbucks-dark uppercase tracking-wider">ACCION</th>
-                    </tr>
-                </thead>
-                <tbody id="scanned-list" className="bg-starbucks-white divide-y divide-gray-200">
-                    {renderPendingRecords()}
-                </tbody>
-            </table>
-        </div>
+        {variant === 'desktop' ? (
+            <div ref={tableRef} className="table-container border border-gray-200 rounded-lg mt-4">
+                <table className="w-full min-w-full divide-y divide-gray-200">
+                    <thead className="bg-starbucks-cream sticky top-0 z-10">
+                        <tr>
+                            <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">#</th>
+                            <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">CODIGO</th>
+                            <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">TIEMPO ESTIMADO</th>
+                            <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">CANT</th>
+                            <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">PRODUCTO</th>
+                            <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">SKU</th>
+                            <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">SUBCATEGORÍA</th>
+                            <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">EMPRESA</th>
+                            <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">Venta</th>
+                            <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">HORA DE ASIGNACION</th>
+                            <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">HORA INICIO</th>
+                            <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-starbucks-dark uppercase tracking-wider">HORA FIN</th>
+                            <th scope="col" className="px-4 py-2 text-center text-xs font-medium text-starbucks-dark uppercase tracking-wider">ACCION</th>
+                        </tr>
+                    </thead>
+                    <tbody id="scanned-list" className="bg-starbucks-white divide-y divide-gray-200">
+                        {renderPendingRecords()}
+                    </tbody>
+                </table>
+            </div>
+        ) : (
+            <div ref={tableRef} className="table-container border border-gray-200 rounded-lg mt-4 bg-starbucks-cream/40 p-1.5">
+                {scannedData.length === 0 ? (
+                    <p className="text-center text-gray-400 py-10 text-xs uppercase font-bold">Esperando registros...</p>
+                ) : (
+                    getScheduledRows(scannedData).map((item, index) => (
+                        <MobilePendingRow
+                            key={item.code}
+                            data={item}
+                            index={index}
+                            isOpen={openSwipeCode === item.code}
+                            onOpenChange={setOpenSwipeCode}
+                            onDelete={deleteRow}
+                            onTimeChange={handleTimeChange}
+                        />
+                    ))
+                )}
+            </div>
+        )}
     </div>
   );
 
@@ -2300,7 +2479,7 @@ const deleteRow = (codeToDelete: string) => {
 
                         {scanMode === 'assign' && (
                             <div className="md:hidden">
-                                {RegistrosPendientesSection}
+                                {renderRegistrosPendientesSection(pendingTableContainerRef, 'mobile')}
                             </div>
                         )}
                     </div>
@@ -2470,7 +2649,7 @@ const deleteRow = (codeToDelete: string) => {
                     </div>
                     {scanMode === 'assign' && (
                         <div className="hidden md:block">
-                            {RegistrosPendientesSection}
+                            {renderRegistrosPendientesSection(pendingTableContainerDesktopRef, 'desktop')}
                         </div>
                     )}
 
@@ -2581,14 +2760,28 @@ const deleteRow = (codeToDelete: string) => {
                                 className="bg-transparent min-h-[100px]"
                             />
                         </div>
+                        <div className="space-y-2 pt-2 border-t">
+                            <Label htmlFor="delete-confirm" className="font-bold text-red-600">
+                                Escribe <span className="font-mono bg-red-50 px-1 rounded">{deleteLoteConfirmPhrase}</span> para confirmar:
+                            </Label>
+                            <Input
+                                id="delete-confirm"
+                                value={deleteLoteConfirmInput}
+                                onChange={(e) => setDeleteLoteConfirmInput(e.target.value)}
+                                placeholder={deleteLoteConfirmPhrase}
+                                className="bg-transparent font-mono uppercase"
+                                autoComplete="off"
+                            />
+                            <p className="text-xs text-gray-500">Esto borra todos los registros del lote en producción programada. No se puede deshacer.</p>
+                        </div>
                     </div>
                     <DialogFooter className="flex flex-col sm:flex-row gap-2">
-                        <Button variant="outline" onClick={() => { setIsDeleteLoteModalOpen(false); setDeleteLoteName(''); setDeleteLoteReason(''); }} className="w-full sm:w-auto">
+                        <Button variant="outline" onClick={() => { setIsDeleteLoteModalOpen(false); setDeleteLoteName(''); setDeleteLoteReason(''); setDeleteLoteConfirmInput(''); }} className="w-full sm:w-auto">
                             Cancelar
                         </Button>
-                        <Button 
-                            onClick={handleFinalDeleteLote} 
-                            disabled={loading || !deleteLoteName.trim() || !deleteLoteReason.trim()}
+                        <Button
+                            onClick={handleFinalDeleteLote}
+                            disabled={loading || !deleteLoteName.trim() || !deleteLoteReason.trim() || !isDeleteLoteConfirmValid}
                             className="w-full sm:w-auto bg-red-600 hover:bg-red-700 text-white font-bold"
                         >
                             {loading ? 'Procesando...' : 'Confirmar Eliminación'}
