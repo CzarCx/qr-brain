@@ -195,20 +195,22 @@ function MobilePendingRow({
           onPointerCancel={endDrag}
         >
           <div
-            className="grid items-center gap-2 px-2.5 py-2 cursor-pointer"
-            style={{ gridTemplateColumns: '18px auto 1fr auto auto auto auto' }}
+            className="flex items-center gap-2 px-2.5 py-2 cursor-pointer"
             role="button"
             tabIndex={0}
             aria-expanded={expanded}
             onClick={handleHeadClick}
             onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleHeadClick(); } }}
           >
-            <span className="text-[10px] font-bold text-gray-400 tabular-nums">{index + 1}</span>
-            <span className="font-mono text-xs font-bold text-starbucks-dark whitespace-nowrap">{data.code}</span>
-            <div className="min-w-0 flex flex-col gap-0.5">
-              <span className="text-[11px] text-gray-500 truncate">{data.producto}</span>
+            <span className="text-[10px] font-bold text-gray-400 tabular-nums shrink-0">{index + 1}</span>
+            {/* Código arriba, subcategoría del SKU (o el SKU si no se encontró
+                una) debajo — ya calculado al escanear vía sku_alterno → sku_m
+                en addCodeAndUpdateCounters, mismo dato que ve la tabla de escritorio. */}
+            <div className="min-w-0 flex-1 flex flex-col gap-0.5">
+              <span className="font-mono text-xs font-bold text-starbucks-dark whitespace-nowrap">{data.code}</span>
+              <span className="text-[11px] font-semibold text-starbucks-accent truncate">{data.subcategoria || data.sku || '—'}</span>
             </div>
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-1 shrink-0">
               <Input
                 type="number"
                 value={data.esti_time ?? ''}
@@ -220,10 +222,10 @@ function MobilePendingRow({
               />
               <span className="text-[8px] text-gray-400 font-bold">min</span>
             </div>
-            <span className="text-[10px] font-black text-starbucks-accent bg-starbucks-cream rounded px-1.5 py-0.5 tabular-nums">×{data.cantidad}</span>
+            <span className="text-sm font-black text-starbucks-accent bg-starbucks-cream rounded px-2 py-1 tabular-nums shrink-0">×{data.cantidad}</span>
             <button
               onClick={(e) => { e.stopPropagation(); onOpenChange(isOpen ? null : data.code); }}
-              className="h-6 w-6 flex items-center justify-center rounded text-gray-400 hover:bg-gray-100"
+              className="h-6 w-6 flex items-center justify-center rounded text-gray-400 hover:bg-gray-100 shrink-0"
               aria-label="Más acciones"
             >
               <MoreVertical className="h-3.5 w-3.5" />
@@ -232,9 +234,9 @@ function MobilePendingRow({
           </div>
           <div className="grid transition-[grid-template-rows] duration-200" style={{ gridTemplateRows: expanded ? '1fr' : '0fr' }}>
             <div className="overflow-hidden">
-              <dl className="grid grid-cols-2 gap-x-3 gap-y-1.5 px-2.5 pb-2.5 pt-1 pl-9 border-t border-dashed border-gray-200 mt-0.5 text-[11px]">
+              <dl className="grid grid-cols-2 gap-x-3 gap-y-1.5 px-2.5 pb-2.5 pt-1 pl-8 border-t border-dashed border-gray-200 mt-0.5 text-[11px]">
                 <div><dt className="text-[8px] font-black uppercase tracking-wide text-gray-400">SKU</dt><dd className="font-semibold text-starbucks-dark truncate">{data.sku}</dd></div>
-                <div><dt className="text-[8px] font-black uppercase tracking-wide text-gray-400">Subcategoría</dt><dd className="font-semibold text-starbucks-dark">{data.subcategoria || 'N/A'}</dd></div>
+                <div><dt className="text-[8px] font-black uppercase tracking-wide text-gray-400">Producto</dt><dd className="font-semibold text-starbucks-dark">{data.producto}</dd></div>
                 <div><dt className="text-[8px] font-black uppercase tracking-wide text-gray-400">Empresa</dt><dd className="font-semibold text-starbucks-dark">{data.empresa}</dd></div>
                 <div><dt className="text-[8px] font-black uppercase tracking-wide text-gray-400">Venta</dt><dd className="font-semibold text-starbucks-dark">{data.venta}</dd></div>
                 <div><dt className="text-[8px] font-black uppercase tracking-wide text-gray-400">Hora asignación</dt><dd className="font-semibold text-starbucks-dark">{data.hora}</dd></div>
