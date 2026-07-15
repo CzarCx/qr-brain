@@ -81,7 +81,7 @@ export function Combobox({ options, groupedOptions, value, onValueChange, placeh
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[--radix-popover-trigger-width] p-0 z-[100]">
+      <PopoverContent className="w-[--radix-popover-trigger-width] p-0 z-[100] pointer-events-auto">
         <Command filter={(value, search) => {
             if (value.toLowerCase().includes(search.toLowerCase())) return 1
             return 0

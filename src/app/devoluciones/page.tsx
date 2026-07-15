@@ -65,6 +65,7 @@ type ReturnItem = {
 };
 
 const STORAGE_KEY = 'devoluciones_session_data';
+const DRIVER_STORAGE_KEY = 'devoluciones_driver_data';
 
 export default function DevolucionesPage() {
   const { profile, user } = useAuth();
@@ -87,6 +88,11 @@ export default function DevolucionesPage() {
   const [isIntegrityWarningOpen, setIsWarningModalOpen] = useState(false);
   const [driverName, setDriverName] = useState('');
   const [driverPlate, setDriverPlate] = useState('');
+  const [paqueteria, setPaqueteria] = useState('');
+  const [paqueteriaOptions, setPaqueteriaOptions] = useState<{ value: string; label: string }[]>([]);
+  // Se pide antes de escanear (no al finalizar) y se persiste hasta que termine
+  // todo el proceso de devoluciones, para sobrevivir un refresh a media sesión.
+  const [isDriverModalOpen, setIsDriverModalOpen] = useState(false);
 
   const messageTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const html5QrCodeRef = useRef<Html5Qrcode | null>(null);
@@ -120,7 +126,7 @@ export default function DevolucionesPage() {
 
   useEffect(() => {
     setIsMounted(true);
-    
+
     // Recuperar datos de LocalStorage
     const savedData = localStorage.getItem(STORAGE_KEY);
     if (savedData) {
@@ -134,6 +140,27 @@ export default function DevolucionesPage() {
         console.error("Error al recuperar sesión de devoluciones:", e);
       }
     }
+
+    // Recuperar datos del transporte (conductor/placas). Se resuelve en el mismo
+    // efecto de montaje (no en uno reactivo aparte) para que abrir el modal de
+    // captura no compita en una carrera contra la restauración: si ya había
+    // datos guardados, nunca debe llegar a parpadear el modal.
+    let hasDriverData = false;
+    const savedDriver = localStorage.getItem(DRIVER_STORAGE_KEY);
+    if (savedDriver) {
+      try {
+        const parsedDriver = JSON.parse(savedDriver);
+        if (parsedDriver?.driverName && parsedDriver?.driverPlate && parsedDriver?.paqueteria) {
+          setDriverName(parsedDriver.driverName);
+          setDriverPlate(parsedDriver.driverPlate);
+          setPaqueteria(parsedDriver.paqueteria);
+          hasDriverData = true;
+        }
+      } catch (e) {
+        console.error("Error al recuperar datos del transporte:", e);
+      }
+    }
+    if (!hasDriverData) setIsDriverModalOpen(true);
   }, []);
 
   // Guardar en LocalStorage cada vez que cambie la lista
@@ -142,6 +169,32 @@ export default function DevolucionesPage() {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(returnsList));
     }
   }, [returnsList, isMounted]);
+
+  // Guardar los datos del transporte hasta que termine el proceso completo de
+  // devoluciones (se limpian recién cuando handleFinalizeReturns tiene éxito).
+  useEffect(() => {
+    if (isMounted && driverName.trim() && driverPlate.trim() && paqueteria.trim()) {
+      localStorage.setItem(DRIVER_STORAGE_KEY, JSON.stringify({ driverName, driverPlate, paqueteria }));
+    }
+  }, [driverName, driverPlate, paqueteria, isMounted]);
+
+  useEffect(() => {
+    const fetchPaqueterias = async () => {
+      const { data, error, count } = await supabaseEtiquetas.from('paqueterias').select('nombre', { count: 'exact' }).order('nombre');
+      if (error) {
+        console.error('Error al cargar paqueterías:', error);
+        // Temporal: se muestra en pantalla (no solo en consola) para poder
+        // diagnosticar desde el teléfono, donde no hay devtools a la mano.
+        showModalNotification('Error cargando paqueterías', `${error.message} (código: ${error.code})`, 'destructive');
+        return;
+      }
+      setPaqueteriaOptions((data || []).map(p => ({ value: p.nombre, label: p.nombre })));
+      if (!data || data.length === 0) {
+        console.warn('[paqueterias] La consulta no dio error pero regresó 0 filas. count reportado por PostgREST:', count);
+      }
+    };
+    fetchPaqueterias();
+  }, []);
 
   useEffect(() => {
     if (!user?.email) return;
@@ -403,6 +456,22 @@ export default function DevolucionesPage() {
       showAppMessage(`Eliminado: ${code}`, 'info');
   };
 
+  const handleStartScanner = () => {
+      if (!driverName.trim() || !driverPlate.trim() || !paqueteria.trim()) {
+          setIsDriverModalOpen(true);
+          return;
+      }
+      setScannerActive(true);
+  };
+
+  const handleConfirmDriverInfo = () => {
+      if (!driverName.trim() || !driverPlate.trim() || !paqueteria.trim()) {
+          alert('Por favor, ingresa el nombre del conductor, las placas y la paquetería.');
+          return;
+      }
+      setIsDriverModalOpen(false);
+  };
+
   const handleOpenFinalizeModal = () => {
       if (returnsList.length === 0) {
           showAppMessage('No hay códigos en la lista.', 'warning');
@@ -421,8 +490,8 @@ export default function DevolucionesPage() {
   };
 
   const handleFinalizeReturns = async () => {
-      if (!driverName.trim() || !driverPlate.trim()) {
-          alert("Por favor, ingresa el nombre del conductor y las placas.");
+      if (!driverName.trim() || !driverPlate.trim() || !paqueteria.trim()) {
+          alert("Por favor, ingresa el nombre del conductor, las placas y la paquetería.");
           return;
       }
       setLoading(true);
@@ -483,8 +552,14 @@ export default function DevolucionesPage() {
           setReturnsList([]);
           scannedCodesSetRef.current.clear();
           localStorage.removeItem(STORAGE_KEY);
-          setDriverName(''); setDriverPlate('');
+          localStorage.removeItem(DRIVER_STORAGE_KEY);
+          setDriverName(''); setDriverPlate(''); setPaqueteria('');
           setIsFinalizeModalOpen(false);
+          setScannerActive(false);
+          // Termina el proceso de devoluciones: se piden los datos del transporte
+          // de nuevo para la siguiente vuelta, en vez de arrastrar al conductor
+          // anterior a un lote completamente distinto.
+          setIsDriverModalOpen(true);
       } catch (e: any) {
           playWarningSound();
           showModalNotification('Error al Guardar', e.message, 'destructive');
@@ -609,7 +684,7 @@ export default function DevolucionesPage() {
                         {!scannerActive && <p className="text-white/40 font-bold uppercase text-xs">Escáner Inactivo</p>}
                     </div>
                     <div className="mt-4 flex gap-2 justify-center">
-                      <Button onClick={() => setScannerActive(true)} disabled={scannerActive || loading || !encargado} className="bg-blue-600 hover:bg-blue-700 h-10 px-8">Iniciar</Button>
+                      <Button onClick={handleStartScanner} disabled={scannerActive || loading || !encargado || !driverName.trim() || !driverPlate.trim() || !paqueteria.trim()} className="bg-blue-600 hover:bg-blue-700 h-10 px-8">Iniciar</Button>
                       <Button onClick={() => window.location.reload()} variant="destructive" className="h-10 px-8" disabled={!scannerActive}>Detener</Button>
                     </div>
                   </div>
@@ -703,25 +778,55 @@ export default function DevolucionesPage() {
           </DialogContent>
       </Dialog>
 
-      <Dialog open={isFinalizeModalOpen} onOpenChange={setIsFinalizeModalOpen}>
-          <DialogContent className="sm:max-w-md rounded-2xl">
+      {/* Datos del transporte: se piden antes de escanear (botón "Iniciar"), no
+          aquí al final — este modal ya no vuelve a pedirlos, solo confirma con
+          lo que ya se capturó (y que sobrevive un refresh vía localStorage). */}
+      <Dialog open={isDriverModalOpen} onOpenChange={() => {}}>
+          <DialogContent className="sm:max-w-md rounded-2xl" onInteractOutside={(e) => e.preventDefault()} onEscapeKeyDown={(e) => e.preventDefault()}>
               <DialogHeader>
-                  <DialogTitle className="flex items-center gap-2 text-starbucks-green"><Truck className="h-6 w-6" /> Finalizar Transporte</DialogTitle>
-                  <DialogDescription>Se procesarán {returnsList.length} devoluciones.</DialogDescription>
+                  <DialogTitle className="flex items-center gap-2 text-starbucks-green"><Truck className="h-6 w-6" /> Datos del Transporte</DialogTitle>
+                  <DialogDescription>Antes de escanear, registra quién transporta esta vuelta de devoluciones.</DialogDescription>
               </DialogHeader>
               <div className="grid gap-4 py-4">
                   <div className="space-y-2">
                       <Label htmlFor="driver-name" className="text-xs font-black uppercase text-gray-400">Nombre del Conductor</Label>
-                      <Input id="driver-name" value={driverName} onChange={(e) => setDriverName(e.target.value)} placeholder="Ej. Juan Pérez" className="h-12 rounded-xl font-bold uppercase" />
+                      <Input id="driver-name" value={driverName} onChange={(e) => setDriverName(e.target.value)} placeholder="Ej. Juan Pérez" className="h-12 rounded-xl font-bold uppercase" onKeyDown={(e) => e.key === 'Enter' && handleConfirmDriverInfo()} />
                   </div>
                   <div className="space-y-2">
                       <Label htmlFor="driver-plate" className="text-xs font-black uppercase text-gray-400">Placas del Vehículo</Label>
-                      <Input id="driver-plate" value={driverPlate} onChange={(e) => setDriverPlate(e.target.value)} placeholder="Ej. ABC-1234" className="h-12 rounded-xl font-mono font-bold uppercase" />
+                      <Input id="driver-plate" value={driverPlate} onChange={(e) => setDriverPlate(e.target.value)} placeholder="Ej. ABC-1234" className="h-12 rounded-xl font-mono font-bold uppercase" onKeyDown={(e) => e.key === 'Enter' && handleConfirmDriverInfo()} />
+                  </div>
+                  <div className="space-y-2">
+                      <Label htmlFor="paqueteria" className="text-xs font-black uppercase text-gray-400">Paquetería</Label>
+                      <Combobox
+                          options={paqueteriaOptions}
+                          value={paqueteria}
+                          onValueChange={setPaqueteria}
+                          placeholder="Selecciona paquetería..."
+                          emptyMessage="No hay paqueterías registradas."
+                          buttonClassName="h-12 rounded-xl font-bold uppercase"
+                      />
                   </div>
               </div>
+              <DialogFooter>
+                  <Button onClick={handleConfirmDriverInfo} disabled={!driverName.trim() || !driverPlate.trim() || !paqueteria.trim()} className="w-full h-12 rounded-xl bg-starbucks-green hover:bg-starbucks-dark text-white font-black">
+                      Continuar
+                  </Button>
+              </DialogFooter>
+          </DialogContent>
+      </Dialog>
+
+      <Dialog open={isFinalizeModalOpen} onOpenChange={setIsFinalizeModalOpen}>
+          <DialogContent className="sm:max-w-md rounded-2xl">
+              <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2 text-starbucks-green"><Truck className="h-6 w-6" /> Finalizar Transporte</DialogTitle>
+                  <DialogDescription>
+                      Se procesarán {returnsList.length} devoluciones a nombre de <span className="font-bold text-black">{driverName}</span>, placas <span className="font-bold text-black font-mono">{driverPlate}</span>, paquetería <span className="font-bold text-black">{paqueteria}</span>.
+                  </DialogDescription>
+              </DialogHeader>
               <DialogFooter className="flex flex-col sm:flex-row gap-2">
                   <Button variant="outline" onClick={() => setIsFinalizeModalOpen(false)} className="w-full sm:w-auto h-12 rounded-xl font-bold">Cancelar</Button>
-                  <Button onClick={handleFinalizeReturns} disabled={loading || !driverName.trim() || !driverPlate.trim()} className="w-full sm:w-auto bg-starbucks-green hover:bg-starbucks-dark text-white font-black h-12 px-8 rounded-xl shadow-lg shadow-starbucks-green/20 transition-all">
+                  <Button onClick={handleFinalizeReturns} disabled={loading} className="w-full sm:w-auto bg-starbucks-green hover:bg-starbucks-dark text-white font-black h-12 px-8 rounded-xl shadow-lg shadow-starbucks-green/20 transition-all">
                       {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : 'CONFIRMAR Y GUARDAR'}
                   </Button>
               </DialogFooter>
