@@ -50,7 +50,7 @@ import { Switch } from '@/components/ui/switch';
 import { Combobox } from '@/components/ui/combobox';
 import { useAuth } from '@/components/AuthProvider';
 import { Textarea } from '@/components/ui/textarea';
-import { cn, getCameraCapabilitiesWithRetry } from '@/lib/utils';
+import { cn, getCameraCapabilitiesWithRetry, withTimeout } from '@/lib/utils';
 
 type ScanResult = {
     name: string | null;
@@ -138,6 +138,11 @@ export default function CalificarPage() {
   const readerRef = useRef<HTMLDivElement>(null);
   const lastScanTimeRef = useRef(Date.now());
   const MIN_SCAN_INTERVAL = 2000;
+  // Si el token de sesión queda a medio refrescar (celular en segundo plano un
+  // rato, red inestable), una consulta puede quedarse colgada sin resolver ni
+  // rechazar. Sin este timeout, el finally de onScanSuccess nunca corre, `loading`
+  // queda pegado en true y la pantalla deja de aceptar escaneos hasta cerrar sesión.
+  const SCAN_QUERY_TIMEOUT_MS = 15000;
   const massScannedCodesRef = useRef(new Set<string>());
   const physicalScannerInputRef = useRef<HTMLInputElement | null>(null);
   const bufferRef = useRef('');
@@ -197,13 +202,30 @@ export default function CalificarPage() {
   useEffect(() => {
     if (!user?.email) return;
 
-    const fetchNameFromEmployees = async () => {
+    const fetchNameFromEmployees = async (isRetry = false) => {
         try {
-            const { data, error } = await supabaseEtiquetas
+            const { data, error } = await withTimeout(supabaseEtiquetas
                 .from('empleados')
                 .select('nombres, apellido_paterno, apellido_materno')
                 .eq('email', user.email)
-                .maybeSingle();
+                .maybeSingle(), 15000);
+
+            // Antes se ignoraba `error` por completo: un token vencido devuelve
+            // data=null aquí, y sin `profile.name` de respaldo el encargado se
+            // quedaba en blanco para siempre, sin ningún reintento. Si hay error,
+            // se fuerza un refreshSession() y se reintenta una vez — si el token
+            // de verdad estaba vencido, esto lo repara sin necesidad de cerrar sesión.
+            if (error) {
+                if (!isRetry) {
+                    console.warn("[calificar] Error trayendo encargado, reintentando tras refrescar sesión:", error);
+                    const { error: refreshError } = await supabaseEtiquetas.auth.refreshSession();
+                    if (!refreshError) {
+                        await fetchNameFromEmployees(true);
+                        return;
+                    }
+                }
+                throw error;
+            }
 
             if (data) {
                 const fullName = [data.nombres, data.apellido_paterno, data.apellido_materno].filter(Boolean).join(' ').toUpperCase();
@@ -371,10 +393,10 @@ export default function CalificarPage() {
     }
     
     try {
-        const { data: personalData, error: personalError } = await supabaseEtiquetas
+        const { data: personalData, error: personalError } = await withTimeout(supabaseEtiquetas
             .from('personal')
             .select('name, product, status, details, sku, quantity, id_empleado_entrega')
-            .eq('code', finalCode);
+            .eq('code', finalCode), SCAN_QUERY_TIMEOUT_MS);
 
         if (personalError) throw personalError;
 
@@ -413,10 +435,10 @@ export default function CalificarPage() {
                 }
             }
         } else {
-            const { data: etiquetaData, error: etiquetaError } = await supabaseEtiquetas
+            const { data: etiquetaData, error: etiquetaError } = await withTimeout(supabaseEtiquetas
                 .from('etiquetas_i')
                 .select('code, sku, product, quantity, organization, sales_num')
-                .eq('code', finalCode);
+                .eq('code', finalCode), SCAN_QUERY_TIMEOUT_MS);
 
             if (etiquetaError) throw etiquetaError;
 
@@ -462,7 +484,7 @@ export default function CalificarPage() {
                         name_cali: encargado || 'N/A',
                         id_empleado_calificada: user?.id ?? null
                     };
-                    const { error: insertError } = await supabaseEtiquetas.from('personal').insert(newPersonalRecord);
+                    const { error: insertError } = await withTimeout(supabaseEtiquetas.from('personal').insert(newPersonalRecord), SCAN_QUERY_TIMEOUT_MS);
                     if (insertError) throw insertError;
                     setLastScannedResult(result);
                     showAppMessage('Etiqueta no asignada, calificada automáticamente.', 'success');

@@ -8,7 +8,7 @@ import { Loader2, Database, WifiOff, RefreshCw, UserCircle2, Save, UserCheck } f
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Input } from '@/components/ui/input';
-import { cn } from '@/lib/utils';
+import { cn, withTimeout } from '@/lib/utils';
 
 export const ROUTE_PERMISSIONS: Record<string, string[]> = {
   '/': ['BAR_MANAGER'],
@@ -50,24 +50,12 @@ function writeAuthCache(cache: AuthCache) {
   } catch {}
 }
 
-// El service worker cachea las llamadas a Supabase con su propio timeout (10s),
-// pero eso vive en su capa: si la petición se cuelga ahí (o en cualquier otro
-// punto de la red) sin llegar a resolver ni rechazar, el catch de quien la llama
-// nunca se dispara y la UI queda cargando para siempre. Este timeout garantiza
-// que, cuelgue donde cuelgue, la promesa siempre termine rechazando. Los `ms` que
-// se usan al llamarlo deben ser mayores a esos 10s del SW: si son más cortos, una
-// conexión lenta-pero-real pierde la carrera contra este timeout antes de que el
-// SW complete su propio intento de red, y se reporta "sin conexión" por error.
-function withTimeout<T>(promise: PromiseLike<T>, ms: number): Promise<T> {
-  return Promise.race([
-    Promise.resolve(promise),
-    new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Tiempo de espera agotado')), ms)),
-  ]);
-}
-
-// Debe quedar por encima de los 10s del NetworkFirst del service worker (ver
-// comentario arriba) — un único lugar para ese invariante en vez de repetir
-// el número en cada llamada a withTimeout.
+// Debe quedar por encima de los 10s del NetworkFirst del service worker: si la
+// petición se cuelga ahí (o en cualquier otro punto de la red) sin resolver ni
+// rechazar, el catch de quien la llama nunca se dispara y la UI queda cargando
+// para siempre. `withTimeout` (en lib/utils) garantiza que la promesa siempre
+// termine rechazando — un único lugar para ese invariante de 15s en vez de
+// repetir el número en cada llamada.
 const SUPABASE_TIMEOUT_MS = 15000;
 
 type AuthContextType = {
@@ -268,6 +256,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       subscription.unsubscribe();
     };
   }, [syncProfileAndRoles, router]);
+
+  // supabase-js reintenta refrescar el token solo al recuperar visibilidad de
+  // la pestaña, pero si ese intento falla con un error "reintentable" (p. ej.
+  // un hipo de red mientras el celular estuvo en segundo plano), se limita a
+  // loguearlo y deja la sesión vencida tal cual — no dispara SIGNED_OUT ni
+  // TOKEN_REFRESHED, así que ninguna pantalla se entera y todo sigue "logueado"
+  // pero con cada consulta fallando en silencio hasta cerrar sesión a mano.
+  // Forzar un refreshSession() propio aquí le da una segunda oportunidad real:
+  // si funciona, onAuthStateChange arriba dispara TOKEN_REFRESHED y resincroniza.
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        supabaseEtiquetas.auth.refreshSession().catch(err => {
+          console.error('[AuthProvider] No se pudo refrescar la sesión al volver a la pestaña:', err);
+        });
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, []);
 
   const signOut = async () => {
     setLoading(true);
