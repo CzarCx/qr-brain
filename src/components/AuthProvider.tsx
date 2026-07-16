@@ -20,6 +20,7 @@ export const ROUTE_PERMISSIONS: Record<string, string[]> = {
   '/sewing-tickets': ['SEWING_MANAGER'],
   '/sewing-tickets/impresos': ['SEWING_MANAGER'],
   '/sewing-tickets/status': ['SEWING_MANAGER'],
+  '/insumos': ['WAREHOUSE_MANAGER'],
   '/registro-personal': ['ADMIN'],
   '/main': [],
 };

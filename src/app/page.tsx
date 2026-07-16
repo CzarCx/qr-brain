@@ -16,7 +16,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Zap, ZoomIn, UserPlus, PlusCircle, Clock, AlertTriangle, Wifi, WifiOff, Search, XCircle, CheckCircle, Trash2, Lock, Unlock, FileText, Printer, Download, FileUp, FileSpreadsheet, Loader2, Copy, ChevronDown, ChevronUp, Users, Info, ShoppingCart, UserCheck } from 'lucide-react';
+import { Zap, ZoomIn, UserPlus, PlusCircle, Clock, AlertTriangle, Wifi, WifiOff, Search, XCircle, CheckCircle, Trash2, Lock, Unlock, FileText, Printer, Download, FileUp, FileSpreadsheet, Loader2, Copy, ChevronDown, ChevronUp, Users, Info, ShoppingCart, UserCheck, ScanLine } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Combobox } from '@/components/ui/combobox';
 import {
@@ -674,6 +674,13 @@ export default function Home() {
       scannerSectionRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
   }, [encargado, isMobile]);
+
+  // Scroll manual al escáner (botón flotante). A diferencia de los scrolls
+  // automáticos de arriba, este aplica en cualquier dispositivo: lo dispara el
+  // usuario explícitamente, no una condición de layout.
+  const scrollToScanner = useCallback(() => {
+    scannerSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, []);
 
   useEffect(() => {
     if (!selectedPersonal) {
@@ -2813,6 +2820,20 @@ const deleteRow = (codeToDelete: string) => {
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+
+            {/* Botón flotante: centra el escáner en pantalla desde cualquier punto
+                de la página. Se coloca por encima del FAB del layout (bottom-6
+                right-4 en móvil) para no encimarse con él. */}
+            <button
+                type="button"
+                onClick={scrollToScanner}
+                title="Ir al escáner"
+                aria-label="Ir al escáner"
+                className="fixed bottom-24 right-4 md:bottom-6 z-[99] flex items-center gap-2 rounded-full bg-starbucks-green px-4 py-3 text-white shadow-lg shadow-starbucks-green/30 transition-transform hover:scale-105 active:scale-95 hover:bg-starbucks-dark"
+            >
+                <ScanLine className="h-5 w-5" />
+                <span className="text-xs font-black uppercase tracking-wider hidden sm:inline">Escáner</span>
+            </button>
         </main>
     </>
   );

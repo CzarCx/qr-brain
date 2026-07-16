@@ -4,7 +4,7 @@ import Link from 'next/link';
 import Head from 'next/head';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { UserCog, UserCheck, ClipboardList, ScanLine, PackageCheck, UserPlus, Undo2, Boxes, Scissors } from 'lucide-react';
+import { UserCog, UserCheck, ClipboardList, ScanLine, PackageCheck, UserPlus, Undo2, Boxes, Scissors, Tags } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 
 /**
@@ -66,6 +66,14 @@ const navItems = [
     icon: <Undo2 className="h-8 w-8 text-starbucks-green" />,
     cta: 'Ir a Devoluciones',
     requiredRole: 'DELIVERY_MANAGER',
+  },
+  {
+    href: '/insumos',
+    title: 'Control de Insumos',
+    description: 'Genera, asigna y renueva insumos con trazabilidad por código.',
+    icon: <Tags className="h-8 w-8 text-starbucks-green" />,
+    cta: 'Ir a Insumos',
+    requiredRole: 'WAREHOUSE_MANAGER',
   },
   {
     href: '/registro-personal',

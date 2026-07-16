@@ -101,16 +101,33 @@ export function useSewingTickets() {
         ? new Date(printDateSource).toLocaleDateString('en-CA', { timeZone: 'America/Mexico_City' }) 
         : null;
 
-      // --- SINCRONIZACIÓN AUTOMÁTICA CON TABLA 'PERSONAL' (Etiquetas DB) ---
+      // --- VALIDACIÓN + SINCRONIZACIÓN CON TABLA 'PERSONAL' (Etiquetas DB) ---
       const numericCode = parseFloat(finalBarcode);
 
       if (!isNaN(numericCode)) {
-        const { data: personalCheckRows } = await supabaseEtiquetas
+        const { data: personalCheckRows, error: personalCheckError } = await supabaseEtiquetas
             .from('personal')
             .select('code')
             .eq('code', finalBarcode);
 
-        if (!personalCheckRows || personalCheckRows.length === 0) {
+        if (personalCheckError) {
+            throw new Error(`Error al verificar en 'personal': ${personalCheckError.message}`);
+        }
+
+        // VALIDACIÓN CRÍTICA: si el código YA existe en 'personal' (producción),
+        // se rechaza el escaneo por completo — no se registra en ninguna tabla.
+        if (personalCheckRows && personalCheckRows.length > 0) {
+            toast({
+                variant: 'destructive',
+                title: 'Código Ya Registrado',
+                description: `El código ${finalBarcode} ya existe en los registros de 'personal' (producción). No se puede volver a escanear.`,
+            });
+            setLoading(false);
+            return false;
+        }
+
+        // El código no existe en 'personal' → se sincroniza como registro nuevo.
+        {
             // Replicar lógica de obtención de tiempo estimado (Sumando tiempos para múltiples SKUs)
             let totalEstimatedTime = 0;
             const skusToProcess = allSkus.split(' | ');

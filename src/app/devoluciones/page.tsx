@@ -141,11 +141,9 @@ export default function DevolucionesPage() {
       }
     }
 
-    // Recuperar datos del transporte (conductor/placas). Se resuelve en el mismo
-    // efecto de montaje (no en uno reactivo aparte) para que abrir el modal de
-    // captura no compita en una carrera contra la restauración: si ya había
-    // datos guardados, nunca debe llegar a parpadear el modal.
-    let hasDriverData = false;
+    // Recuperar datos del transporte (conductor/placas) para precargar el modal.
+    // El modal SIEMPRE se abre al entrar a /devoluciones: si había datos guardados
+    // solo sirven para precargar los campos y que baste con confirmar o editar.
     const savedDriver = localStorage.getItem(DRIVER_STORAGE_KEY);
     if (savedDriver) {
       try {
@@ -154,13 +152,12 @@ export default function DevolucionesPage() {
           setDriverName(parsedDriver.driverName);
           setDriverPlate(parsedDriver.driverPlate);
           setPaqueteria(parsedDriver.paqueteria);
-          hasDriverData = true;
         }
       } catch (e) {
         console.error("Error al recuperar datos del transporte:", e);
       }
     }
-    if (!hasDriverData) setIsDriverModalOpen(true);
+    setIsDriverModalOpen(true);
   }, []);
 
   // Guardar en LocalStorage cada vez que cambie la lista
@@ -511,6 +508,7 @@ export default function DevolucionesPage() {
                       name_inc: user?.id,
                       driver_name: driverName,
                       driver_plate: driverPlate,
+                      transportista: paqueteria,
                       date_entregado: new Date().toISOString(),
                       code: item.code,
                       registro: !item.isUnknown,
@@ -536,6 +534,7 @@ export default function DevolucionesPage() {
                   name_inc: user?.id,
                   driver_name: driverName,
                   driver_plate: driverPlate,
+                  transportista: paqueteria,
                   date_entregado: new Date().toISOString(),
                   sku: item.sku,
                   tienda: resolveTienda(item.organization),
@@ -685,6 +684,7 @@ export default function DevolucionesPage() {
                     </div>
                     <div className="mt-4 flex gap-2 justify-center">
                       <Button onClick={handleStartScanner} disabled={scannerActive || loading || !encargado || !driverName.trim() || !driverPlate.trim() || !paqueteria.trim()} className="bg-blue-600 hover:bg-blue-700 h-10 px-8">Iniciar</Button>
+                      <Button onClick={() => setIsDriverModalOpen(true)} variant="outline" className="h-10 px-4 gap-2" disabled={scannerActive} title="Editar datos del transporte"><Truck className="h-4 w-4" /> Transporte</Button>
                       <Button onClick={() => window.location.reload()} variant="destructive" className="h-10 px-8" disabled={!scannerActive}>Detener</Button>
                     </div>
                   </div>

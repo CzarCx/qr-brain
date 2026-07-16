@@ -19,7 +19,8 @@ import {
   User as UserIcon,
   LayoutGrid,
   ExternalLink,
-  ShieldAlert
+  ShieldAlert,
+  Tags
 } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
@@ -51,6 +52,7 @@ const mainNavLinks = [
   { href: '/devoluciones', label: 'Devolución', icon: <Undo2 className="h-5 w-5" /> },
   { href: '/sewing-tickets', label: 'Costura', icon: <Scissors className="h-5 w-5" /> },
   { href: '/sewing-tickets/status', label: 'Status Rápido', icon: <Settings2 className="h-5 w-5" /> },
+  { href: '/insumos', label: 'Insumos', icon: <Tags className="h-5 w-5" /> },
 ];
 
 const externalLinks = [
