@@ -41,10 +41,12 @@ import {
     Download, 
     Clock, 
     FileWarning, 
-    Search, 
+    Search,
     Loader2,
-    Check
+    Check,
+    Hourglass
 } from 'lucide-react';
+import Link from 'next/link';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Switch } from '@/components/ui/switch';
 import { Combobox } from '@/components/ui/combobox';
@@ -65,7 +67,11 @@ type ScanResult = {
     organization?: string | null;
     sales_num?: string | number | null;
     isNew?: boolean;
-    id_empleado_entrega?: string | null;
+    // Operario que despachó/empaquetó la etiqueta (personal.id_empleado_despacha),
+    // que es a quien se le atribuye la incidencia. No confundir con
+    // id_empleado_entrega: ese lo escribe /entrega al entregar, o sea después de QC,
+    // así que al calificar todavía está en null.
+    id_empleado_despacha?: string | null;
 };
 
 type ReportReason = {
@@ -90,6 +96,9 @@ type InventoryCategory = {
 };
 
 const STORAGE_KEY = 'calificar_session_list';
+// La operación es en México: fecha y hora se fijan a esta zona en vez de depender
+// de la del equipo (o de UTC), para que ambas describan el mismo instante local.
+const MX_TIMEZONE = 'America/Mexico_City';
 
 export default function CalificarPage() {
   const { profile, user } = useAuth();
@@ -126,11 +135,17 @@ export default function CalificarPage() {
   // busca nunca modifique la selección real; esta solo cambia al elegir un
   // elemento de la lista.
   const [subcategoriaSearchDraft, setSubcategoriaSearchDraft] = useState('');
+  // Subcategoría del SKU solicitado, resuelta al abrir el modal. Se guarda aparte
+  // de `searchQueryDespachado` porque esa última arranca con este mismo valor como
+  // default pero el operador la cambia por lo que encontró físicamente; sin este
+  // estado, el producto solicitado se perdería al momento de guardar.
+  const [subcatSolicitada, setSubcatSolicitada] = useState<string | null>(null);
   const [isInventoryPopoverOpen, setIsInventoryPopoverOpen] = useState(false);
   const [piezasDespachadas, setPiezasDespachadas] = useState('');
   const [observacionesIncidencia, setObservacionesIncidencia] = useState('');
   const [inventoryList, setInventoryList] = useState<InventoryCategory[]>([]);
   const [loadingInventory, setLoadingInventory] = useState(false);
+  const [retrabajosAbiertos, setRetrabajosAbiertos] = useState(0);
 
   const messageTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -244,11 +259,11 @@ export default function CalificarPage() {
   const fetchInventoryItems = useCallback(async (query: string = '') => {
     setLoadingInventory(true);
     try {
-        // inventory_master puede tener muchas más filas que el límite de página
-        // de Supabase/PostgREST (por defecto 1000), y una subcategoría podría
-        // existir solo en filas más allá de la primera página. Se pagina con
-        // .range() hasta agotar la tabla (o el filtro) para no perder ninguna,
-        // en vez de confiar en un único .limit().
+        // sku_m es la fuente autoritativa de subcategorías (una por SKU), y puede
+        // tener muchas más filas que el límite de página de Supabase/PostgREST
+        // (por defecto 1000): una subcategoría podría existir solo en filas más
+        // allá de la primera página. Se pagina con .range() hasta agotar la tabla
+        // (o el filtro) para no perder ninguna, en vez de confiar en un .limit().
         const PAGE_SIZE = 1000;
         const MAX_PAGES = 50; // salvaguarda: hasta 50,000 filas
         const subcategorySet = new Set<string>();
@@ -257,19 +272,19 @@ export default function CalificarPage() {
 
         while (page < MAX_PAGES) {
             let queryBuilder = supabaseEtiquetas
-                .from('inventory_master')
-                .select('subcategoria')
+                .from('sku_m')
+                .select('sub_cat')
                 .range(from, from + PAGE_SIZE - 1);
 
             if (query) {
-                queryBuilder = queryBuilder.ilike('subcategoria', `%${query}%`);
+                queryBuilder = queryBuilder.ilike('sub_cat', `%${query}%`);
             }
 
             const { data, error } = await queryBuilder;
             if (error) throw error;
 
             (data ?? []).forEach((item: any) => {
-                if (item.subcategoria) subcategorySet.add(item.subcategoria);
+                if (item.sub_cat) subcategorySet.add(item.sub_cat);
             });
 
             if (!data || data.length < PAGE_SIZE) break;
@@ -395,7 +410,7 @@ export default function CalificarPage() {
     try {
         const { data: personalData, error: personalError } = await withTimeout(supabaseEtiquetas
             .from('personal')
-            .select('name, product, status, details, sku, quantity, id_empleado_entrega')
+            .select('name, product, status, details, sku, quantity, id_empleado_despacha')
             .eq('code', finalCode), SCAN_QUERY_TIMEOUT_MS);
 
         if (personalError) throw personalError;
@@ -416,8 +431,12 @@ export default function CalificarPage() {
                 details: firstP.details,
                 sku: firstP.sku,
                 quantity: firstP.quantity,
-                id_empleado_entrega: firstP.id_empleado_entrega,
+                id_empleado_despacha: firstP.id_empleado_despacha,
             };
+
+            // Un paquete que vuelve de retrabajo se avisa distinto: no es un escaneo
+            // normal, es una recalificación tras haberse corregido una discrepancia.
+            const vieneDeRetrabajo = firstP.status === 'RETRABAJANDO';
 
             if (firstP.status === 'CALIFICADO') {
                 showAppMessage(`Etiqueta ya procesada (Estado: ${firstP.status}).`, 'warning');
@@ -425,10 +444,19 @@ export default function CalificarPage() {
             } else {
                  if (scanMode === 'individual') {
                     setLastScannedResult(result);
-                    showAppMessage('Etiqueta confirmada correctamente.', 'success');
+                    if (vieneDeRetrabajo) {
+                        playWarningSound();
+                        showAppMessage('Paquete Retrabajado: volver a calificar.', 'warning');
+                    } else {
+                        showAppMessage('Etiqueta confirmada correctamente.', 'success');
+                    }
                     setIsRatingModalOpen(true);
                 } else {
-                    if (firstP.status === 'REPORTADO') showAppMessage(`Añadido (Reportado): ${finalCode}`, 'info');
+                    if (vieneDeRetrabajo) {
+                        playWarningSound();
+                        showAppMessage(`Paquete Retrabajado: volver a calificar (${finalCode}).`, 'warning');
+                    }
+                    else if (firstP.status === 'REPORTADO') showAppMessage(`Añadido (Reportado): ${finalCode}`, 'info');
                     else showAppMessage(`Añadido a la lista: ${finalCode}`, 'success');
                     setMassScannedCodes(prev => [result, ...prev]);
                     massScannedCodesRef.current.add(finalCode);
@@ -614,26 +642,60 @@ export default function CalificarPage() {
     }
   }
 
+  /**
+   * Cuenta los retrabajos abiertos para el badge del encabezado. Usa `head: true`:
+   * solo interesa el número, no traer las filas.
+   */
+  const refreshRetrabajosAbiertos = useCallback(async () => {
+    const { count, error } = await supabaseEtiquetas
+      .from('registro_incidencias_en_paquetes_listos_para_entrega')
+      .select('id', { count: 'exact', head: true })
+      .is('fin_retrabajo', null);
+    if (!error) setRetrabajosAbiertos(count ?? 0);
+  }, []);
+
+  useEffect(() => { refreshRetrabajosAbiertos(); }, [refreshRetrabajosAbiertos]);
+
+  /**
+   * Traduce un SKU a su subcategoría: primero busca en sku_m; si no está ahí, el
+   * SKU puede ser un alterno, así que se resuelve a su maestro vía sku_alterno y
+   * se reintenta. Devuelve null si no se puede resolver (falla en silencio).
+   */
+  const resolveSubcategoria = useCallback(async (sku: string): Promise<string | null> => {
+      try {
+          const { data } = await supabaseEtiquetas.from('sku_m').select('sub_cat').eq('sku', sku).maybeSingle();
+          if (data?.sub_cat) return data.sub_cat;
+
+          const { data: alt } = await supabaseEtiquetas
+              .from('sku_alterno').select('sku_mdr').eq('sku', sku).maybeSingle();
+          if (alt?.sku_mdr) {
+              const { data: mdr } = await supabaseEtiquetas
+                  .from('sku_m').select('sub_cat').eq('sku_mdr', alt.sku_mdr).maybeSingle();
+              if (mdr?.sub_cat) return mdr.sub_cat;
+          }
+      } catch (e) {
+          console.error('Error resolviendo subcategoría en sku_m/sku_alterno:', e);
+      }
+      return null;
+  }, []);
+
   const handleOpenDiscrepancyModal = async (item: ScanResult) => {
       setItemToReport(item);
       setSearchQueryDespachado('');
       setSubcategoriaSearchDraft('');
+      setSubcatSolicitada(null);
       setPiezasDespachadas('');
       setObservacionesIncidencia('');
       setIsDiscrepancyModalOpen(true);
 
-      // Precarga la subcategoría esperada según el SKU solicitado, como
-      // referencia/default — el operador puede elegir otra si lo que
-      // encontró físicamente es distinto. Falla en silencio: es una ayuda,
-      // no un requisito para poder reportar la discrepancia.
+      // La subcategoría del SKU solicitado cumple dos papeles: se guarda tal cual
+      // en `producto_solicitado`, y además sirve de default editable del producto
+      // despachado (el operador la cambia si encontró algo distinto).
       if (item.sku) {
-          try {
-              const { data } = await supabaseEtiquetas.from('sku_m').select('sub_cat').eq('sku', item.sku).maybeSingle();
-              if (data?.sub_cat) {
-                  setSearchQueryDespachado(data.sub_cat);
-              }
-          } catch (e) {
-              console.error('Error buscando subcategoría esperada en sku_m:', e);
+          const sub = await resolveSubcategoria(item.sku);
+          if (sub) {
+              setSubcatSolicitada(sub);
+              setSearchQueryDespachado(sub);
           }
       }
   };
@@ -680,21 +742,47 @@ export default function CalificarPage() {
           const pSolicitadas = Number(itemToReport.quantity);
           const pDespachadas = Number(piezasDespachadas);
 
+          // `id_producto_solicitado` es bigint (sin FK) y el SKU del sistema suele ser
+          // texto (ej. MUR_HOG_LAMB_...): mandarlo tal cual reventaba el insert con
+          // 22P02 y abortaba el reporte completo. Solo se manda cuando el SKU es
+          // numérico; el producto en sí queda descrito en `producto_solicitado`.
+          const skuTexto = String(itemToReport.sku ?? '').trim();
+          const skuEsNumerico = /^\d+$/.test(skuTexto);
+
+          // Si el SKU no tiene subcategoría en sku_m/sku_alterno, se guarda el SKU
+          // crudo como respaldo para no perder la referencia del producto, y se
+          // anota en observaciones: sin esa nota, el valor parecería una
+          // subcategoría más y nadie sabría que el catálogo tiene un hueco.
+          const sinSubcategoria = !subcatSolicitada && !!skuTexto;
+          const observacionesFinal = [
+              observacionesIncidencia?.trim() || '',
+              sinSubcategoria ? `[Sin subcategoría asociada al SKU: ${skuTexto}]` : '',
+          ].filter(Boolean).join(' ');
+
           const record = {
-              fecha: now.toISOString().split('T')[0],
-              hora: now.toLocaleTimeString('en-GB', { hour12: false }),
-              id_producto_solicitado: itemToReport.sku ?? null,
-              // bigint: no se puede mandar la subcategoria (texto) directo.
-              // Pendiente saber a qué tabla referencia para resolver el id real.
-              id_producto_despachado: null,
+              // Ambos se fijan a hora de México. Antes `fecha` salía en UTC y `hora`
+              // en la hora local del equipo: por la noche la fecha ya había avanzado
+              // al día siguiente mientras la hora seguía en el día anterior, así que
+              // el par no representaba un instante real. `inicio_retrabajo` es la
+              // fuente confiable (timestamptz); fecha/hora quedan como referencia
+              // legible y ya coherente entre sí.
+              fecha: now.toLocaleDateString('en-CA', { timeZone: MX_TIMEZONE }),
+              hora: now.toLocaleTimeString('en-GB', { timeZone: MX_TIMEZONE, hour12: false }),
+              inicio_retrabajo: now.toISOString(),
+              id_producto_solicitado: skuEsNumerico ? Number(skuTexto) : null,
+              // Par simétrico de columnas text: la subcategoría del SKU solicitado
+              // contra la que el operador encontró físicamente.
+              producto_solicitado: subcatSolicitada ?? (skuTexto || null),
+              producto_despachado: searchQueryDespachado || null,
               piezas_solicitadas: isNaN(pSolicitadas) ? 0 : pSolicitadas,
               piezas_despachadas: isNaN(pDespachadas) ? 0 : pDespachadas,
-              observaciones: observacionesIncidencia || '',
-              id_empleado: itemToReport.id_empleado_entrega ?? null,
+              observaciones: observacionesFinal,
+              id_empleado: itemToReport.id_empleado_despacha ?? null,
               id_capturista: null,
               id_reportador: user?.id ?? null,
               bar_code: itemToReport.code,
-              firma_empleado: false
+              // Columna text, no boolean: sin firma capturada se deja en null.
+              firma_empleado: null,
           };
 
           const { error: insError } = await supabaseEtiquetas
@@ -703,21 +791,60 @@ export default function CalificarPage() {
 
           if (insError) throw new Error(`Error de base de datos: ${insError.message}`);
 
+          // El paquete vuelve a producción a corregirse: queda RETRABAJANDO, no
+          // REPORTADO. Al reescanearlo en QC, el modal de calificación se abre
+          // igual que con cualquier estatus distinto de CALIFICADO, así que
+          // "Aceptar" cierra el ciclo pasándolo a CALIFICADO.
+          const detallesIncidencia = `DISCREPANCIA EN QC: Encontrado ${piezasDespachadas} pzas. Subcategoría: ${searchQueryDespachado}`;
+
           const { data: updateData, error: updateError } = await supabaseEtiquetas.from('personal').update({
-              details: `DISCREPANCIA EN QC: Encontrado ${piezasDespachadas} pzas. Subcategoría: ${searchQueryDespachado}`,
-              status: 'REPORTADO',
+              details: detallesIncidencia,
+              status: 'RETRABAJANDO',
               id_empleado_calificada: user?.id ?? null
           }).eq('code', itemToReport.code).select('code');
 
-          if (updateError) throw new Error(`La incidencia se guardó, pero no se pudo marcar el paquete como reportado: ${updateError.message}`);
-          if (!updateData || updateData.length === 0) throw new Error('La incidencia se guardó, pero el paquete no se marcó como reportado (0 filas afectadas). Verifica permisos.');
+          if (updateError) throw new Error(`La incidencia se guardó, pero no se pudo marcar el paquete como retrabajando: ${updateError.message}`);
 
-          alert('Incidencia guardada exitosamente y paquete reportado.');
+          // En modo masivo, una etiqueta escaneada que aún no existía en `personal`
+          // (isNew) solo se inserta al pulsar "Calificar Todos". Si se reporta la
+          // discrepancia antes de eso, el UPDATE de arriba no encuentra ninguna fila
+          // y el paquete se quedaría sin marcar. Se crea aquí en su lugar, ya con el
+          // estatus RETRABAJANDO, siguiendo el mismo payload que usa el masivo.
+          if (!updateData || updateData.length === 0) {
+              const nowIso = new Date().toISOString();
+              const { data: insData, error: insErr } = await supabaseEtiquetas.from('personal').insert({
+                  code: itemToReport.code,
+                  name: itemToReport.name,
+                  name_inc: encargado || 'N/A',
+                  sku: itemToReport.sku,
+                  product: itemToReport.product,
+                  quantity: itemToReport.quantity,
+                  organization: itemToReport.organization,
+                  sales_num: itemToReport.sales_num,
+                  status: 'RETRABAJANDO',
+                  date: nowIso,
+                  details: detallesIncidencia,
+                  name_cali: encargado || 'N/A',
+                  id_empleado_calificada: user?.id ?? null,
+              }).select('code');
+
+              if (insErr) throw new Error(`La incidencia se guardó, pero no se pudo registrar el paquete como retrabajando: ${insErr.message}`);
+              if (!insData || insData.length === 0) throw new Error('La incidencia se guardó, pero el paquete no se registró como retrabajando (0 filas afectadas). Verifica permisos.');
+          }
+
+          await refreshRetrabajosAbiertos();
+          alert('Incidencia guardada exitosamente. El paquete quedó en RETRABAJANDO.');
           setIsDiscrepancyModalOpen(false);
-          
-          setMassScannedCodes(prev => prev.map(i => i.code === itemToReport.code ? { ...i, status: 'REPORTADO' } : i));
+
+          // El paquete se va a retrabajar: sale de la lista de pendientes por
+          // calificar (ya no aplica "Calificar Todos" sobre él) y volverá a entrar
+          // cuando se reescanee tras corregirse. Se borra también del Set de
+          // duplicados; si no, el reescaneo se rechazaría por "código duplicado"
+          // y sería imposible volver a calificarlo.
+          setMassScannedCodes(prev => prev.filter(i => i.code !== itemToReport.code));
+          massScannedCodesRef.current.delete(itemToReport.code);
           if (lastScannedResult?.code === itemToReport.code) {
-              setLastScannedResult(prev => prev ? { ...prev, status: 'REPORTADO' } : null);
+              setLastScannedResult(null);
           }
 
       } catch (e: any) { 
@@ -727,6 +854,31 @@ export default function CalificarPage() {
           setLoading(false); 
       }
   };
+
+  /**
+   * Cierra la(s) incidencia(s) abiertas de los paquetes que se acaban de calificar:
+   * ese es el fin del retrabajo. `segundos_retrabajo` es una columna generada, así
+   * que la duración la calcula la BD sola a partir de este fin.
+   *
+   * El filtro `.is('fin_retrabajo', null)` es lo que hace correcto el multi-retrabajo:
+   * solo toca el ciclo abierto y nunca reescribe duraciones ya cerradas.
+   *
+   * Best-effort: si falla, no debe tumbar la calificación, que ya quedó guardada.
+   */
+  const cerrarRetrabajo = useCallback(async (codes: string[]) => {
+    const limpios = codes.filter(Boolean);
+    if (limpios.length === 0) return;
+    // Instante real, nunca `qualificationTimestamp`: ese puede venir desplazado un
+    // día por isNextDayDelivery (es la fecha de entrega, no la de calificación) y
+    // le sumaría 24h fantasma a la duración del retrabajo.
+    const { error } = await supabaseEtiquetas
+        .from('registro_incidencias_en_paquetes_listos_para_entrega')
+        .update({ fin_retrabajo: new Date().toISOString() })
+        .in('bar_code', limpios)
+        .is('fin_retrabajo', null);
+    if (error) console.warn('No se pudo cerrar el retrabajo de la incidencia:', error.message);
+    else await refreshRetrabajosAbiertos();
+  }, [refreshRetrabajosAbiertos]);
 
   const handleAccept = async () => {
     if (!lastScannedResult?.code) return;
@@ -743,6 +895,7 @@ export default function CalificarPage() {
         }).eq('code', lastScannedResult.code).select('code');
         if (error) throw error;
         if (!data || data.length === 0) throw new Error('No se actualizó ningún registro (0 filas afectadas). Verifica permisos o que el código siga existiendo.');
+        await cerrarRetrabajo([lastScannedResult.code]);
         await saveKpiData(encargado, 1, elapsedTime);
         alert('Calificación guardada correctamente.');
         handleOpenRatingModal(false);
@@ -798,6 +951,8 @@ const handleMassQualify = async () => {
             }
             successCount += updData.length;
         }
+        // Un paquete que venía de retrabajo también puede cerrarse desde el masivo.
+        await cerrarRetrabajo(massScannedCodes.map(item => item.code));
         alert(`Se procesaron ${successCount} etiquetas correctamente.`);
         if (successCount > 0) await saveKpiData(encargado, successCount, elapsedTime);
         setMassScannedCodes([]);
@@ -854,7 +1009,7 @@ const triggerMassQualify = async () => {
       const { data, error } = await supabaseEtiquetas.from('personal').select('*').eq('lote', loteToLoad.trim());
       if (error) throw error;
       if (!data || data.length === 0) { showAppMessage(`No se encontraron paquetes.`, 'warning'); return; }
-      const newItems: ScanResult[] = data.map(item => ({ code: item.code, name: item.name, product: item.product, status: item.status, details: item.details, sku: item.sku, quantity: item.quantity, organization: item.organization, sales_num: item.sales_num, found: true, isNew: false, id_empleado_entrega: item.id_empleado_entrega }));
+      const newItems: ScanResult[] = data.map(item => ({ code: item.code, name: item.name, product: item.product, status: item.status, details: item.details, sku: item.sku, quantity: item.quantity, organization: item.organization, sales_num: item.sales_num, found: true, isNew: false, id_empleado_despacha: item.id_empleado_despacha }));
       const currentCodes = new Set(massScannedCodes.map(c => c.code));
       const itemsToAdd = newItems.filter(item => { if (!currentCodes.has(item.code)) { massScannedCodesRef.current.add(item.code); return true; } return false; });
       setMassScannedCodes(prev => [...prev, ...itemsToAdd]);
@@ -877,9 +1032,23 @@ const triggerMassQualify = async () => {
       <Head><title>Calificar Calidad</title></Head>
       <main className="text-starbucks-dark flex items-center justify-center p-4">
         <div className="w-full max-w-2xl mx-auto bg-starbucks-white rounded-xl shadow-2xl p-4 md:p-6 space-y-4">
-          <header className="text-center">
+          <header className="text-center space-y-2">
             <h1 className="text-xl md:text-2xl font-bold text-starbucks-green">Calificar Calidad</h1>
             <p className="text-gray-600 text-sm mt-1">Escanea el QR para validar el empaquetado.</p>
+            {/* Sin este acceso, la vista de retrabajos existiría pero nadie sabría
+                que hay paquetes esperando. El contador da aviso sin robar espacio. */}
+            <Link
+              href="/calificar/retrabajos"
+              className={cn(
+                'inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[10px] font-black uppercase tracking-widest transition-colors',
+                retrabajosAbiertos > 0
+                  ? 'bg-amber-100 border-amber-200 text-amber-800 hover:bg-amber-200'
+                  : 'bg-gray-50 border-gray-200 text-gray-500 hover:bg-gray-100',
+              )}
+            >
+              <Hourglass className="h-3 w-3" />
+              {retrabajosAbiertos > 0 ? `${retrabajosAbiertos} en retrabajo` : 'Retrabajos'}
+            </Link>
           </header>
 
           <div className="space-y-4">
@@ -1047,6 +1216,16 @@ const triggerMassQualify = async () => {
                                    </DialogDescription>
                                  </DialogHeader>
                                  <div className="grid gap-4 py-4">
+                                 {lastScannedResult.status === 'RETRABAJANDO' && (
+                                     <Alert className="bg-amber-50 border-amber-200 text-amber-900">
+                                         <AlertTriangle className="h-4 w-4" />
+                                         <AlertTitle className="font-black">Paquete Retrabajado</AlertTitle>
+                                         <AlertDescription>
+                                             Este paquete regresó de una discrepancia y debe volver a calificarse.
+                                             <span className="block mt-1 text-xs font-semibold">{lastScannedResult.details || 'Sin detalle de la incidencia.'}</span>
+                                         </AlertDescription>
+                                     </Alert>
+                                 )}
                                  {lastScannedResult.status === 'REPORTADO' && (
                                      <Alert variant="destructive">
                                          <AlertTriangle className="h-4 w-4" />

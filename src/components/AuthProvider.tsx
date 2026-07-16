@@ -15,6 +15,7 @@ export const ROUTE_PERMISSIONS: Record<string, string[]> = {
   '/almacen': ['WAREHOUSE_MANAGER'],
   '/ppc': ['USER'],
   '/calificar': ['QUALITY_CONTROL'],
+  '/calificar/retrabajos': ['QUALITY_CONTROL'],
   '/entrega': ['DELIVERY_MANAGER'],
   '/devoluciones': ['DELIVERY_MANAGER'],
   '/sewing-tickets': ['SEWING_MANAGER'],

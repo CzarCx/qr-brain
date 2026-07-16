@@ -286,7 +286,7 @@ export default function Home() {
         return;
     }
 
-    const applyScanResult = (data: { name: string | null; product: string | null; status: string } | null, offline: boolean) => {
+    const applyScanResult = async (data: { name: string | null; product: string | null; status: string } | null, offline: boolean) => {
         if (!data) {
             if (offline) {
                 // Sin snapshot para este código: en vez de bloquear, se acepta sin
@@ -304,6 +304,39 @@ export default function Home() {
         } else if (data.status === 'REPORTADO') {
             playWarningSound();
             showModalNotification('Paquete Reportado', 'Este paquete no está listo para ser enviado, tiene un reporte activo.', 'destructive');
+        } else if (data.status === 'EN PRODUCCION' && !offline) {
+            // Un paquete que llega a entrega sin haber pasado por QC se califica
+            // automáticamente aquí. Se replican las mismas columnas que escribe
+            // /calificar (date_cal, name_cali, id_empleado_calificada) para no
+            // perder la trazabilidad de quién lo calificó y cuándo.
+            const { data: updated, error: calError } = await supabaseEtiquetas
+                .from('personal')
+                .update({
+                    status: 'CALIFICADO',
+                    details: null,
+                    date_cal: new Date().toISOString(),
+                    name_cali: encargado || 'N/A',
+                    id_empleado_calificada: user?.id ?? null,
+                })
+                .eq('code', finalCode)
+                .select('code');
+
+            if (calError || !updated || updated.length === 0) {
+                playWarningSound();
+                showModalNotification(
+                    'No se pudo calificar',
+                    calError
+                        ? `Error al actualizar el estatus: ${calError.message}`
+                        : 'No se actualizó ningún registro (0 filas afectadas). Verifica permisos.',
+                    'destructive',
+                );
+                return;
+            }
+
+            playBeep();
+            setDeliveryList(prev => [{ code: finalCode, product: data.product, name: data.name }, ...prev]);
+            scannedCodesRef.current.add(finalCode);
+            showAppMessage(`Calificado automáticamente y añadido: ${finalCode}`, 'success');
         } else if (isValidationOverridden || data.status === 'CALIFICADO') {
             playBeep();
             const newItem: DeliveryItem = {
@@ -322,7 +355,7 @@ export default function Home() {
 
     try {
         if (!isOnline) {
-            applyScanResult(snapshotRef.current[finalCode] ?? null, true);
+            await applyScanResult(snapshotRef.current[finalCode] ?? null, true);
         } else {
             const { data, error } = await supabaseEtiquetas
                 .from('personal')
@@ -333,14 +366,14 @@ export default function Home() {
             if (error && error.code !== 'PGRST116') { // PGRST116 = no rows found
                 throw error;
             }
-            applyScanResult(data ?? null, false);
+            await applyScanResult(data ?? null, false);
         }
     } catch (e: any) {
         showModalNotification('Error de Base de Datos', `Hubo un problema al consultar el código: ${e.message}`, 'destructive');
     } finally {
         setLoading(false);
     }
-  }, [isValidationOverridden, isOnline]);
+  }, [isValidationOverridden, isOnline, user, encargado]);
 
     useEffect(() => {
         const handlePhysicalScannerInput = (event: KeyboardEvent) => {
