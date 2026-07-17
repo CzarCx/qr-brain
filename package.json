@@ -9,7 +9,10 @@
     "build": "NODE_ENV=production next build",
     "start": "next start",
     "lint": "next lint",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "copy-wasm": "mkdir -p public/wasm && cp node_modules/zxing-wasm/dist/reader/zxing_reader.wasm public/wasm/zxing_reader.wasm",
+    "postinstall": "npm run copy-wasm",
+    "prebuild": "npm run copy-wasm"
   },
   "dependencies": {
     "@genkit-ai/google-genai": "1.20.0",
@@ -39,6 +42,7 @@
     "@serwist/next": "^9.5.11",
     "@supabase/ssr": "^0.4.0",
     "@supabase/supabase-js": "^2.45.0",
+    "barcode-detector": "^3.2.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.0.0",

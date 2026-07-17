@@ -43,3 +43,5 @@ next-env.d.ts
 # firebase
 firebase-debug.log
 firestore-debug.log
+# WASM del escáner (se regenera con postinstall/prebuild -> copy-wasm)
+public/wasm/

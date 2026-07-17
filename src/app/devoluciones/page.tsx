@@ -1,7 +1,7 @@
 'use client';
 import {useEffect, useRef, useState, useCallback, useMemo} from 'react';
 import Head from 'next/head';
-import { Html5Qrcode, Html5QrcodeScannerState } from 'html5-qrcode';
+import dynamic from 'next/dynamic';
 import { supabaseEtiquetas } from '@/lib/supabaseClient';
 import { Button } from "@/components/ui/button";
 import { Input } from '@/components/ui/input';
@@ -70,6 +70,10 @@ type ReturnItem = {
 const STORAGE_KEY = 'devoluciones_session_data';
 const DRIVER_STORAGE_KEY = 'devoluciones_driver_data';
 
+// Escáner nuevo (zxing-wasm) SOLO para esta pantalla. ssr:false porque usa cámara/WASM
+// del navegador; nadie más lo importa, así que las otras pantallas siguen con html5-qrcode.
+const BarcodeScanner = dynamic(() => import('./BarcodeScanner'), { ssr: false });
+
 // Respaldo del catálogo de paqueterías. La tabla `paqueterias` puede venir vacía —sin
 // política de RLS que deje leerla, o sin filas todavía— y entonces el combo quedaba en
 // blanco y bloqueaba TODO el flujo (no se puede iniciar el escáner sin paquetería). Con
@@ -104,8 +108,9 @@ export default function DevolucionesPage() {
   const [isDriverModalOpen, setIsDriverModalOpen] = useState(false);
 
   const messageTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const html5QrCodeRef = useRef<Html5Qrcode | null>(null);
-  const readerRef = useRef<HTMLDivElement>(null);
+  // Track de video del escáner nuevo, para aplicar flash/zoom si algún día se cablean
+  // (hoy no hay botones en esta pantalla; se conserva la plomería de capabilities).
+  const trackRef = useRef<MediaStreamTrack | null>(null);
   const lastScanTimeRef = useRef(Date.now());
   const physicalScannerInputRef = useRef<HTMLInputElement | null>(null);
   const bufferRef = useRef('');
@@ -666,37 +671,14 @@ export default function DevolucionesPage() {
     return () => { if (input) input.removeEventListener('keydown', handlePhysicalScannerInput); };
   }, [scannerActive, selectedScannerMode, onScanSuccess]);
 
+  // La cámara ya no se maneja aquí: la lleva <BarcodeScanner /> (zxing-wasm), que se
+  // monta/desmonta según scannerActive y limpia sus propios tracks. Al detener (o cambiar
+  // de usuario) se resetea la plomería de flash/zoom que aún vive en el padre.
   useEffect(() => {
-    if (!isMounted || !readerRef.current) return;
-    if (!html5QrCodeRef.current) html5QrCodeRef.current = new Html5Qrcode(readerRef.current.id, false);
-    const qrCode = html5QrCodeRef.current;
-    // El resultado de getCameraCapabilitiesWithRetry puede tardar hasta ~1.5s;
-    // si el usuario detiene (o reinicia) la cámara antes de que resuelva, esa
-    // promesa vieja no debe pisar el estado con datos de un track ya muerto.
-    let cancelled = false;
-    const cleanup = () => {
-        cancelled = true;
-        if (qrCode && qrCode.isScanning) {
-            return qrCode.stop().catch(err => { if (!String(err).includes('not started')) console.error(err); }).finally(() => {
-              if (isMobile) { setCameraCapabilities(null); setIsFlashOn(false); setZoom(1); }
-            });
-        }
-        return Promise.resolve();
-    };
-    if (scannerActive && selectedScannerMode === 'camara') {
-      if (qrCode.getState() !== Html5QrcodeScannerState.SCANNING) {
-        qrCode.start({ facingMode: "environment" }, { fps: 10, qrbox: 250 }, onScanSuccess, () => {})
-        .then(() => {
-            if (isMobile) {
-              const videoElement = readerRef.current?.querySelector('video');
-              const track = (videoElement?.srcObject as MediaStream)?.getVideoTracks()[0];
-              if (track) getCameraCapabilitiesWithRetry(track).then(caps => { if (!cancelled) setCameraCapabilities(caps); });
-            }
-        }).catch(err => { console.error(err); setScannerActive(false); });
-      }
-    } else cleanup();
-    return () => { cleanup(); };
-  }, [scannerActive, selectedScannerMode, isMobile, isMounted, onScanSuccess]);
+    if (!(scannerActive && selectedScannerMode === 'camara') && isMobile) {
+      setCameraCapabilities(null); setIsFlashOn(false); setZoom(1); trackRef.current = null;
+    }
+  }, [scannerActive, selectedScannerMode, isMobile]);
 
   const messageClasses: any = { success: 'bg-green-500/80 text-white', error: 'bg-red-500/80 text-white', warning: 'bg-yellow-500/80 text-white', info: 'bg-blue-500/80 text-white' };
 
@@ -758,9 +740,19 @@ export default function DevolucionesPage() {
                   </div>
                   <div className="bg-starbucks-cream p-4 rounded-lg flex flex-col min-h-[300px]">
                     <div className="scanner-container relative flex-grow bg-black rounded-lg overflow-hidden flex items-center justify-center">
-                        <div id="reader" ref={readerRef} className="w-full" style={{ display: selectedScannerMode === 'camara' && scannerActive ? 'block' : 'none' }}></div>
+                        <div className="w-full h-full" style={{ display: selectedScannerMode === 'camara' && scannerActive ? 'block' : 'none' }}>
+                          {selectedScannerMode === 'camara' && scannerActive && (
+                            <BarcodeScanner
+                              onDetected={onScanSuccess}
+                              onTrackReady={(track) => {
+                                trackRef.current = track;
+                                if (isMobile) getCameraCapabilitiesWithRetry(track).then(setCameraCapabilities);
+                              }}
+                              onError={(e) => { console.error('Error de cámara (devoluciones):', e); showModalNotification('Error de cámara', 'No se pudo iniciar la cámara. Revisa los permisos e intenta de nuevo.', 'destructive'); setScannerActive(false); }}
+                            />
+                          )}
+                        </div>
                         {message.show && <div className={`scanner-message z-20 ${messageClasses[message.type]}`}>{message.text}</div>}
-                        {scannerActive && selectedScannerMode === 'camara' && <div id="laser-line" className="absolute top-1/2 left-0 w-full h-[2px] bg-red-500 shadow-[0_0_10px_red] z-10" />}
                         {!scannerActive && <p className="text-white/40 font-bold uppercase text-xs">Escáner Inactivo</p>}
                     </div>
                     <div className="mt-4 flex gap-2 justify-center">
@@ -896,14 +888,24 @@ export default function DevolucionesPage() {
                   </div>
                   <div className="space-y-2">
                       <Label htmlFor="paqueteria" className="text-xs font-black uppercase text-gray-400">Paquetería</Label>
-                      <Combobox
-                          options={paqueteriaOptions}
-                          value={paqueteria}
-                          onValueChange={setPaqueteria}
-                          placeholder="Selecciona paquetería..."
-                          emptyMessage="No hay paqueterías registradas."
-                          buttonClassName="h-12 rounded-xl font-bold uppercase"
-                      />
+                      {/* Antes era un Combobox (cmdk): en Safari/iOS a veces abría el
+                          popover pero no renderizaba las opciones ("No hay paqueterías").
+                          Se cambia al Select de Radix —el mismo que ya usan empresa y
+                          plataforma en esta pantalla— que es más robusto en móvil. */}
+                      <Select value={paqueteria} onValueChange={setPaqueteria}>
+                          <SelectTrigger className="h-12 rounded-xl font-bold uppercase">
+                              <SelectValue placeholder="Selecciona paquetería..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                              {paqueteriaOptions.length > 0 ? (
+                                  paqueteriaOptions.map(opt => (
+                                      <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                                  ))
+                              ) : (
+                                  <div className="px-3 py-2 text-xs text-gray-400 text-center">No hay paqueterías registradas.</div>
+                              )}
+                          </SelectContent>
+                      </Select>
                   </div>
               </div>
               <DialogFooter>

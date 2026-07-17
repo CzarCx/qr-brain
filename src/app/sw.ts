@@ -4,7 +4,7 @@
 // tsconfig.json porque requiere el lib "webworker", incompatible con el lib "dom"
 // que usa el resto del proyecto.
 import { defaultCache } from '@serwist/next/worker';
-import { Serwist, NetworkOnly } from 'serwist';
+import { Serwist, NetworkOnly, CacheFirst } from 'serwist';
 
 declare const self: ServiceWorkerGlobalScope;
 
@@ -24,6 +24,13 @@ const serwist = new Serwist({
     {
       matcher: ({ url }) => url.hostname.endsWith('.supabase.co'),
       handler: new NetworkOnly(),
+    },
+    // El .wasm del escáner de /devoluciones (zxing-wasm, ~1 MiB): CacheFirst para que
+    // tras la primera carga sobreviva sin red — el piso escanea offline y no debe
+    // re-descargar el binario en cada arranque de la cámara.
+    {
+      matcher: ({ url }) => url.pathname.startsWith('/wasm/'),
+      handler: new CacheFirst({ cacheName: 'wasm-cache' }),
     },
     ...defaultCache,
   ],
