@@ -20,7 +20,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { ArrowLeft, RefreshCw, Timer, AlertTriangle, History, Hourglass } from 'lucide-react';
+import { ArrowLeft, RefreshCw, Timer, AlertTriangle, History, Hourglass, ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const INCIDENCIAS_TABLE = 'registro_incidencias_en_paquetes_listos_para_entrega';
@@ -60,9 +60,82 @@ const urgencia = (segundos: number) => {
 const fmtFecha = (iso: string | null) =>
   iso ? new Date(iso).toLocaleString('es-MX', { dateStyle: 'short', timeStyle: 'short', timeZone: 'America/Mexico_City' }) : '—';
 
+const fmtDia = (iso: string | null) =>
+  iso ? new Date(iso).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', timeZone: 'America/Mexico_City' }) : '—';
+
+const fmtHora = (iso: string | null) =>
+  iso ? new Date(iso).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Mexico_City' }) : '';
+
+// Tarjeta expandible para el historial en móvil — mismo patrón que las cards de
+// /ASIGNAR (MobilePendingRow): reemplaza la tabla con scroll horizontal por una
+// lista compacta. Definida fuera del componente para no recrearse en cada render.
+function MobileHistorialRow({ item, empleadoNombre, sku }: { item: Incidencia; empleadoNombre: string; sku?: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const difierePiezas = item.piezas_solicitadas !== item.piezas_despachadas;
+  const toggle = () => setExpanded(v => !v);
+
+  return (
+    <div className="rounded-xl border border-gray-200 overflow-hidden mb-1.5 bg-white">
+      <div
+        className="flex items-center gap-2 px-2.5 py-2 cursor-pointer"
+        role="button"
+        tabIndex={0}
+        aria-expanded={expanded}
+        onClick={toggle}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); } }}
+      >
+        {/* Código de barras arriba y el SKU debajo, igual que las cards de /ASIGNAR. */}
+        <div className="min-w-0 flex-1 flex flex-col gap-0.5">
+          <span className="font-mono text-xs font-bold text-starbucks-dark whitespace-nowrap">{item.bar_code || '—'}</span>
+          {sku && <span className="font-mono text-[9px] font-bold text-starbucks-accent truncate">{sku}</span>}
+          <span className="text-[9px] font-medium text-gray-400">
+            {fmtDia(item.inicio_retrabajo)} <span className="font-mono">{fmtHora(item.inicio_retrabajo)}</span>
+          </span>
+        </div>
+        <span className="text-sm font-black font-mono text-starbucks-green tabular-nums shrink-0">{formatDuration(item.segundos_retrabajo)}</span>
+        {/* Cantidad solicitada como badge ×N, igual que las cards de /ASIGNAR. */}
+        <span className="text-sm font-black text-starbucks-accent bg-starbucks-cream rounded px-2 py-1 tabular-nums shrink-0">×{item.piezas_solicitadas ?? '—'}</span>
+        <ChevronDown className={cn('h-3.5 w-3.5 text-gray-400 transition-transform shrink-0', expanded && 'rotate-180')} />
+      </div>
+      <div className="grid transition-[grid-template-rows] duration-200" style={{ gridTemplateRows: expanded ? '1fr' : '0fr' }}>
+        <div className="overflow-hidden">
+          <div className="px-2.5 pb-2.5 pt-2 border-t border-dashed border-gray-200">
+            <div className="grid grid-cols-2 gap-2.5 mb-2">
+              <div className="bg-gray-50 rounded-lg p-2 border border-gray-100">
+                <p className="text-[8px] font-black uppercase tracking-widest text-gray-400 mb-0.5">Solicitado</p>
+                <p className="text-[11px] font-bold text-gray-800 break-words">{item.producto_solicitado || '—'}</p>
+                <p className="text-[10px] font-mono font-bold text-gray-500 mt-0.5">{item.piezas_solicitadas ?? '—'} pzas</p>
+              </div>
+              <div className="bg-red-50/50 rounded-lg p-2 border border-red-100">
+                <p className="text-[8px] font-black uppercase tracking-widest text-red-400 mb-0.5">Despachado</p>
+                <p className="text-[11px] font-bold text-gray-800 break-words">{item.producto_despachado || '—'}</p>
+                <p className={cn('text-[10px] font-mono font-bold mt-0.5', difierePiezas ? 'text-red-500' : 'text-green-600')}>{item.piezas_despachadas ?? '—'} pzas</p>
+              </div>
+            </div>
+            <div>
+              <p className="text-[8px] font-black uppercase tracking-widest text-gray-400">Despachó</p>
+              <p className="text-[11px] font-semibold text-starbucks-dark">{empleadoNombre || '—'}</p>
+            </div>
+            {item.observaciones && (
+              <div className="mt-2">
+                <p className="text-[8px] font-black uppercase tracking-widest text-gray-400">Observaciones</p>
+                <p className="text-[11px] text-gray-600 italic border-l-2 border-gray-200 pl-2 mt-0.5 break-words">{item.observaciones}</p>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function RetrabajosPage() {
   const [incidencias, setIncidencias] = useState<Incidencia[]>([]);
   const [empleados, setEmpleados] = useState<Record<string, string>>({});
+  // La tabla de incidencias solo guarda `id_producto_solicitado` (numérico) y la
+  // subcategoría en `producto_solicitado`, no el SKU de texto. Se cruza aparte
+  // contra `personal` por bar_code para mostrarlo junto al código.
+  const [skus, setSkus] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busqueda, setBusqueda] = useState('');
@@ -105,6 +178,24 @@ export default function RetrabajosPage() {
     };
     fetchEmpleados();
   }, []);
+
+  // SKU por bar_code: se resuelve contra `personal` (donde `code` = bar_code) cada
+  // vez que cambian las incidencias cargadas, y se cruza en memoria.
+  useEffect(() => {
+    const codes = Array.from(new Set(incidencias.map(i => i.bar_code).filter(Boolean))) as string[];
+    if (codes.length === 0) return;
+    const fetchSkus = async () => {
+      const { data } = await supabaseEtiquetas
+        .from('personal')
+        .select('code, sku')
+        .in('code', codes);
+      if (!data) return;
+      const mapa: Record<string, string> = {};
+      data.forEach((p: any) => { if (p.code && p.sku) mapa[p.code] = p.sku; });
+      setSkus(mapa);
+    };
+    fetchSkus();
+  }, [incidencias]);
 
   const filtrar = useCallback((lista: Incidencia[]) => {
     const q = busqueda.trim().toUpperCase();
@@ -258,32 +349,55 @@ export default function RetrabajosPage() {
 
           {/* ---------- HISTORIAL ---------- */}
           <TabsContent value="historial" className="mt-4">
-            <Card>
+            {/* Móvil: tarjetas expandibles (mismo patrón que /ASIGNAR) en vez de la
+                tabla, que en pantallas chicas se corta y obliga a scroll horizontal. */}
+            <div className="md:hidden space-y-1.5">
+              {historial.length > 0 ? historial.map(i => (
+                <MobileHistorialRow key={i.id} item={i} empleadoNombre={empleados[i.id_empleado || ''] || ''} sku={skus[i.bar_code || '']} />
+              )) : (
+                <Card><CardContent className="py-12 text-center text-gray-400 text-sm">
+                  {loading ? 'Cargando...' : 'Sin retrabajos resueltos todavía.'}
+                </CardContent></Card>
+              )}
+            </div>
+
+            {/* Escritorio: tabla completa. */}
+            <Card className="hidden md:block">
               <CardContent className="p-0">
                 <div className="overflow-auto max-h-[520px]">
                   <Table>
                     <TableHeader className="sticky top-0 bg-gray-50 z-10">
                       <TableRow>
+                        <TableHead className="text-xs font-black">Fecha</TableHead>
                         <TableHead className="text-xs font-black">Código</TableHead>
                         <TableHead className="text-xs font-black">Solicitado</TableHead>
                         <TableHead className="text-xs font-black">Despachado</TableHead>
                         <TableHead className="text-xs font-black text-center">Pzas</TableHead>
                         <TableHead className="text-xs font-black">Despachó</TableHead>
+                        <TableHead className="text-xs font-black">Observaciones</TableHead>
                         <TableHead className="text-xs font-black text-right">Duración</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {historial.length > 0 ? historial.map(i => (
                         <TableRow key={i.id}>
-                          <TableCell className="font-mono text-xs font-bold">{i.bar_code || '—'}</TableCell>
+                          <TableCell className="text-xs whitespace-nowrap" title={`Inicio: ${fmtFecha(i.inicio_retrabajo)}\nFin: ${fmtFecha(i.fin_retrabajo)}`}>
+                            <span className="font-bold text-gray-700">{fmtDia(i.inicio_retrabajo)}</span>
+                            <span className="text-gray-400 font-mono ml-1">{fmtHora(i.inicio_retrabajo)}</span>
+                          </TableCell>
+                          <TableCell className="font-mono text-xs font-bold">
+                            <div>{i.bar_code || '—'}</div>
+                            {skus[i.bar_code || ''] && <div className="text-[10px] font-normal text-starbucks-accent">{skus[i.bar_code || '']}</div>}
+                          </TableCell>
                           <TableCell className="text-xs max-w-[180px] truncate" title={i.producto_solicitado || ''}>{i.producto_solicitado || '—'}</TableCell>
                           <TableCell className="text-xs max-w-[180px] truncate" title={i.producto_despachado || ''}>{i.producto_despachado || '—'}</TableCell>
                           <TableCell className="text-center"><Piezas solicitadas={i.piezas_solicitadas} despachadas={i.piezas_despachadas} /></TableCell>
                           <TableCell className="text-xs">{empleados[i.id_empleado || ''] || '—'}</TableCell>
+                          <TableCell className="text-xs max-w-[200px] truncate text-gray-500 italic" title={i.observaciones || ''}>{i.observaciones || '—'}</TableCell>
                           <TableCell className="text-right font-mono text-xs font-bold text-starbucks-green">{formatDuration(i.segundos_retrabajo)}</TableCell>
                         </TableRow>
                       )) : (
-                        <TableRow><TableCell colSpan={6} className="text-center text-gray-400 py-10 text-sm">
+                        <TableRow><TableCell colSpan={8} className="text-center text-gray-400 py-10 text-sm">
                           {loading ? 'Cargando...' : 'Sin retrabajos resueltos todavía.'}
                         </TableCell></TableRow>
                       )}

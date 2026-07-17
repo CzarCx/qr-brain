@@ -217,6 +217,15 @@ export default function CalificarPage() {
   useEffect(() => {
     if (!user?.email) return;
 
+    // El padrón de `empleados` es la fuente preferida, pero el perfil identifica a la
+    // MISMA persona autenticada, así que como mucho cambia la ortografía. Se compara el
+    // id aunque AuthProvider ya llavee su caché offline por userId: en un celular
+    // compartido entre turnos este es el punto donde el perfil de otro operario se
+    // convertiría en una atribución falsa, así que se falla cerrado.
+    const aplicarRespaldo = () => {
+        if (profile?.id === user.id && profile.name) setEncargado(profile.name);
+    };
+
     const fetchNameFromEmployees = async (isRetry = false) => {
         try {
             const { data, error } = await withTimeout(supabaseEtiquetas
@@ -245,11 +254,19 @@ export default function CalificarPage() {
             if (data) {
                 const fullName = [data.nombres, data.apellido_paterno, data.apellido_materno].filter(Boolean).join(' ').toUpperCase();
                 setEncargado(fullName);
-            } else if (profile?.name) {
-                setEncargado(profile.name);
+            } else {
+                aplicarRespaldo();
             }
         } catch (err) {
             console.error("Error fetching name for calificar encargado:", err);
+            // Este catch era terminal y dejaba `encargado` vacío, y con él el botón de
+            // escanear muerto (`disabled={... || !encargado}`), sin más rastro que un log
+            // que nadie ve en un celular de piso. Justamente los dos casos que llegan aquí
+            // —sin red y token vencido— son para los que se escribió el respaldo, así que
+            // era el único camino en que no se usaba. Ojo al recolocarlo: postgrest NO
+            // lanza ante un fallo de red (devuelve {data:null,error}), de modo que el
+            // `throw error` de arriba es lo que trae ese caso hasta aquí.
+            aplicarRespaldo();
         }
     };
 

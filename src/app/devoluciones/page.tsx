@@ -62,6 +62,9 @@ type ReturnItem = {
   product?: string | null;
   organization?: string | null;
   tiendaAlreadySet?: boolean;
+  // Plataforma que EMITIÓ la etiqueta (Mercado Libre, TikTok, Walmart…), distinta del
+  // transportista que la trae de vuelta. Solo se captura en bultos sin registro previo.
+  origen?: string | null;
 };
 
 const STORAGE_KEY = 'devoluciones_session_data';
@@ -287,12 +290,20 @@ export default function DevolucionesPage() {
         // PASO 1: Buscar en etiquetas_i para obtener No. Venta, Pack ID, SKU y Empresa
         let query = supabaseEtiquetas.from('etiquetas_i').select('sales_num, pack_id, code, sku, product, organization');
         
+        // pack_id y sales_num son columnas numeric: un código alfanumérico de una
+        // paquetería externa (FedEx, Estafeta…) las hace fallar con 22P02 y tumbaría
+        // el escaneo entero antes de agregar nada a la lista. Cuando el input trae
+        // letras se busca solo por `code` (text); al no existir en etiquetas_i cae al
+        // camino de "sin registro previo", que es justo como debe tratarse una externa.
+        const inputEsNumerico = /^\d+$/.test(finalInput);
         if (searchType === 'sales_num') {
             query = query.eq('sales_num', finalInput);
         } else if (searchType === 'pack_id') {
             query = query.eq('pack_id', finalInput);
-        } else {
+        } else if (inputEsNumerico) {
             query = query.or(`code.eq."${finalInput}",pack_id.eq."${finalInput}",sales_num.eq."${finalInput}"`);
+        } else {
+            query = query.eq('code', finalInput);
         }
 
         let { data: tagData, error: tagError } = await query.limit(1).maybeSingle();
@@ -443,8 +454,23 @@ export default function DevolucionesPage() {
 
   const EMPRESA_OPTIONS = ['MTM', 'PALO DE ROSA', 'TOLEXAL', 'TAL', 'DOMESKA', 'SUPER OFERTAS'];
 
+  // Origen de la etiqueta, no del transporte. Solo aplica a bultos SIN REGISTRO: los de
+  // Mercado Libre se reconocen solos porque existen en etiquetas_i. Se incluye 'Mercado
+  // Libre' por si es una etiqueta de ML aún no digitalizada (va a devoluciones_ml igual);
+  // cualquier otra plataforma se guarda en la tabla aparte devoluciones_externas.
+  const PLATAFORMA_OPTIONS = ['Mercado Libre', 'TikTok', 'Walmart', 'Amazon', 'Shein', 'Otro'];
+
+  // Una devolución es "externa" (tabla propia) cuando no está en nuestra base Y su
+  // plataforma no es Mercado Libre. Es el discriminador que enruta el guardado.
+  const esDevolucionExterna = (item: ReturnItem) =>
+      !!(item.isUnknown && item.origen && item.origen !== 'Mercado Libre');
+
   const handleOrganizationChange = (code: string, organization: string) => {
       setReturnsList(prev => prev.map(item => item.code === code ? { ...item, organization } : item));
+  };
+
+  const handleOrigenChange = (code: string, origen: string) => {
+      setReturnsList(prev => prev.map(item => item.code === code ? { ...item, origen } : item));
   };
 
   const removeFromList = (code: string) => {
@@ -476,9 +502,18 @@ export default function DevolucionesPage() {
       }
       // Todo registro sin empresa ya asignada en devoluciones_ml.tienda debe
       // llenarse manualmente (Select en la tabla) antes de poder finalizar.
-      const missingOrganization = returnsList.some(item => !item.tiendaAlreadySet && (!item.organization || item.organization === '---'));
+      // Todo bulto SIN REGISTRO necesita su plataforma de origen: es lo que decide a qué
+      // tabla se guarda (Mercado Libre -> devoluciones_ml, el resto -> devoluciones_externas).
+      const missingOrigen = returnsList.some(item => item.isUnknown && !item.origen);
+      if (missingOrigen) {
+          showModalNotification('Falta Plataforma', 'Indica la plataforma (Mercado Libre, TikTok, Walmart…) de cada bulto marcado como SIN REGISTRO antes de finalizar.', 'destructive');
+          return;
+      }
+      // La empresa/marca interna se exige para Mercado Libre; en las externas puede no
+      // conocerse al momento (solo se tiene el código), así que ahí es opcional.
+      const missingOrganization = returnsList.some(item => !esDevolucionExterna(item) && !item.tiendaAlreadySet && (!item.organization || item.organization === '---'));
       if (missingOrganization) {
-          showModalNotification('Falta Empresa', 'Selecciona la empresa de cada registro marcado en amarillo antes de finalizar.', 'destructive');
+          showModalNotification('Falta Empresa', 'Selecciona la empresa de cada registro de Mercado Libre marcado en amarillo antes de finalizar.', 'destructive');
           return;
       }
       const hasUnknown = returnsList.some(item => item.isUnknown);
@@ -527,8 +562,14 @@ export default function DevolucionesPage() {
               await Promise.all(updatePromises);
           }
 
-          if (newReturns.length > 0) {
-              const insertData = newReturns.map(item => ({
+          // Las devoluciones externas (plataforma distinta de ML) viven en su propia
+          // tabla, nunca en el volcado del reporte de Mercado Libre. El resto de las
+          // nuevas (ML sin digitalizar o ya conocidas) sigue yendo a devoluciones_ml.
+          const nuevasML = newReturns.filter(item => !esDevolucionExterna(item));
+          const nuevasExternas = newReturns.filter(esDevolucionExterna);
+
+          if (nuevasML.length > 0) {
+              const insertData = nuevasML.map(item => ({
                   num_venta: item.isUnknown ? null : (item.sales_num ? String(item.sales_num) : null),
                   entregado: true,
                   name_inc: user?.id,
@@ -545,7 +586,33 @@ export default function DevolucionesPage() {
               if (errorIns) throw errorIns;
           }
 
-          await supabaseEtiquetas.from('personal').update({ status: 'DEVUELTO' }).in('code', codes);
+          if (nuevasExternas.length > 0) {
+              const externasData = nuevasExternas.map(item => ({
+                  code: item.code,
+                  origen: item.origen,
+                  tienda: resolveTienda(item.organization),
+                  sku: item.sku && item.sku !== '---' ? item.sku : null,
+                  transportista: paqueteria,
+                  driver_name: driverName,
+                  driver_plate: driverPlate,
+                  entregado: true,
+                  date_entregado: new Date().toISOString(),
+                  name_inc: user?.id,
+              }));
+              const { error: errorExt } = await supabaseEtiquetas.from('devoluciones_externas').insert(externasData);
+              if (errorExt) throw errorExt;
+          }
+
+          // personal.code es numeric y solo contiene etiquetas internas (ML). Un código
+          // alfanumérico de paquetería externa lo haría fallar con 22P02, y como este
+          // UPDATE corre DESPUÉS del insert a devoluciones_ml (ya comprometido, sin
+          // transacción), tumbaría el cierre dejando el registro guardado pero con un
+          // error en pantalla. Los códigos externos nunca estuvieron en personal, así
+          // que se excluyen: solo los numéricos se marcan como DEVUELTO.
+          const codesInternos = codes.filter(c => /^\d+$/.test(String(c)));
+          if (codesInternos.length > 0) {
+              await supabaseEtiquetas.from('personal').update({ status: 'DEVUELTO' }).in('code', codesInternos);
+          }
           playBeep();
           showModalNotification('¡Éxito!', `Se procesaron ${codes.length} devoluciones correctamente.`, 'success');
           setReturnsList([]);
@@ -723,6 +790,23 @@ export default function DevolucionesPage() {
                                                   {item.isNewInDev && <span className="text-[7px] font-black text-green-600 border border-green-200 px-1 rounded-sm bg-green-50 flex items-center gap-0.5"><Sparkles className="h-2 w-2" /> NUEVO</span>}
                                                   {item.isUnknown && <span className="text-[7px] font-black text-red-600 border border-red-200 px-1 rounded-sm bg-red-50 flex items-center gap-0.5"><HelpCircle className="h-2 w-2" /> SIN REGISTRO</span>}
                                               </div>
+                                              {/* Sin registro en nuestra base: hay que indicar de qué plataforma es la
+                                                  etiqueta. Esto enruta el guardado (ML -> devoluciones_ml, resto -> externas). */}
+                                              {item.isUnknown && (
+                                                  <Select
+                                                      value={item.origen || undefined}
+                                                      onValueChange={(val) => handleOrigenChange(item.code, val)}
+                                                  >
+                                                      <SelectTrigger className="h-6 w-[130px] text-[8px] font-bold px-2 mt-1 border-red-300 bg-red-50">
+                                                          <SelectValue placeholder="Plataforma..." />
+                                                      </SelectTrigger>
+                                                      <SelectContent>
+                                                          {PLATAFORMA_OPTIONS.map(p => (
+                                                              <SelectItem key={p} value={p} className="text-[10px]">{p}</SelectItem>
+                                                          ))}
+                                                      </SelectContent>
+                                                  </Select>
+                                              )}
                                           </div>
                                       </TableCell>
                                       <TableCell className="py-2"><span className="font-mono text-[10px] font-black text-starbucks-green">{item.sales_num || '---'}</span></TableCell>
