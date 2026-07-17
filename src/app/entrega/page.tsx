@@ -2,7 +2,7 @@
 import {useEffect, useRef, useState, useCallback, useMemo} from 'react';
 import Head from 'next/head';
 import Image from 'next/image';
-import { Html5Qrcode, Html5QrcodeScannerState } from 'html5-qrcode';
+import dynamic from 'next/dynamic';
 import { supabase, supabaseEtiquetas } from '@/lib/supabaseClient';
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -54,6 +54,10 @@ type DeliverPayload = {
   userId: string | null;
 };
 
+// Escáner nuevo (zxing-wasm), compartido con /devoluciones. ssr:false porque usa
+// cámara/WASM del navegador. Reemplaza a html5-qrcode SOLO en esta pantalla.
+const BarcodeScanner = dynamic(() => import('@/components/BarcodeScanner'), { ssr: false });
+
 const STORAGE_KEY = 'entrega_session_list';
 
 export default function Home() {
@@ -88,9 +92,9 @@ export default function Home() {
   const messageTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Refs
-  const html5QrCodeRef = useRef<Html5Qrcode | null>(null);
-  const readerRef = useRef<HTMLDivElement>(null);
-  const lastScanTimeRef = useRef(Date.now());
+  const trackRef = useRef<MediaStreamTrack | null>(null);
+  // Dedup POR CÓDIGO (no por tiempo): guarda el último código y cuándo se procesó.
+  const lastScanRef = useRef({ code: '', time: 0 });
   const scannedCodesRef = useRef(new Set<string>());
   const physicalScannerInputRef = useRef<HTMLInputElement | null>(null);
   // Snapshot local de `personal` (nombre/producto/status) construido al cargar
@@ -261,13 +265,8 @@ export default function Home() {
     };
 
   const onScanSuccess = useCallback(async (decodedText: string) => {
-    if (loadingRef.current || Date.now() - lastScanTimeRef.current < MIN_SCAN_INTERVAL) return;
+    if (loadingRef.current) return;
 
-    lastScanTimeRef.current = Date.now();
-    setLoading(true);
-    showAppMessage('Procesando código...', 'info');
-    if ('vibrate' in navigator) navigator.vibrate(100);
-    
     let finalCode = decodedText;
     try {
         const parsed = JSON.parse(decodedText);
@@ -275,16 +274,29 @@ export default function Home() {
             finalCode = String(parsed.id);
         }
     } catch (e) {
-        // Not a JSON, proceed with the original decodedText
+        // No es JSON: se usa el texto tal cual.
     }
-
     finalCode = String(finalCode).trim();
+    if (!finalCode) return;
 
+    const now = Date.now();
+    // Ya en la lista: avisar DIRECTO (sin ir a la BD) con cooldown corto anti-spam. El
+    // escáner WASM detecta ~7 veces/seg; con el bloqueo por tiempo de antes el aviso se
+    // perdía y se tragaban escaneos nuevos legítimos.
     if (scannedCodesRef.current.has(finalCode)) {
-        setLoading(false);
+        if (finalCode === lastScanRef.current.code && now - lastScanRef.current.time < 900) return;
+        lastScanRef.current = { code: finalCode, time: now };
         showAppMessage(`Código ya en la lista: ${finalCode}`, 'warning');
         return;
     }
+    // Código NUEVO: bloqueo POR CÓDIGO (no por tiempo global), así el aviso de éxito sale
+    // siempre en la primera lectura y no se descartan escaneos distintos hechos rápido.
+    if (finalCode === lastScanRef.current.code && now - lastScanRef.current.time < MIN_SCAN_INTERVAL) return;
+    lastScanRef.current = { code: finalCode, time: now };
+
+    setLoading(true);
+    showAppMessage('Procesando código...', 'info');
+    if ('vibrate' in navigator) navigator.vibrate(100);
 
     const applyScanResult = async (data: { name: string | null; product: string | null; status: string } | null, offline: boolean) => {
         if (!data) {
@@ -400,93 +412,28 @@ export default function Home() {
     }, [scannerActive, selectedScannerMode, onScanSuccess]);
 
 
-  const applyCameraConstraints = useCallback((track: MediaStreamTrack) => {
+  // Flash/zoom se aplican al MediaStreamTrack del escáner (el que expone <BarcodeScanner />
+  // vía onTrackReady). torch/zoom no son estándar en TS, de ahí el cast.
+  const applyCameraConstraints = useCallback((track: MediaStreamTrack | null) => {
     if (!isMobile || !track || track.readyState !== 'live') return;
-    track.applyConstraints({
-      advanced: [{ zoom: zoom, torch: isFlashOn }]
-    }).catch(e => {
+    track.applyConstraints({ advanced: [{ zoom, torch: isFlashOn }] } as any).catch((e: unknown) => {
       if (!String(e).includes('ConstraintNotSatisfiedError')) {
         console.error("Failed to apply constraints", e);
       }
     });
   }, [zoom, isFlashOn, isMobile]);
-  
-  useEffect(() => {
-    if (isMobile && scannerActive && selectedScannerMode === 'camara' && html5QrCodeRef.current?.getState() === Html5QrcodeScannerState.SCANNING) {
-      const videoElement = readerRef.current?.querySelector('video');
-      if (videoElement && videoElement.srcObject) {
-        const stream = videoElement.srcObject as MediaStream;
-        const track = stream.getVideoTracks()[0];
-        if (track) applyCameraConstraints(track);
-      }
-    }
-  }, [zoom, isFlashOn, scannerActive, selectedScannerMode, isMobile, applyCameraConstraints, loading, deliveryList.length, lastScanned]);
 
   useEffect(() => {
-    if (!isMounted || !readerRef.current) return;
+    if (scannerActive && selectedScannerMode === 'camara') applyCameraConstraints(trackRef.current);
+  }, [zoom, isFlashOn, scannerActive, selectedScannerMode, applyCameraConstraints]);
 
-    if (!html5QrCodeRef.current) {
-      html5QrCodeRef.current = new Html5Qrcode(readerRef.current.id, false);
+  // La cámara ya no se maneja aquí: la lleva <BarcodeScanner /> (zxing-wasm). Al detener el
+  // escáner se resetea la plomería de flash/zoom que aún vive en el padre.
+  useEffect(() => {
+    if (!(scannerActive && selectedScannerMode === 'camara')) {
+      setCameraCapabilities(null); setIsFlashOn(false); setZoom(1); trackRef.current = null;
     }
-    const qrCode = html5QrCodeRef.current;
-    // El resultado de getCameraCapabilitiesWithRetry puede tardar hasta ~1.5s;
-    // si el usuario detiene (o reinicia) la cámara antes de que resuelva, esa
-    // promesa vieja no debe pisar el estado con datos de un track ya muerto.
-    let cancelled = false;
-
-    const cleanup = () => {
-        cancelled = true;
-        if (qrCode && qrCode.isScanning) {
-            return qrCode.stop().catch(err => {
-                if (!String(err).includes('not started')) {
-                    console.error("Fallo al detener el escáner:", err);
-                }
-            }).finally(() => {
-              if (isMobile) {
-                setCameraCapabilities(null);
-                setIsFlashOn(false);
-                setZoom(1);
-              }
-            });
-        }
-        return Promise.resolve();
-    };
-
-    if (scannerActive && selectedScannerMode === 'camara') {
-      if (qrCode.getState() !== Html5QrcodeScannerState.SCANNING) {
-        const config = {
-          fps: 5,
-          qrbox: { width: 250, height: 250 },
-        };
-        qrCode.start({ facingMode: "environment" }, config, onScanSuccess, (e: any) => {})
-        .then(() => {
-            if (isMobile) {
-              const videoElement = readerRef.current?.querySelector('video');
-              const stream = videoElement?.srcObject as MediaStream;
-              const track = stream?.getVideoTracks()[0];
-              if (track) {
-                getCameraCapabilitiesWithRetry(track).then(caps => { if (!cancelled) setCameraCapabilities(caps); });
-              }
-            }
-        })
-        .catch(err => {
-            console.error("Error al iniciar camara:", err);
-            if (String(err).includes('Cannot transition to a new state')) {
-                showAppMessage('Error al iniciar la cámara. Por favor, intenta de nuevo.', 'error');
-            } else {
-                showAppMessage('Error al iniciar la cámara. Revisa los permisos.', 'error');
-            }
-            setScannerActive(false);
-        });
-      }
-    } else {
-      cleanup();
-    }
-
-    return () => {
-      cleanup();
-    };
-  }, [scannerActive, selectedScannerMode, isMounted, isMobile, onScanSuccess]);
+  }, [scannerActive, selectedScannerMode]);
 
   const startScanner = () => {
     if (!encargado.trim()) return showAppMessage('Por favor, selecciona un encargado.', 'error');
@@ -1062,14 +1009,27 @@ export default function Home() {
                 <h2 className="text-lg font-bold text-starbucks-dark">Para Entrega ({deliveryList.length})</h2>
 
                 <div className="bg-starbucks-cream p-4 rounded-lg">
-                    <div className="scanner-container relative">
-                        <div id="reader" ref={readerRef} style={{ display: selectedScannerMode === 'camara' && scannerActive ? 'block' : 'none' }}></div>
+                    <div className="scanner-container relative aspect-square max-h-[50vh] mx-auto bg-black rounded-lg overflow-hidden">
+                        <div className="w-full h-full" style={{ display: selectedScannerMode === 'camara' && scannerActive ? 'block' : 'none' }}>
+                          {selectedScannerMode === 'camara' && scannerActive && (
+                            <BarcodeScanner
+                              onDetected={onScanSuccess}
+                              onTrackReady={(track) => {
+                                trackRef.current = track;
+                                if (isMobile) getCameraCapabilitiesWithRetry(track).then((caps) => {
+                                  setCameraCapabilities(caps);
+                                  applyCameraConstraints(track);
+                                });
+                              }}
+                              onError={(e) => { console.error('Error de cámara (entrega):', e); showAppMessage('No se pudo iniciar la cámara. Revisa los permisos.', 'error'); setScannerActive(false); }}
+                            />
+                          )}
+                        </div>
                          {message.show && (
                             <div className={`scanner-message ${messageClasses[message.type]}`}>
                                 {message.text}
                             </div>
                         )}
-                         {scannerActive && selectedScannerMode === 'camara' && <div id="laser-line"></div>}
                          <input type="text" id="physical-scanner-input" ref={physicalScannerInputRef} className="hidden-input" autoComplete="off" />
                          {selectedScannerMode === 'camara' && !scannerActive && (
                              <div className="text-center p-8 border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center w-full h-full">

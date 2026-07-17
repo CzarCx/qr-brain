@@ -72,7 +72,7 @@ const DRIVER_STORAGE_KEY = 'devoluciones_driver_data';
 
 // Escáner nuevo (zxing-wasm) SOLO para esta pantalla. ssr:false porque usa cámara/WASM
 // del navegador; nadie más lo importa, así que las otras pantallas siguen con html5-qrcode.
-const BarcodeScanner = dynamic(() => import('./BarcodeScanner'), { ssr: false });
+const BarcodeScanner = dynamic(() => import('@/components/BarcodeScanner'), { ssr: false });
 
 // Respaldo del catálogo de paqueterías. La tabla `paqueterias` puede venir vacía —sin
 // política de RLS que deje leerla, o sin filas todavía— y entonces el combo quedaba en
@@ -527,7 +527,7 @@ export default function DevolucionesPage() {
   // Mercado Libre se reconocen solos porque existen en etiquetas_i. Se incluye 'Mercado
   // Libre' por si es una etiqueta de ML aún no digitalizada (va a devoluciones_ml igual);
   // cualquier otra plataforma se guarda en la tabla aparte devoluciones_externas.
-  const PLATAFORMA_OPTIONS = ['Mercado Libre', 'TikTok', 'Walmart', 'Amazon', 'Shein', 'Otro'];
+  const PLATAFORMA_OPTIONS = ['Mercado Libre', 'TikTok', 'Walmart', 'Amazon', 'FedEx', 'Estafeta', 'Otro'];
 
   // Una devolución es "externa" (tabla propia) cuando no está en nuestra base Y su
   // plataforma no es Mercado Libre. Es el discriminador que enruta el guardado.
@@ -811,7 +811,12 @@ export default function DevolucionesPage() {
                                 trackRef.current = track;
                                 // Se piden SIEMPRE (no solo en móvil): los controles se muestran
                                 // según lo que la cámara reporte, no según el ancho de pantalla.
-                                getCameraCapabilitiesWithRetry(track).then(setCameraCapabilities);
+                                // Tras capabilities, se re-aplican flash/zoom al track: importa
+                                // cuando Android reinicia la cámara al volver de segundo plano.
+                                getCameraCapabilitiesWithRetry(track).then((caps) => {
+                                  setCameraCapabilities(caps);
+                                  applyCameraConstraints(track);
+                                });
                               }}
                               onError={(e) => { console.error('Error de cámara (devoluciones):', e); showModalNotification('Error de cámara', 'No se pudo iniciar la cámara. Revisa los permisos e intenta de nuevo.', 'destructive'); setScannerActive(false); }}
                             />

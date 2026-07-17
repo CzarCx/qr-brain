@@ -8,11 +8,16 @@
  * ninguna otra pantalla lo importa.
  *
  * Se decodifica sobre el FRAME COMPLETO (solo reducido para rendimiento), NO sobre un
- * recorte central: un recorte cuadrado le cortaba los extremos —y con ellos los patrones
- * de inicio/fin— a los códigos 1D largos en vertical, que por eso no leían. El motor ya
- * trae tryRotate/tryHarder activos, así que lee en cualquier orientación. El texto crudo
- * sale por onDetected (mismo contrato que onScanSuccess → processCode no cambia), y el
- * contorno del código detectado se dibuja en un canvas encima del video.
+ * recorte central: un recorte cuadrado le cortaba los extremos a los códigos 1D largos en
+ * vertical, que por eso no leían. El motor ya trae tryRotate/tryHarder activos, así que lee
+ * en cualquier orientación. El texto crudo sale por onDetected (mismo contrato que
+ * onScanSuccess → processCode no cambia), y el contorno del código detectado se dibuja en
+ * un canvas encima del video.
+ *
+ * Reanudar tras bloquear el teléfono es distinto por plataforma: iOS PAUSA el <video> pero
+ * conserva el track vivo (por eso flash/zoom siguen respondiendo); Android suele APAGAR el
+ * track (libera la cámara). Por eso al volver a ser visible se intenta reanudar y, si el
+ * video no se recupera de verdad, se REINICIA la cámara desde cero (cubre ambos casos).
  */
 
 import { useEffect, useRef, useState } from 'react';
@@ -34,11 +39,13 @@ const FORMATS = ['qr_code', 'code_128', 'ean_13', 'ean_8', 'upc_a', 'upc_e', 'it
 
 // ~7 lecturas/seg: suficiente para leer al vuelo y suave para la CPU del iPhone.
 const DETECT_INTERVAL_MS = 140;
-// Lado máximo del frame que se manda a decodificar. Reduce sin perder resolución útil de
-// los códigos largos (el recorte anterior era lo que los rompía en vertical).
+// Lado máximo del frame que se manda a decodificar.
 const MAX_DIM = 1280;
 // Cuánto se mantiene el contorno tras el último avistamiento (evita parpadeo).
 const OUTLINE_HOLD_MS = 350;
+// Tras intentar reanudar, cuánto esperar antes de comprobar si de verdad se recuperó
+// (si no, se reinicia la cámara — caso típico de Android).
+const RESUME_CHECK_MS = 600;
 
 type Props = {
   onDetected: (text: string) => void;
@@ -63,6 +70,7 @@ export default function BarcodeScanner({ onDetected, onTrackReady, onError }: Pr
     let busy = false;
     let lastRun = 0;
     let lastHit = 0; // último instante con código detectado (para sostener el contorno)
+    let resumeTimer: ReturnType<typeof setTimeout> | null = null;
     const detector = new BarcodeDetector({ formats: FORMATS as unknown as never });
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
@@ -72,10 +80,6 @@ export default function BarcodeScanner({ onDetected, onTrackReady, onError }: Pr
       oc?.getContext('2d')?.clearRect(0, 0, oc.width, oc.height);
     };
 
-    // Dibuja el contorno del código. Los puntos vienen en coordenadas del canvas reducido
-    // (factor `scale`); se llevan al espacio intrínseco del video, y como el canvas de
-    // overlay tiene ese mismo tamaño y object-cover igual que el video, el trazo cae
-    // justo encima de lo que se ve.
     const drawOutline = (
       points: ReadonlyArray<{ x: number; y: number }> | undefined,
       box: { x: number; y: number; width: number; height: number } | undefined,
@@ -114,7 +118,6 @@ export default function BarcodeScanner({ onDetected, onTrackReady, onError }: Pr
     const loop = (t: number) => {
       if (cancelled) return;
       const v = videoRef.current;
-      // Sostener el contorno un poco; si hace rato que no se ve el código, se borra.
       if (t - lastHit > OUTLINE_HOLD_MS) clearOutline();
 
       if (v && ctx && v.readyState >= 2 && !busy && t - lastRun >= DETECT_INTERVAL_MS) {
@@ -122,13 +125,10 @@ export default function BarcodeScanner({ onDetected, onTrackReady, onError }: Pr
         busy = true;
         const vw = v.videoWidth, vh = v.videoHeight;
         if (vw && vh) {
-          // Frame COMPLETO (solo reducido si excede MAX_DIM): así el código entero entra
-          // en cualquier orientación. El motor (tryRotate) resuelve las verticales.
           const scale = Math.min(1, MAX_DIM / Math.max(vw, vh));
           const cw = Math.round(vw * scale), ch = Math.round(vh * scale);
           if (canvas.width !== cw || canvas.height !== ch) { canvas.width = cw; canvas.height = ch; }
           ctx.drawImage(v, 0, 0, cw, ch);
-          // El overlay debe tener el tamaño intrínseco del video para alinear el trazo.
           const oc = overlayRef.current;
           if (oc && (oc.width !== vw || oc.height !== vh)) { oc.width = vw; oc.height = vh; }
           detector.detect(canvas)
@@ -150,31 +150,81 @@ export default function BarcodeScanner({ onDetected, onTrackReady, onError }: Pr
       rafId = requestAnimationFrame(loop);
     };
 
-    (async () => {
+    // ¿El video está produciendo imagen de verdad? (no basta con que el track diga 'live':
+    // Android puede dejarlo congelado tras volver de segundo plano).
+    const isPlaying = () => {
+      const v = videoRef.current;
+      return !!v && !v.paused && v.readyState >= 2 && v.videoWidth > 0;
+    };
+
+    const stopStream = () => {
+      stream?.getTracks().forEach(tr => tr.stop());
+      stream = null;
+    };
+
+    const attachAndPlay = async () => {
+      const v = videoRef.current;
+      if (!v || !stream) return;
+      if (v.srcObject !== stream) v.srcObject = stream;
+      try { await v.play(); } catch { /* iOS puede rechazar sin gesto; se reintenta al volver */ }
+    };
+
+    const startCamera = async () => {
       try {
         stream = await navigator.mediaDevices.getUserMedia({
           video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 } },
           audio: false,
         });
-        if (cancelled) { stream.getTracks().forEach(tr => tr.stop()); return; }
-        const v = videoRef.current!;
-        v.srcObject = stream;
-        // iOS exige playsInline+muted+gesto; el gesto ya ocurrió al pulsar "Iniciar".
-        await v.play();
+        if (cancelled) { stopStream(); return; }
+        await attachAndPlay();
         if (cancelled) return;
         setReady(true);
         const track = stream.getVideoTracks()[0];
-        if (track) cbRef.current.onTrackReady?.(track);
-        rafId = requestAnimationFrame(loop);
+        if (track) {
+          cbRef.current.onTrackReady?.(track);
+          // Android libera la cámara en segundo plano → el track termina; reaccionar.
+          track.addEventListener('ended', () => { if (!cancelled) resume(); });
+        }
+        if (rafId == null) rafId = requestAnimationFrame(loop);
       } catch (e) {
         if (!cancelled) cbRef.current.onError?.(e);
       }
-    })();
+    };
+
+    // Al volver a ser visible: si el track murió (Android) se reinicia; si sigue vivo (iOS)
+    // se reanuda el video y, como red de seguridad, se comprueba poco después que de verdad
+    // se recuperó — si no, se reinicia igual.
+    const resume = () => {
+      if (cancelled || document.visibilityState !== 'visible') return;
+      const track = stream?.getVideoTracks?.()[0];
+      if (!stream || !track || track.readyState === 'ended') {
+        stopStream();
+        startCamera();
+        return;
+      }
+      attachAndPlay();
+      if (resumeTimer) clearTimeout(resumeTimer);
+      resumeTimer = setTimeout(() => {
+        if (cancelled || document.visibilityState !== 'visible') return;
+        if (!isPlaying()) { stopStream(); startCamera(); }
+      }, RESUME_CHECK_MS);
+    };
+
+    const onVisibility = () => { if (document.visibilityState === 'visible') resume(); };
+    document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('focus', resume);
+    window.addEventListener('pageshow', resume);
+
+    startCamera();
 
     return () => {
       cancelled = true;
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('focus', resume);
+      window.removeEventListener('pageshow', resume);
+      if (resumeTimer) clearTimeout(resumeTimer);
       if (rafId) cancelAnimationFrame(rafId);
-      stream?.getTracks().forEach(tr => tr.stop());
+      stopStream();
       if (videoRef.current) videoRef.current.srcObject = null;
     };
   }, []);
