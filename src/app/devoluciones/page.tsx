@@ -93,7 +93,11 @@ export default function DevolucionesPage() {
   const [zoom, setZoom] = useState(1);
   const isMobile = useIsMobile();
   const [showNotification, setShowNotification] = useState(false);
-  const [notification, setNotification] = useState({ title: '', message: '', variant: 'default' as 'default' | 'destructive' | 'success' });
+  const [notification, setNotification] = useState({ title: '', message: '', variant: 'default' as 'default' | 'destructive' | 'success' | 'warning' });
+  // Tras finalizar hay que reabrir el modal de transporte, pero NO a la vez que el de
+  // éxito: son dos modales encimados y el de Radix bloquea los clics del de éxito (no
+  // dejaba cerrarlo). Se difiere: el de transporte abre al cerrar el de éxito.
+  const [reopenDriverOnClose, setReopenDriverOnClose] = useState(false);
 
   // Batch states
   const [returnsList, setReturnsList] = useState<ReturnItem[]>([]);
@@ -134,9 +138,16 @@ export default function DevolucionesPage() {
     }, 2500);
   };
 
-   const showModalNotification = (title: string, message: string, variant: 'default' | 'destructive' | 'success' = 'default') => {
+   const showModalNotification = (title: string, message: string, variant: 'default' | 'destructive' | 'success' | 'warning' = 'default') => {
     setNotification({ title, message, variant });
     setShowNotification(true);
+  };
+
+  // Cierra el modal de notificación y, si venimos de finalizar, recién ahí abre el de
+  // transporte para la siguiente vuelta (nunca los dos a la vez).
+  const closeNotification = () => {
+    setShowNotification(false);
+    if (reopenDriverOnClose) { setReopenDriverOnClose(false); setIsDriverModalOpen(true); }
   };
 
   useEffect(() => {
@@ -373,13 +384,34 @@ export default function DevolucionesPage() {
             if (alreadyDelivered) {
                 playWarningSound();
                 showModalNotification(
-                    'Ya Entregado', 
-                    `Esta devolución (${alreadyDelivered.num_venta || alreadyDelivered.code}) ya fue marcada como entregada anteriormente.`, 
+                    'Ya Entregado',
+                    `Esta devolución (${alreadyDelivered.num_venta || alreadyDelivered.code}) ya fue marcada como entregada anteriormente.`,
                     'warning'
                 );
                 setLoading(false);
                 return;
             }
+        }
+
+        // PASO 2b: también en devoluciones_externas (TikTok/Walmart/etc., de otras vueltas).
+        // El código es text, así que un alfanumérico no rompe la consulta.
+        const { data: extRecords, error: extError } = await supabaseEtiquetas
+            .from('devoluciones_externas')
+            .select('entregado, code, origen')
+            .or(`code.eq."${finalInput}",code.eq."${realCode}"`);
+
+        if (extError) throw extError;
+
+        if (extRecords && extRecords.length > 0) {
+            const yaRegistrada = extRecords.find(r => r.entregado) || extRecords[0];
+            playWarningSound();
+            showModalNotification(
+                'Ya Registrada',
+                `Esta devolución externa (${yaRegistrada.code}${yaRegistrada.origen ? ' · ' + yaRegistrada.origen : ''}) ya fue registrada en una vuelta anterior.`,
+                'warning'
+            );
+            setLoading(false);
+            return;
         }
 
         const devData = devRecords && devRecords.length > 0 ? devRecords[0] : null;
@@ -447,11 +479,19 @@ export default function DevolucionesPage() {
     const code = decodedText.trim();
     if (!code) return;
     const now = Date.now();
-    // El escáner WASM detecta ~7 veces/seg. Con un bloqueo por TIEMPO (el de antes) se
-    // tragaba escaneos nuevos legítimos (por eso el "escaneado" no siempre salía) y dejaba
-    // pasar el mismo código repetido (por eso el "ya en la lista" era errático). Ahora un
-    // código NUEVO se procesa de inmediato, y el MISMO se ignora durante el cooldown para
-    // no spamear mientras el operario lo mantiene enfrente.
+    // Si el código YA está en la lista, se avisa DIRECTO (sin ir a la BD) y no se reprocesa.
+    // El aviso "ya en la lista" fallaba porque el bloqueo por tiempo se lo comía; ahora sale
+    // con un cooldown corto (para no spamear mientras se sostiene el mismo código enfrente).
+    if (scannedCodesSetRef.current.has(code)) {
+      if (code === lastScanRef.current.code && now - lastScanRef.current.time < 900) return;
+      lastScanRef.current = { code, time: now };
+      playWarningSound();
+      showAppMessage(`Ya en la lista: ${code}`, 'warning');
+      return;
+    }
+    // Código NUEVO: el escáner WASM detecta ~7 veces/seg, así que el bloqueo es POR CÓDIGO
+    // (no por tiempo global) para no tragarse escaneos nuevos legítimos, y así el aviso de
+    // "escaneado correctamente" sale siempre en la primera lectura.
     if (code === lastScanRef.current.code && now - lastScanRef.current.time < MIN_SCAN_INTERVAL) return;
     lastScanRef.current = { code, time: now };
     processCode(code, 'any');
@@ -653,8 +693,9 @@ export default function DevolucionesPage() {
           setScannerActive(false);
           // Termina el proceso de devoluciones: se piden los datos del transporte
           // de nuevo para la siguiente vuelta, en vez de arrastrar al conductor
-          // anterior a un lote completamente distinto.
-          setIsDriverModalOpen(true);
+          // anterior a un lote completamente distinto. Se DIFIERE hasta que el usuario
+          // cierre el modal de éxito (ver closeNotification): no pueden convivir los dos.
+          setReopenDriverOnClose(true);
       } catch (e: any) {
           playWarningSound();
           showModalNotification('Error al Guardar', e.message, 'destructive');
@@ -822,7 +863,56 @@ export default function DevolucionesPage() {
                         FINALIZAR ({returnsList.length})
                       </Button>
                   </div>
-                  <div className="table-container border rounded-lg max-h-[500px] overflow-auto bg-white shadow-inner custom-scrollbar">
+                  {/* Móvil: cards en vez de tabla (la de 800px se salía de la pantalla). */}
+                  <div className="md:hidden space-y-2 max-h-[500px] overflow-auto pr-0.5">
+                    {returnsList.length > 0 ? returnsList.map((item) => (
+                      <div key={item.code} className={cn("rounded-xl border p-2.5 space-y-1.5", item.isUnknown ? "bg-orange-50 border-orange-200" : "bg-white border-gray-200")}>
+                        {/* Fila 1: código + badge, y borrar a la derecha. */}
+                        <div className="flex items-start gap-2">
+                          <div className="min-w-0 flex-1">
+                            <p className="font-mono text-[11px] font-bold break-all leading-tight">{item.code}</p>
+                            <div className="flex flex-wrap gap-1 mt-1">
+                              {item.isManual && <span className="text-[7px] font-black text-amber-600 border border-amber-200 px-1 rounded-sm bg-amber-50">MANUAL</span>}
+                              {item.isNewInDev && <span className="text-[7px] font-black text-green-600 border border-green-200 px-1 rounded-sm bg-green-50 flex items-center gap-0.5"><Sparkles className="h-2 w-2" /> NUEVO</span>}
+                              {item.isUnknown && <span className="text-[7px] font-black text-red-600 border border-red-200 px-1 rounded-sm bg-red-50 flex items-center gap-0.5"><HelpCircle className="h-2 w-2" /> SIN REGISTRO</span>}
+                            </div>
+                          </div>
+                          <Button variant="ghost" size="icon" onClick={() => removeFromList(item.code)} className="text-red-400 hover:text-red-600 h-6 w-6 shrink-0"><Trash2 className="h-3.5 w-3.5" /></Button>
+                        </div>
+                        {/* Fila 2: Plataforma al lado de Empresa, alineadas horizontalmente. */}
+                        <div className={cn("grid gap-2", item.isUnknown ? "grid-cols-2" : "grid-cols-1")}>
+                          {item.isUnknown && (
+                            <Select value={item.origen || undefined} onValueChange={(val) => handleOrigenChange(item.code, val)}>
+                              <SelectTrigger className="h-8 w-full text-[10px] font-bold px-2 border-red-300 bg-red-50"><SelectValue placeholder="Plataforma..." /></SelectTrigger>
+                              <SelectContent>{PLATAFORMA_OPTIONS.map(p => (<SelectItem key={p} value={p} className="text-xs">{p}</SelectItem>))}</SelectContent>
+                            </Select>
+                          )}
+                          {item.tiendaAlreadySet ? (
+                            <div className="h-8 flex items-center px-2 rounded-md border border-starbucks-green/30 bg-green-50/50"><span className="text-[10px] font-black text-starbucks-green truncate">{item.organization}</span></div>
+                          ) : (
+                            <Select value={item.organization && item.organization !== '---' ? item.organization : undefined} onValueChange={(val) => handleOrganizationChange(item.code, val)}>
+                              <SelectTrigger className="h-8 w-full text-[10px] font-bold px-2 border-amber-300 bg-amber-50"><SelectValue placeholder="Empresa..." /></SelectTrigger>
+                              <SelectContent>{EMPRESA_OPTIONS.map(org => (<SelectItem key={org} value={org} className="text-xs">{org}</SelectItem>))}</SelectContent>
+                            </Select>
+                          )}
+                        </div>
+                        {/* Fila 3: SKU y Subcategoría juntos. */}
+                        <div className="grid grid-cols-2 gap-2 border-t border-dashed border-gray-200 pt-1.5">
+                          <div className="min-w-0">
+                            <p className="text-[8px] font-black uppercase tracking-wide text-gray-400">SKU</p>
+                            <p className="text-[10px] font-bold text-gray-600 truncate">{item.sku}</p>
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-[8px] font-black uppercase tracking-wide text-gray-400">Subcat.</p>
+                            <p className="text-[10px] font-black text-amber-700 uppercase truncate">{item.subcategoria}</p>
+                          </div>
+                        </div>
+                      </div>
+                    )) : <div className="text-center text-gray-400 py-16 text-[11px] uppercase font-bold">Esperando registros...</div>}
+                  </div>
+
+                  {/* Desktop: tabla */}
+                  <div className="hidden md:block table-container border rounded-lg max-h-[500px] overflow-auto bg-white shadow-inner custom-scrollbar">
                       <Table className="min-w-[800px]">
                           <TableHeader className="sticky top-0 bg-gray-50 z-10">
                               <TableRow>
@@ -983,7 +1073,7 @@ export default function DevolucionesPage() {
       </Dialog>
 
       {showNotification && (
-          <div className="p-4 fixed inset-0 bg-black/60 backdrop-blur-sm flex justify-center items-center z-[100]" onClick={() => setShowNotification(false)}>
+          <div className="p-4 fixed inset-0 bg-black/60 backdrop-blur-sm flex justify-center items-center z-[100]" onClick={closeNotification}>
                 <div className="bg-white rounded-[2.5rem] shadow-2xl p-8 w-full max-w-[320px] text-center space-y-6 animate-in zoom-in duration-300" onClick={(e) => e.stopPropagation()}>
                   <div className={cn("p-4 rounded-3xl inline-block mx-auto", notification.variant === 'destructive' ? "bg-red-50 text-red-500" : notification.variant === 'success' ? "bg-green-50 text-green-600" : "bg-amber-50 text-amber-600")}>
                       {notification.variant === 'destructive' ? <XCircle className="h-10 w-10" /> : notification.variant === 'success' ? <CheckCircle className="h-10 w-10"/> : <AlertTriangle className="h-10 w-10" />}
@@ -992,7 +1082,7 @@ export default function DevolucionesPage() {
                       <h3 className="text-xl font-black text-gray-900 tracking-tight">{notification.title}</h3>
                       <p className="text-xs text-gray-500 font-medium leading-relaxed">{notification.message}</p>
                   </div>
-                  <Button onClick={() => setShowNotification(false)} className="w-full h-12 rounded-2xl bg-starbucks-green font-black text-xs tracking-widest shadow-lg shadow-starbucks-green/20">CERRAR</Button>
+                  <Button onClick={closeNotification} className="w-full h-12 rounded-2xl bg-starbucks-green font-black text-xs tracking-widest shadow-lg shadow-starbucks-green/20">CERRAR</Button>
               </div>
           </div>
       )}
