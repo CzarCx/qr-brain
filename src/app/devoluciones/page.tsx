@@ -70,6 +70,12 @@ type ReturnItem = {
 const STORAGE_KEY = 'devoluciones_session_data';
 const DRIVER_STORAGE_KEY = 'devoluciones_driver_data';
 
+// Respaldo del catálogo de paqueterías. La tabla `paqueterias` puede venir vacía —sin
+// política de RLS que deje leerla, o sin filas todavía— y entonces el combo quedaba en
+// blanco y bloqueaba TODO el flujo (no se puede iniciar el escáner sin paquetería). Con
+// esto el operario nunca se queda sin opciones; cuando la tabla sí responde, esas mandan.
+const PAQUETERIA_FALLBACK = ['FEDEX', 'ESTAFETA', 'DHL', 'PAQUETEXPRESS', 'MERCADO ENVÍOS', 'UPS', '99 MINUTOS', 'CORREOS DE MÉXICO'];
+
 export default function DevolucionesPage() {
   const { profile, user } = useAuth();
   const [isMounted, setIsMounted] = useState(false);
@@ -180,18 +186,26 @@ export default function DevolucionesPage() {
 
   useEffect(() => {
     const fetchPaqueterias = async () => {
+      const usarRespaldo = (motivo: string) => {
+        console.warn(`[paqueterias] ${motivo}. Usando catálogo de respaldo del código.`);
+        setPaqueteriaOptions(PAQUETERIA_FALLBACK.map(n => ({ value: n, label: n })));
+      };
+
       const { data, error, count } = await supabaseEtiquetas.from('paqueterias').select('nombre', { count: 'exact' }).order('nombre');
       if (error) {
+        // Antes esto solo mostraba un modal y dejaba el combo vacío, bloqueando el flujo.
+        // Ahora se cae al respaldo para que el operario pueda seguir trabajando.
         console.error('Error al cargar paqueterías:', error);
-        // Temporal: se muestra en pantalla (no solo en consola) para poder
-        // diagnosticar desde el teléfono, donde no hay devtools a la mano.
-        showModalNotification('Error cargando paqueterías', `${error.message} (código: ${error.code})`, 'destructive');
+        usarRespaldo(`error de consulta: ${error.message} (código: ${error.code})`);
         return;
       }
-      setPaqueteriaOptions((data || []).map(p => ({ value: p.nombre, label: p.nombre })));
       if (!data || data.length === 0) {
-        console.warn('[paqueterias] La consulta no dio error pero regresó 0 filas. count reportado por PostgREST:', count);
+        // 0 filas sin error = casi siempre RLS sin política de lectura para el rol de la
+        // app (la tabla probablemente sí tiene datos). Ver docs/paqueterias_rls.sql.
+        usarRespaldo(`la consulta regresó 0 filas (count: ${count})`);
+        return;
       }
+      setPaqueteriaOptions(data.map(p => ({ value: p.nombre, label: p.nombre })));
     };
     fetchPaqueterias();
   }, []);
