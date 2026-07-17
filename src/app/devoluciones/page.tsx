@@ -853,7 +853,7 @@ export default function DevolucionesPage() {
                     <div className="mt-4 flex gap-2 justify-center">
                       <Button onClick={handleStartScanner} disabled={scannerActive || loading || !encargado || !driverName.trim() || !driverPlate.trim() || !paqueteria.trim()} className="bg-blue-600 hover:bg-blue-700 h-10 px-8">Iniciar</Button>
                       <Button onClick={() => setIsDriverModalOpen(true)} variant="outline" className="h-10 px-4 gap-2" disabled={scannerActive} title="Editar datos del transporte"><Truck className="h-4 w-4" /> Transporte</Button>
-                      <Button onClick={() => window.location.reload()} variant="destructive" className="h-10 px-8" disabled={!scannerActive}>Detener</Button>
+                      <Button onClick={() => { setScannerActive(false); showAppMessage('Escáner detenido.', 'info'); }} variant="destructive" className="h-10 px-8" disabled={!scannerActive}>Detener</Button>
                     </div>
                   </div>
               </div>

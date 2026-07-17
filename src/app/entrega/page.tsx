@@ -447,7 +447,10 @@ export default function Home() {
   };
 
   const stopScanner = () => {
-    window.location.reload();
+    // Antes recargaba la página (workaround de html5-qrcode). Con <BarcodeScanner /> basta
+    // con desmontarlo: su cleanup apaga los tracks. Se conserva la lista y la sesión.
+    setScannerActive(false);
+    showAppMessage('Escáner detenido.', 'info');
   };
 
   const removeFromList = (codeToRemove: string) => {
