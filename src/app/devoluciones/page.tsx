@@ -111,7 +111,8 @@ export default function DevolucionesPage() {
   // Track de video del escáner nuevo, para aplicar flash/zoom si algún día se cablean
   // (hoy no hay botones en esta pantalla; se conserva la plomería de capabilities).
   const trackRef = useRef<MediaStreamTrack | null>(null);
-  const lastScanTimeRef = useRef(Date.now());
+  // Dedup POR CÓDIGO (no por tiempo): guarda el último código y cuándo se procesó.
+  const lastScanRef = useRef({ code: '', time: 0 });
   const physicalScannerInputRef = useRef<HTMLInputElement | null>(null);
   const bufferRef = useRef('');
   const scannedCodesSetRef = useRef(new Set<string>());
@@ -442,9 +443,18 @@ export default function DevolucionesPage() {
   }, []);
 
   const onScanSuccess = useCallback((decodedText: string) => {
-    if (loadingRef.current || Date.now() - lastScanTimeRef.current < MIN_SCAN_INTERVAL) return;
-    lastScanTimeRef.current = Date.now();
-    processCode(decodedText, 'any');
+    if (loadingRef.current) return;
+    const code = decodedText.trim();
+    if (!code) return;
+    const now = Date.now();
+    // El escáner WASM detecta ~7 veces/seg. Con un bloqueo por TIEMPO (el de antes) se
+    // tragaba escaneos nuevos legítimos (por eso el "escaneado" no siempre salía) y dejaba
+    // pasar el mismo código repetido (por eso el "ya en la lista" era errático). Ahora un
+    // código NUEVO se procesa de inmediato, y el MISMO se ignora durante el cooldown para
+    // no spamear mientras el operario lo mantiene enfrente.
+    if (code === lastScanRef.current.code && now - lastScanRef.current.time < MIN_SCAN_INTERVAL) return;
+    lastScanRef.current = { code, time: now };
+    processCode(code, 'any');
   }, [processCode]);
   
   const handleManualCodeAdd = () => {
@@ -675,10 +685,22 @@ export default function DevolucionesPage() {
   // monta/desmonta según scannerActive y limpia sus propios tracks. Al detener (o cambiar
   // de usuario) se resetea la plomería de flash/zoom que aún vive en el padre.
   useEffect(() => {
-    if (!(scannerActive && selectedScannerMode === 'camara') && isMobile) {
+    if (!(scannerActive && selectedScannerMode === 'camara')) {
       setCameraCapabilities(null); setIsFlashOn(false); setZoom(1); trackRef.current = null;
     }
-  }, [scannerActive, selectedScannerMode, isMobile]);
+  }, [scannerActive, selectedScannerMode]);
+
+  // Flash y zoom se aplican al MediaStreamTrack del escáner (el que expone <BarcodeScanner />
+  // vía onTrackReady). torch/zoom no son estándar en TS, de ahí el cast.
+  const applyCameraConstraints = useCallback((track: MediaStreamTrack | null) => {
+    if (!track || track.readyState !== 'live') return;
+    track.applyConstraints({ advanced: [{ zoom, torch: isFlashOn }] } as any)
+      .catch((e: unknown) => { if (!String(e).includes('ConstraintNotSatisfiedError')) console.error('No se pudieron aplicar flash/zoom:', e); });
+  }, [zoom, isFlashOn]);
+
+  useEffect(() => {
+    if (scannerActive && selectedScannerMode === 'camara') applyCameraConstraints(trackRef.current);
+  }, [zoom, isFlashOn, scannerActive, selectedScannerMode, applyCameraConstraints]);
 
   const messageClasses: any = { success: 'bg-green-500/80 text-white', error: 'bg-red-500/80 text-white', warning: 'bg-yellow-500/80 text-white', info: 'bg-blue-500/80 text-white' };
 
@@ -738,15 +760,17 @@ export default function DevolucionesPage() {
                       <Button variant={selectedScannerMode === 'camara' ? 'default' : 'outline'} onClick={() => setSelectedScannerMode('camara')} disabled={scannerActive} className="h-10 text-xs font-bold">CÁMARA</Button>
                       <Button variant={selectedScannerMode === 'fisico' ? 'default' : 'outline'} onClick={() => setSelectedScannerMode('fisico')} disabled={scannerActive} className="h-10 text-xs font-bold">USB / LASER</Button>
                   </div>
-                  <div className="bg-starbucks-cream p-4 rounded-lg flex flex-col min-h-[300px]">
-                    <div className="scanner-container relative flex-grow bg-black rounded-lg overflow-hidden flex items-center justify-center">
+                  <div className="bg-starbucks-cream p-4 rounded-lg flex flex-col">
+                    <div className="scanner-container relative w-full aspect-square max-h-[50vh] mx-auto bg-black rounded-lg overflow-hidden flex items-center justify-center">
                         <div className="w-full h-full" style={{ display: selectedScannerMode === 'camara' && scannerActive ? 'block' : 'none' }}>
                           {selectedScannerMode === 'camara' && scannerActive && (
                             <BarcodeScanner
                               onDetected={onScanSuccess}
                               onTrackReady={(track) => {
                                 trackRef.current = track;
-                                if (isMobile) getCameraCapabilitiesWithRetry(track).then(setCameraCapabilities);
+                                // Se piden SIEMPRE (no solo en móvil): los controles se muestran
+                                // según lo que la cámara reporte, no según el ancho de pantalla.
+                                getCameraCapabilitiesWithRetry(track).then(setCameraCapabilities);
                               }}
                               onError={(e) => { console.error('Error de cámara (devoluciones):', e); showModalNotification('Error de cámara', 'No se pudo iniciar la cámara. Revisa los permisos e intenta de nuevo.', 'destructive'); setScannerActive(false); }}
                             />
@@ -755,6 +779,31 @@ export default function DevolucionesPage() {
                         {message.show && <div className={`scanner-message z-20 ${messageClasses[message.type]}`}>{message.text}</div>}
                         {!scannerActive && <p className="text-white/40 font-bold uppercase text-xs">Escáner Inactivo</p>}
                     </div>
+                    {/* Flash y zoom: solo en móvil, con la cámara activa, y solo si el track
+                        expone esas capacidades (muchos iPhone no dan torch/zoom por WebRTC). */}
+                    {isMounted && scannerActive && selectedScannerMode === 'camara' && cameraCapabilities && (cameraCapabilities.torch || cameraCapabilities.zoom) && (
+                        <div className="mt-3 bg-black/70 backdrop-blur-md p-3 rounded-xl flex items-center gap-4 text-white border border-white/10">
+                            {cameraCapabilities.torch && (
+                                <Button variant="ghost" size="icon" onClick={() => setIsFlashOn(!isFlashOn)} className={cn("h-10 w-10 shrink-0", isFlashOn ? 'text-yellow-400 bg-white/10' : 'text-white')} title="Flash">
+                                    <Zap className="h-6 w-6" />
+                                </Button>
+                            )}
+                            {cameraCapabilities.zoom && (
+                                <div className="flex-1 flex items-center gap-3">
+                                    <ZoomIn className="h-5 w-5 text-gray-400 shrink-0" />
+                                    <input
+                                        type="range"
+                                        min={cameraCapabilities.zoom.min}
+                                        max={cameraCapabilities.zoom.max}
+                                        step={cameraCapabilities.zoom.step || 0.1}
+                                        value={zoom}
+                                        onChange={(e) => setZoom(parseFloat(e.target.value))}
+                                        className="w-full h-2 bg-white/20 rounded-lg appearance-none cursor-pointer accent-starbucks-green"
+                                    />
+                                </div>
+                            )}
+                        </div>
+                    )}
                     <div className="mt-4 flex gap-2 justify-center">
                       <Button onClick={handleStartScanner} disabled={scannerActive || loading || !encargado || !driverName.trim() || !driverPlate.trim() || !paqueteria.trim()} className="bg-blue-600 hover:bg-blue-700 h-10 px-8">Iniciar</Button>
                       <Button onClick={() => setIsDriverModalOpen(true)} variant="outline" className="h-10 px-4 gap-2" disabled={scannerActive} title="Editar datos del transporte"><Truck className="h-4 w-4" /> Transporte</Button>

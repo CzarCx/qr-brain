@@ -7,10 +7,12 @@
  * (~3-4x más rápido que el ZXing-JS que html5-qrcode corría antes en iOS). Aislado aquí:
  * ninguna otra pantalla lo importa.
  *
- * El componente maneja su propia cámara (<video>), corre el loop de detección sobre un
- * recorte central (menos píxeles = más FPS en iPhone) y emite el texto crudo por
- * onDetected — el mismo contrato que onScanSuccess, así processCode no cambia. Además
- * dibuja el CONTORNO del código detectado en un canvas encima del video.
+ * Se decodifica sobre el FRAME COMPLETO (solo reducido para rendimiento), NO sobre un
+ * recorte central: un recorte cuadrado le cortaba los extremos —y con ellos los patrones
+ * de inicio/fin— a los códigos 1D largos en vertical, que por eso no leían. El motor ya
+ * trae tryRotate/tryHarder activos, así que lee en cualquier orientación. El texto crudo
+ * sale por onDetected (mismo contrato que onScanSuccess → processCode no cambia), y el
+ * contorno del código detectado se dibuja en un canvas encima del video.
  */
 
 import { useEffect, useRef, useState } from 'react';
@@ -26,13 +28,15 @@ prepareZXingModule({
 });
 
 // Lista corta y explícita: menos formatos = menos trabajo por frame. Cubre QR (Mercado
-// Libre) y los 1D típicos de paqueterías (FedEx/Estafeta suelen ser Code128 o ITF).
+// Libre) y los 1D típicos de paqueterías (FedEx/Estafeta/ITF-14 de cajas suelen ser
+// Code128 o ITF).
 const FORMATS = ['qr_code', 'code_128', 'ean_13', 'ean_8', 'upc_a', 'upc_e', 'itf', 'code_39', 'code_93', 'codabar'];
 
-// ~8 lecturas/seg: suficiente para leer al vuelo y suave para la CPU del iPhone.
-const DETECT_INTERVAL_MS = 120;
-// Recorte cuadrado sobre el que se decodifica (equivalente al qrbox de antes).
-const CROP = 512;
+// ~7 lecturas/seg: suficiente para leer al vuelo y suave para la CPU del iPhone.
+const DETECT_INTERVAL_MS = 140;
+// Lado máximo del frame que se manda a decodificar. Reduce sin perder resolución útil de
+// los códigos largos (el recorte anterior era lo que los rompía en vertical).
+const MAX_DIM = 1280;
 // Cuánto se mantiene el contorno tras el último avistamiento (evita parpadeo).
 const OUTLINE_HOLD_MS = 350;
 
@@ -68,26 +72,27 @@ export default function BarcodeScanner({ onDetected, onTrackReady, onError }: Pr
       oc?.getContext('2d')?.clearRect(0, 0, oc.width, oc.height);
     };
 
-    // Dibuja el contorno del código. Los puntos vienen en coordenadas del recorte (CROP);
-    // se transforman al espacio intrínseco del video, y como el canvas de overlay tiene
-    // ese mismo tamaño y object-cover igual que el video, el trazo cae justo encima.
+    // Dibuja el contorno del código. Los puntos vienen en coordenadas del canvas reducido
+    // (factor `scale`); se llevan al espacio intrínseco del video, y como el canvas de
+    // overlay tiene ese mismo tamaño y object-cover igual que el video, el trazo cae
+    // justo encima de lo que se ve.
     const drawOutline = (
       points: ReadonlyArray<{ x: number; y: number }> | undefined,
       box: { x: number; y: number; width: number; height: number } | undefined,
-      sx: number, sy: number, side: number,
+      scale: number,
     ) => {
       const oc = overlayRef.current;
       const octx = oc?.getContext('2d');
       if (!oc || !octx) return;
       octx.clearRect(0, 0, oc.width, oc.height);
-      const toVideo = (px: number, py: number): [number, number] => [sx + (px / CROP) * side, sy + (py / CROP) * side];
+      const toVideo = (px: number, py: number): [number, number] => [px / scale, py / scale];
 
-      octx.lineWidth = Math.max(4, side * 0.01);
+      octx.lineWidth = Math.max(4, oc.width * 0.006);
       octx.lineJoin = 'round';
       octx.strokeStyle = '#22c55e';
       octx.fillStyle = 'rgba(34,197,94,0.18)';
       octx.shadowColor = 'rgba(34,197,94,0.9)';
-      octx.shadowBlur = Math.max(8, side * 0.02);
+      octx.shadowBlur = Math.max(8, oc.width * 0.012);
       octx.beginPath();
       if (points && points.length >= 3) {
         points.forEach((p, i) => {
@@ -117,20 +122,22 @@ export default function BarcodeScanner({ onDetected, onTrackReady, onError }: Pr
         busy = true;
         const vw = v.videoWidth, vh = v.videoHeight;
         if (vw && vh) {
+          // Frame COMPLETO (solo reducido si excede MAX_DIM): así el código entero entra
+          // en cualquier orientación. El motor (tryRotate) resuelve las verticales.
+          const scale = Math.min(1, MAX_DIM / Math.max(vw, vh));
+          const cw = Math.round(vw * scale), ch = Math.round(vh * scale);
+          if (canvas.width !== cw || canvas.height !== ch) { canvas.width = cw; canvas.height = ch; }
+          ctx.drawImage(v, 0, 0, cw, ch);
           // El overlay debe tener el tamaño intrínseco del video para alinear el trazo.
           const oc = overlayRef.current;
           if (oc && (oc.width !== vw || oc.height !== vh)) { oc.width = vw; oc.height = vh; }
-          const side = Math.min(vw, vh);
-          const sx = (vw - side) / 2, sy = (vh - side) / 2;
-          canvas.width = CROP; canvas.height = CROP;
-          ctx.drawImage(v, sx, sy, side, side, 0, 0, CROP, CROP);
           detector.detect(canvas)
             .then(codes => {
               if (cancelled) return;
               const c = codes[0];
               if (c) {
                 lastHit = performance.now();
-                drawOutline(c.cornerPoints, c.boundingBox as DOMRectReadOnly | undefined, sx, sy, side);
+                drawOutline(c.cornerPoints, c.boundingBox as DOMRectReadOnly | undefined, scale);
                 if (c.rawValue) cbRef.current.onDetected(c.rawValue);
               }
             })
