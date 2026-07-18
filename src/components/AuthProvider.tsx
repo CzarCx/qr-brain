@@ -175,8 +175,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // arriba si `hasCacheForUser`; esto solo cubre cuando no se aplicó antes).
       if (hasCacheForUser && cached.profile) setProfile(cached.profile);
       if (hasCacheForUser) setRoles(cached.roles);
-      lastSyncedUserId.current = currentUser.id;
-      setIsMetadataLoaded(true);
+      // NO se fija `lastSyncedUserId` cuando la sincronización FALLA. Antes se pineaba
+      // igual que en el éxito, y como el guard de arriba corta cualquier llamada con el
+      // mismo id, la sesión quedaba ATASCADA: si el primer sync fallaba (mala señal /
+      // token a medio refrescar), `profile` quedaba null para toda la vida de la página
+      // y SOLO cerrar sesión lo curaba. Dejando el ref en null, un TOKEN_REFRESHED
+      // posterior (el autoRefresh, o el refreshSession del visibilitychange) vuelve a
+      // entrar y por fin sincroniza profile/roles cuando la señal se recupera — la app
+      // se auto-sana sin re-login. (isSyncing evita solapes; withTimeout acota cada intento.)
+      //
+      // Solo se marca `isMetadataLoaded` si se pudieron restaurar roles desde caché: así
+      // un primer login sin caché que falló NO queda con roles=[] + isMetadataLoaded=true,
+      // combinación que expulsaría a /main por un hipo transitorio de red.
+      if (hasCacheForUser) setIsMetadataLoaded(true);
     } finally {
       isSyncing.current = false;
       setLoading(false);

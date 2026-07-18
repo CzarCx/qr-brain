@@ -222,8 +222,19 @@ export default function CalificarPage() {
     // id aunque AuthProvider ya llavee su caché offline por userId: en un celular
     // compartido entre turnos este es el punto donde el perfil de otro operario se
     // convertiría en una atribución falsa, así que se falla cerrado.
+    // La atribución real es id_empleado_calificada = user.id; name_cali es solo display.
+    // Este respaldo NUNCA deja `encargado` vacío (vacío mata el botón Iniciar y el ingreso
+    // manual, y obligaba a cerrar sesión). Todo se saca de la SESIÓN, sin captura manual:
+    // se prefiere el nombre del perfil; si no hay, se deriva algo legible del email; y como
+    // último recurso una etiqueta genérica.
     const aplicarRespaldo = () => {
-        if (profile?.id === user.id && profile.name) setEncargado(profile.name);
+        const fallback =
+            (profile?.id === user.id && profile.name)
+                ? profile.name
+                : (user.email
+                    ? user.email.split('@')[0].replace(/[._-]+/g, ' ').toUpperCase()
+                    : 'CONTROL DE CALIDAD');
+        setEncargado(fallback);
     };
 
     const fetchNameFromEmployees = async (isRetry = false) => {
