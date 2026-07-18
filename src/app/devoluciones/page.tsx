@@ -672,15 +672,13 @@ export default function DevolucionesPage() {
               if (errorExt) throw errorExt;
           }
 
-          // personal.code es numeric y solo contiene etiquetas internas (ML). Un código
-          // alfanumérico de paquetería externa lo haría fallar con 22P02, y como este
-          // UPDATE corre DESPUÉS del insert a devoluciones_ml (ya comprometido, sin
-          // transacción), tumbaría el cierre dejando el registro guardado pero con un
-          // error en pantalla. Los códigos externos nunca estuvieron en personal, así
-          // que se excluyen: solo los numéricos se marcan como DEVUELTO.
-          const codesInternos = codes.filter(c => /^\d+$/.test(String(c)));
-          if (codesInternos.length > 0) {
-              await supabaseEtiquetas.from('personal').update({ status: 'DEVUELTO' }).in('code', codesInternos);
+          // personal.code es TEXT, así que un código alfanumérico ya no rompe el UPDATE
+          // con 22P02. Además, con el "modo externo" las etiquetas de otras paqueterías
+          // también pueden vivir en personal (fueron asignadas), así que se marcan TODAS
+          // como DEVUELTO. Las que nunca estuvieron en personal simplemente no las toca
+          // el .in(), sin error.
+          if (codes.length > 0) {
+              await supabaseEtiquetas.from('personal').update({ status: 'DEVUELTO' }).in('code', codes);
           }
           playBeep();
           showModalNotification('¡Éxito!', `Se procesaron ${codes.length} devoluciones correctamente.`, 'success');
