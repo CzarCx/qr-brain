@@ -72,6 +72,8 @@ type ScanResult = {
     // id_empleado_entrega: ese lo escribe /entrega al entregar, o sea después de QC,
     // así que al calificar todavía está en null.
     id_empleado_despacha?: string | null;
+    // Plataforma de origen: null/'Mercado Libre' = ML; 'Walmart'/'TikTok Shop'/... = externa.
+    origen?: string | null;
 };
 
 type ReportReason = {
@@ -438,7 +440,7 @@ export default function CalificarPage() {
     try {
         const { data: personalData, error: personalError } = await withTimeout(supabaseEtiquetas
             .from('personal')
-            .select('name, product, status, details, sku, quantity, id_empleado_despacha')
+            .select('name, product, status, details, sku, quantity, id_empleado_despacha, origen')
             .eq('code', finalCode), SCAN_QUERY_TIMEOUT_MS);
 
         if (personalError) throw personalError;
@@ -460,6 +462,7 @@ export default function CalificarPage() {
                 sku: firstP.sku,
                 quantity: firstP.quantity,
                 id_empleado_despacha: firstP.id_empleado_despacha,
+                origen: firstP.origen,
             };
 
             // Un paquete que vuelve de retrabajo se avisa distinto: no es un escaneo
@@ -1221,7 +1224,12 @@ const triggerMassQualify = async () => {
               <div className="bg-starbucks-cream p-4 rounded-lg text-left space-y-2">
                 <div>
                     <h3 className="font-bold text-starbucks-dark uppercase text-sm">Código</h3>
-                    <p className="text-base font-mono text-starbucks-green break-words">{lastScannedResult.code}</p>
+                    <p className="text-base font-mono text-starbucks-green break-words">
+                        {lastScannedResult.code}
+                        {lastScannedResult.origen && lastScannedResult.origen !== 'Mercado Libre' && (
+                            <span className="ml-2 px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 text-[10px] font-black uppercase tracking-wider align-middle">{lastScannedResult.origen}</span>
+                        )}
+                    </p>
                 </div>
                 {lastScannedResult.found ? (
                     <>

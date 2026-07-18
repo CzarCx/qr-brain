@@ -30,6 +30,7 @@ import {
 } from "@/components/ui/dialog"
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Switch } from '@/components/ui/switch';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useReactToPrint } from "react-to-print";
 import TicketPreview from "@/components/TicketPreview";
@@ -55,7 +56,12 @@ type ScannedItem = {
   venta: string | null;
   esti_time?: number | null;
   deli_date?: string | null;
+  origen?: string | null;
 };
+
+// Plataformas ajenas a Mercado Libre para el "modo externo". 'Mercado Libre' se
+// omite a propósito: esas se reconocen solas porque existen en etiquetas_i.
+const EXTERNAL_PLATFORM_OPTIONS = ['TikTok Shop', 'Walmart', 'Amazon', 'FedEx', 'Estafeta', 'Otro'];
 
 type CreatedLote = {
   lote_p: string;
@@ -220,7 +226,12 @@ function MobilePendingRow({
                 una) debajo — ya calculado al escanear vía sku_alterno → sku_m
                 en addCodeAndUpdateCounters, mismo dato que ve la tabla de escritorio. */}
             <div className="min-w-0 flex-1 flex flex-col gap-0.5">
-              <span className="font-mono text-xs font-bold text-starbucks-dark whitespace-nowrap">{data.code}</span>
+              <span className="font-mono text-xs font-bold text-starbucks-dark whitespace-nowrap">
+                {data.code}
+                {data.origen && data.origen !== 'Mercado Libre' && (
+                  <span className="ml-1.5 px-1 py-0.5 rounded bg-amber-100 text-amber-800 text-[8px] font-black uppercase tracking-wider align-middle">{data.origen}</span>
+                )}
+              </span>
               <span className="text-[9px] font-medium text-starbucks-accent truncate">{data.subcategoria || data.sku || '—'}</span>
             </div>
             <div className="flex items-center gap-1 shrink-0">
@@ -313,6 +324,11 @@ export default function Home() {
   const [verificationResult, setVerificationResult] = useState<VerificationResult>({ status: 'pending', message: 'Ingrese un código de corte para registrar la fecha.' });
   const [selectedArea, setSelectedArea] = useState('');
   const [skipAreaSelection, setSkipAreaSelection] = useState(false);
+  // Modo externo: escanear etiquetas de otras paqueterías (sin autocompletado
+  // desde etiquetas_i). Se capturan con plataforma + tiempo manual.
+  const [externalMode, setExternalMode] = useState(false);
+  const [externalPlatform, setExternalPlatform] = useState(EXTERNAL_PLATFORM_OPTIONS[0]);
+  const [externalEstiTime, setExternalEstiTime] = useState<number | null>(null);
   const [timerStartTime, setTimerStartTime] = useState<Date | null>(null);
   const [elapsedTime, setElapsedTime] = useState(0);
   const [isPrintDialogOpen, setIsPrintDialogOpen] = useState(false);
@@ -974,6 +990,7 @@ export default function Home() {
                 sales_num: item.venta ? Number(item.venta) : null,
                 date: associationTimestamp.toISOString(),
                 status: 'ASIGNADO',
+                origen: item.origen ?? 'Mercado Libre',
                 esti_time: item.esti_time,
                 deli_date: item.deli_date,
                 date_ini: startTime.toISOString(),
@@ -1173,6 +1190,101 @@ export default function Home() {
             return;
         }
 
+        // MODO EXTERNO: etiquetas de otras paqueterías (Walmart, TikTok, etc.).
+        // No pasan por etiquetas_i (no hay autocompletado todavía): se capturan
+        // con plataforma + tiempo manual y entran a `personal` como las de ML,
+        // uniéndose a la misma cadena de tiempos y al ciclo de estatus.
+        if (externalMode) {
+            if (!externalPlatform) {
+                showModalNotification('Falta Plataforma', 'Selecciona la plataforma de origen antes de escanear etiquetas externas.', 'destructive');
+                playErrorSound();
+                setLoading(false);
+                return;
+            }
+            if (externalEstiTime === null || externalEstiTime === undefined || externalEstiTime <= 0) {
+                showModalNotification('Falta Tiempo Estimado', 'Captura un tiempo estimado (min) mayor a 0 para las etiquetas externas.', 'destructive');
+                playErrorSound();
+                setLoading(false);
+                return;
+            }
+
+            // Reserva anti-duplicado dentro de la sesión.
+            scannedCodesRef.current.add(finalCode);
+
+            // Red de seguridad: si el código SÍ existe en etiquetas_i, casi seguro
+            // es de Mercado Libre y el toggle quedó prendido por error.
+            const { data: mlPeek } = await supabaseEtiquetas
+                .from('etiquetas_i')
+                .select('code')
+                .eq('code', finalCode)
+                .limit(1);
+            if (mlPeek && mlPeek.length > 0) {
+                scannedCodesRef.current.delete(finalCode);
+                showModalNotification('¿Etiqueta de Mercado Libre?', `El código ${finalCode} existe en la base de ML. Apaga el "Modo externo" para escanearlo con autocompletado, o verifica el código.`, 'destructive');
+                playErrorSound();
+                setLoading(false);
+                return;
+            }
+
+            // ¿Ya está asignada? (mismo check que las de ML)
+            const { data: yaAsignada, error: yaAsignadaError } = await supabaseEtiquetas
+                .from('personal')
+                .select('code, name, name_inc')
+                .eq('code', finalCode);
+            if (yaAsignadaError) {
+                scannedCodesRef.current.delete(finalCode);
+                throw new Error(`Error al verificar en 'personal': ${yaAsignadaError.message}`);
+            }
+            if (yaAsignada && yaAsignada.length > 0) {
+                scannedCodesRef.current.delete(finalCode);
+                const p = yaAsignada[0];
+                playErrorSound();
+                showAppMessage(
+                    <>El código {finalCode} ya fue asignado a <strong className="font-bold">{p.name}</strong> por <strong className="font-bold">{p.name_inc}</strong>.</>,
+                    'duplicate'
+                );
+                setLoading(false);
+                return;
+            }
+
+            if (!timerStartedRef.current) {
+                setTimerStartTime(new Date());
+                timerStartedRef.current = true;
+            }
+
+            const nowExt = new Date();
+            const fechaEscaneoExt = nowExt.toLocaleDateString('es-MX', { year: 'numeric', month: '2-digit', day: '2-digit' });
+            const horaEscaneoExt = nowExt.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+
+            const newExtItem: ScannedItem = {
+                code: finalCode,
+                fecha: fechaEscaneoExt,
+                hora: horaEscaneoExt,
+                encargado: encargado.trim(),
+                area: selectedArea,
+                sku: null,
+                subcategoria: null,
+                cantidad: null,
+                producto: null,
+                empresa: null,
+                venta: null,
+                esti_time: externalEstiTime,
+                deli_date: null,
+                origen: externalPlatform,
+            };
+
+            lastSuccessfullyScannedCodeRef.current = finalCode;
+            if (finalCode.startsWith('4')) setMelCodesCount(prev => prev + 1); else setOtherCodesCount(prev => prev + 1);
+            if (finalCode.length > 30) setLongCodesCount(prev => prev + 1);
+
+            setScannedData(prev => [...prev, newExtItem]);
+            if ('vibrate' in navigator) navigator.vibrate(200);
+            playBeep();
+            showAppMessage(`Etiqueta externa (${externalPlatform}) agregada: ${finalCode}`, 'success');
+            setLoading(false);
+            return;
+        }
+
         // Se reserva el código ya mismo, antes de cualquier consulta async
         // (etiquetas_i, v_code, personal, sku_alterno/sku_m): así, si el mismo
         // código se vuelve a escanear mientras estas consultas siguen en vuelo,
@@ -1277,7 +1389,7 @@ export default function Home() {
     } finally {
         setLoading(false);
     }
-}, [addCodeAndUpdateCounters, scannedData, personalList, scanMode, selectedArea, skipAreaSelection, isAttendanceValid, isGuest]);
+}, [addCodeAndUpdateCounters, scannedData, personalList, scanMode, selectedArea, skipAreaSelection, isAttendanceValid, isGuest, externalMode, externalPlatform, externalEstiTime, encargado]);
 
 
   useEffect(() => {
@@ -1866,6 +1978,7 @@ const deleteRow = (codeToDelete: string) => {
                 sales_num: item.sales_num && !isNaN(Number(item.sales_num)) ? Number(item.sales_num) : null,
                 date: associationTimestamp.toISOString(),
                 status: 'ASIGNADO',
+                origen: item.origen ?? 'Mercado Libre',
                 esti_time: item.esti_time,
                 deli_date: item.deli_date,
                 date_ini: startTime.toISOString(),
@@ -2091,7 +2204,12 @@ const deleteRow = (codeToDelete: string) => {
     return getScheduledRows(scannedData).map((data, index) => (
         <tr key={data.code}>
             <td className="px-4 py-3 whitespace-nowrap text-sm font-semibold">{index + 1}</td>
-            <td className="px-4 py-3 whitespace-nowrap font-mono text-sm">{data.code}</td>
+            <td className="px-4 py-3 whitespace-nowrap font-mono text-sm">
+                {data.code}
+                {data.origen && data.origen !== 'Mercado Libre' && (
+                    <span className="ml-2 px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 text-[9px] font-black uppercase tracking-wider align-middle">{data.origen}</span>
+                )}
+            </td>
              <td className="px-4 py-3 whitespace-nowrap text-sm">
                 <Input
                     type="number"
@@ -2268,6 +2386,50 @@ const deleteRow = (codeToDelete: string) => {
                       Continuar sin asignar área
                   </Label>
               </div>
+          </div>
+
+          <div className={cn(
+              "rounded-lg border-2 p-3 transition-colors",
+              externalMode ? "border-amber-400 bg-amber-50" : "border-gray-200 bg-transparent"
+          )}>
+              <div className="flex items-center justify-between gap-3">
+                  <div className="flex flex-col">
+                      <Label htmlFor="external-mode" className="text-sm font-bold text-starbucks-dark">Modo externo (otras paqueterías)</Label>
+                      <span className="text-[11px] text-gray-500 leading-tight">Etiquetas que NO son de Mercado Libre (Walmart, TikTok, etc.).</span>
+                  </div>
+                  <Switch id="external-mode" checked={externalMode} onCheckedChange={setExternalMode} />
+              </div>
+
+              {externalMode && (
+                  <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3 animate-in fade-in slide-in-from-top-1">
+                      <div className="space-y-1">
+                          <Label className="text-xs font-bold text-starbucks-dark">Plataforma de origen</Label>
+                          <Select value={externalPlatform} onValueChange={setExternalPlatform}>
+                              <SelectTrigger className="bg-white"><SelectValue placeholder="Plataforma" /></SelectTrigger>
+                              <SelectContent>
+                                  {EXTERNAL_PLATFORM_OPTIONS.map(p => (
+                                      <SelectItem key={p} value={p}>{p}</SelectItem>
+                                  ))}
+                              </SelectContent>
+                          </Select>
+                      </div>
+                      <div className="space-y-1">
+                          <Label htmlFor="external-time" className="text-xs font-bold text-starbucks-dark">Tiempo estimado (min)</Label>
+                          <Input
+                              id="external-time"
+                              type="number"
+                              min="1"
+                              value={externalEstiTime ?? ''}
+                              onChange={(e) => setExternalEstiTime(e.target.value === '' ? null : Number(e.target.value))}
+                              placeholder="Ej. 5"
+                              className="bg-white"
+                          />
+                      </div>
+                      <p className="sm:col-span-2 text-[10px] font-semibold text-amber-700 uppercase tracking-wide">
+                          Se aplica a cada etiqueta que escanees. Sin autocompletado de SKU/producto (aún).
+                      </p>
+                  </div>
+              )}
           </div>
 
           <div className="space-y-2 relative">

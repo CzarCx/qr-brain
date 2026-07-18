@@ -33,6 +33,8 @@ type DeliveryItem = {
   code: string;
   product: string | null;
   name: string | null;
+  // Plataforma de origen: null/'Mercado Libre' = ML; 'Walmart'/'TikTok Shop'/... = externa.
+  origen?: string | null;
   // true cuando se aceptó offline sin poder validarlo contra un snapshot local
   // (no estaba en ningún lote precargado); se revalida contra el servidor al sincronizar.
   unverified?: boolean;
@@ -298,7 +300,7 @@ export default function Home() {
     showAppMessage('Procesando código...', 'info');
     if ('vibrate' in navigator) navigator.vibrate(100);
 
-    const applyScanResult = async (data: { name: string | null; product: string | null; status: string } | null, offline: boolean) => {
+    const applyScanResult = async (data: { name: string | null; product: string | null; status: string; origen?: string | null } | null, offline: boolean) => {
         if (!data) {
             if (offline) {
                 // Sin snapshot para este código: en vez de bloquear, se acepta sin
@@ -346,7 +348,7 @@ export default function Home() {
             }
 
             playBeep();
-            setDeliveryList(prev => [{ code: finalCode, product: data.product, name: data.name }, ...prev]);
+            setDeliveryList(prev => [{ code: finalCode, product: data.product, name: data.name, origen: data.origen }, ...prev]);
             scannedCodesRef.current.add(finalCode);
             showAppMessage(`Calificado automáticamente y añadido: ${finalCode}`, 'success');
         } else if (isValidationOverridden || data.status === 'CALIFICADO') {
@@ -355,6 +357,7 @@ export default function Home() {
                 code: finalCode,
                 product: data.product,
                 name: data.name,
+                origen: data.origen,
             };
             setDeliveryList(prev => [newItem, ...prev]);
             scannedCodesRef.current.add(finalCode);
@@ -371,7 +374,7 @@ export default function Home() {
         } else {
             const { data, error } = await supabaseEtiquetas
                 .from('personal')
-                .select('name, product, status')
+                .select('name, product, status, origen')
                 .eq('code', finalCode)
                 .single();
 
@@ -648,7 +651,7 @@ export default function Home() {
     try {
       const { data, error } = await supabaseEtiquetas
         .from('personal')
-        .select('code, product, name, status')
+        .select('code, product, name, status, origen')
         .eq('lote', loteId.trim());
 
       if (error) throw error;
@@ -679,6 +682,7 @@ export default function Home() {
             code: item.code,
             product: item.product,
             name: item.name,
+            origen: item.origen,
           });
         } else {
           skippedCount++;
@@ -1173,6 +1177,9 @@ export default function Home() {
                                         <TableCell className="font-mono text-xs">
                                             <div className="flex items-center gap-1.5">
                                                 {item.code}
+                                                {item.origen && item.origen !== 'Mercado Libre' && (
+                                                    <span className="inline-flex items-center rounded-full bg-amber-100 text-amber-800 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wide">{item.origen}</span>
+                                                )}
                                                 {item.unverified && (
                                                     <span title="No estaba en un lote precargado; se validará al sincronizar" className="inline-flex items-center gap-1 rounded-full bg-amber-100 text-amber-700 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide">
                                                         <AlertTriangle className="h-2.5 w-2.5" /> Sin verificar
