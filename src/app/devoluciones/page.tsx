@@ -117,6 +117,13 @@ export default function DevolucionesPage() {
   const trackRef = useRef<MediaStreamTrack | null>(null);
   // Dedup POR CÓDIGO (no por tiempo): guarda el último código y cuándo se procesó.
   const lastScanRef = useRef({ code: '', time: 0 });
+  // Throttle PROPIO del aviso "ya en la lista": independiente de lastScanRef para que el
+  // anti-rebote de códigos nuevos no se lo trague. Solo evita repetir el sonido/toast
+  // mientras se sostiene el mismo código duplicado enfrente de la cámara.
+  const lastDupWarnRef = useRef({ code: '', time: 0 });
+  // UN SOLO AudioContext reutilizado. iOS/Safari limita a ~4 contextos simultáneos y
+  // crear uno nuevo por beep los agotaba => tras varios escaneos el aviso dejaba de sonar.
+  const audioCtxRef = useRef<AudioContext | null>(null);
   const physicalScannerInputRef = useRef<HTMLInputElement | null>(null);
   const bufferRef = useRef('');
   const scannedCodesSetRef = useRef(new Set<string>());
@@ -125,6 +132,10 @@ export default function DevolucionesPage() {
   // reiniciaría el efecto que arranca/detiene la cámara, apagando flash/zoom.
   const loadingRef = useRef(false);
   useEffect(() => { loadingRef.current = loading; }, [loading]);
+
+  // Cerrar el AudioContext al desmontar: evita acumular contextos (límite de iOS) al
+  // navegar dentro/fuera de la pantalla sin recargar del todo.
+  useEffect(() => () => { audioCtxRef.current?.close().catch(() => {}); }, []);
 
   const MIN_SCAN_INTERVAL = 1500;
 
@@ -272,33 +283,40 @@ export default function DevolucionesPage() {
     }));
   }, [encargado]);
 
-  const playBeep = () => {
-    const context = new (window.AudioContext || (window as any).webkitAudioContext)();
-    const oscillator = context.createOscillator();
-    const gainNode = context.createGain();
-    oscillator.type = 'square';
-    oscillator.frequency.setValueAtTime(880, context.currentTime);
-    gainNode.gain.setValueAtTime(1, context.currentTime);
-    gainNode.gain.exponentialRampToValueAtTime(0.00001, context.currentTime + 0.1);
-    oscillator.connect(gainNode);
-    gainNode.connect(context.destination);
-    oscillator.start();
-    oscillator.stop(context.currentTime + 0.1);
+  // Contexto de audio único y reutilizado. Se crea perezosamente y se reanuda si iOS lo
+  // dejó suspendido (hay que reanudarlo dentro de un gesto del usuario: se hace también en
+  // "Iniciar"). Devuelve null si el navegador no soporta Web Audio.
+  const getAudioCtx = (): AudioContext | null => {
+    if (typeof window === 'undefined') return null;
+    if (!audioCtxRef.current) {
+      const Ctx = window.AudioContext || (window as any).webkitAudioContext;
+      if (!Ctx) return null;
+      try { audioCtxRef.current = new Ctx(); } catch { return null; }
+    }
+    const ctx = audioCtxRef.current;
+    if (ctx && ctx.state === 'suspended') ctx.resume().catch(() => {});
+    return ctx;
   };
 
-  const playWarningSound = () => {
-    const context = new (window.AudioContext || (window as any).webkitAudioContext)();
-    const oscillator = context.createOscillator();
-    const gainNode = context.createGain();
-    oscillator.type = 'sawtooth';
-    oscillator.frequency.setValueAtTime(440, context.currentTime); 
-    gainNode.gain.setValueAtTime(1.5, context.currentTime); 
-    gainNode.gain.exponentialRampToValueAtTime(0.00001, context.currentTime + 0.2);
-    oscillator.connect(gainNode);
-    gainNode.connect(context.destination);
-    oscillator.start();
-    oscillator.stop(context.currentTime + 0.2);
+  const playTone = (type: OscillatorType, freq: number, gain: number, dur: number) => {
+    const context = getAudioCtx();
+    if (!context) return;
+    try {
+      const oscillator = context.createOscillator();
+      const gainNode = context.createGain();
+      oscillator.type = type;
+      oscillator.frequency.setValueAtTime(freq, context.currentTime);
+      gainNode.gain.setValueAtTime(gain, context.currentTime);
+      gainNode.gain.exponentialRampToValueAtTime(0.00001, context.currentTime + dur);
+      oscillator.connect(gainNode);
+      gainNode.connect(context.destination);
+      oscillator.start();
+      oscillator.stop(context.currentTime + dur);
+    } catch { /* si el contexto se cayó, el siguiente beep lo recrea */ }
   };
+
+  const playBeep = () => playTone('square', 880, 1, 0.1);
+  const playWarningSound = () => playTone('sawtooth', 440, 1.5, 0.2);
 
   const processCode = useCallback(async (inputValue: string, searchType: 'any' | 'sales_num' | 'pack_id' = 'any') => {
     if (loadingRef.current) return;
@@ -462,7 +480,12 @@ export default function DevolucionesPage() {
 
         setReturnsList(prev => [newItem, ...prev]);
         scannedCodesSetRef.current.add(realCode);
-        
+        // Gracia: al recién agregarlo, sembramos el throttle del aviso de duplicado para
+        // que la cámara —que sigue viendo el mismo código— NO tape el toast "Añadido" con
+        // un "Ya en la lista" instantáneo. El aviso de duplicado saldrá si se vuelve a pasar
+        // pasada la ventana del throttle.
+        lastDupWarnRef.current = { code: realCode, time: Date.now() };
+
         if (!tagData) showAppMessage(`Añadido (Sin registro previo): ${newItem.code}`, 'warning');
         else showAppMessage(`Añadido: ${newItem.code}`, 'success');
 
@@ -475,23 +498,27 @@ export default function DevolucionesPage() {
   }, []);
 
   const onScanSuccess = useCallback((decodedText: string) => {
-    if (loadingRef.current) return;
     const code = decodedText.trim();
     if (!code) return;
     const now = Date.now();
-    // Si el código YA está en la lista, se avisa DIRECTO (sin ir a la BD) y no se reprocesa.
-    // El aviso "ya en la lista" fallaba porque el bloqueo por tiempo se lo comía; ahora sale
-    // con un cooldown corto (para no spamear mientras se sostiene el mismo código enfrente).
+    // El aviso "ya en la lista" va PRIMERO, antes del guard de `loading`: solo lee el Set
+    // y muestra un toast (no toca la BD), así que es seguro aunque otro código se esté
+    // procesando. Antes se saltaba justo en ese caso —volver a pasar un duplicado mientras
+    // `processCode` de otro código dejaba `loading = true` (la validación externa hace 3
+    // consultas seguidas, ~1s en el teléfono)— y el aviso nunca salía. Usa su propio
+    // throttle (lastDupWarnRef) para que el anti-rebote de códigos nuevos no lo tape.
     if (scannedCodesSetRef.current.has(code)) {
-      if (code === lastScanRef.current.code && now - lastScanRef.current.time < 900) return;
-      lastScanRef.current = { code, time: now };
+      if (code === lastDupWarnRef.current.code && now - lastDupWarnRef.current.time < 1200) return;
+      lastDupWarnRef.current = { code, time: now };
       playWarningSound();
       showAppMessage(`Ya en la lista: ${code}`, 'warning');
       return;
     }
-    // Código NUEVO: el escáner WASM detecta ~7 veces/seg, así que el bloqueo es POR CÓDIGO
-    // (no por tiempo global) para no tragarse escaneos nuevos legítimos, y así el aviso de
-    // "escaneado correctamente" sale siempre en la primera lectura.
+    // A partir de aquí el código es NUEVO. Si hay otro procesándose, no encimar.
+    if (loadingRef.current) return;
+    // El escáner WASM detecta ~7 veces/seg, así que el bloqueo es POR CÓDIGO (no por tiempo
+    // global) para no tragarse escaneos nuevos legítimos, y así el aviso de "escaneado
+    // correctamente" sale siempre en la primera lectura.
     if (code === lastScanRef.current.code && now - lastScanRef.current.time < MIN_SCAN_INTERVAL) return;
     lastScanRef.current = { code, time: now };
     processCode(code, 'any');
@@ -553,6 +580,9 @@ export default function DevolucionesPage() {
           setIsDriverModalOpen(true);
           return;
       }
+      // Desbloquear el audio DENTRO del gesto del tap: iOS crea el AudioContext suspendido
+      // y solo un gesto del usuario lo puede reanudar. Sin esto los beeps salen mudos.
+      getAudioCtx();
       setScannerActive(true);
   };
 
