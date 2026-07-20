@@ -460,20 +460,42 @@ export default function DevolucionesPage() {
             } catch (e) {}
         }
 
+        // PASO 3: Enriquecer con etiquetas TikTok. Si el código NO está en etiquetas_i (no
+        // es ML), se busca por `tracking_number` en etiquetas_tiktok para jalar su info
+        // (producto, SKU del vendedor, order id). Al encontrarla deja de ser "SIN REGISTRO":
+        // es una devolución externa de TikTok ya identificada, que se guardará como externa.
+        let tiktokData: { order_id: string | null; package_id: string | null; seller_sku: string | null; product_name: string | null; qty: number | null } | null = null;
+        if (!tagData) {
+            const { data: tk, error: tkError } = await supabaseEtiquetas
+                .from('etiquetas_tiktok')
+                .select('order_id, package_id, seller_sku, product_name, qty')
+                .eq('tracking_number', finalInput)
+                .limit(1)
+                .maybeSingle();
+            if (tkError) throw tkError;
+            tiktokData = tk;
+        }
+
         // Éxito: Añadir a la lista
         playBeep();
         if ('vibrate' in navigator) navigator.vibrate(100);
-        
+
         const newItem: ReturnItem = {
             code: realCode,
-            sales_num: devData ? devData.num_venta : (sales_num || pack_id || (tagData ? null : null)),
+            sales_num: tiktokData
+                ? (tiktokData.order_id || tiktokData.package_id || null)
+                : (devData ? devData.num_venta : (sales_num || pack_id || (tagData ? null : null))),
             scannedAt: new Date().toLocaleTimeString(),
             isManual: searchType !== 'any',
             isNewInDev: !devData,
-            isUnknown: !tagData,
-            sku: tagData?.sku || '---',
+            // TikTok identificado => ya NO es "sin registro".
+            isUnknown: !tagData && !tiktokData,
+            // Origen pre-fijado para TikTok: enruta el guardado a devoluciones_externas sin
+            // pedirle al usuario que elija plataforma.
+            origen: tiktokData ? 'TikTok' : undefined,
+            sku: tiktokData ? (tiktokData.seller_sku || '---') : (tagData?.sku || '---'),
             subcategoria: subcategoria,
-            product: tagData?.product || '---',
+            product: tiktokData ? (tiktokData.product_name || '---') : (tagData?.product || '---'),
             organization: existingTienda || tagData?.organization || '---',
             tiendaAlreadySet: !!existingTienda,
         };
@@ -486,7 +508,8 @@ export default function DevolucionesPage() {
         // pasada la ventana del throttle.
         lastDupWarnRef.current = { code: realCode, time: Date.now() };
 
-        if (!tagData) showAppMessage(`Añadido (Sin registro previo): ${newItem.code}`, 'warning');
+        if (tiktokData) showAppMessage(`Añadido (TikTok): ${newItem.product && newItem.product !== '---' ? newItem.product : newItem.code}`, 'success');
+        else if (!tagData) showAppMessage(`Añadido (Sin registro previo): ${newItem.code}`, 'warning');
         else showAppMessage(`Añadido: ${newItem.code}`, 'success');
 
     } catch (err: any) {
@@ -556,10 +579,12 @@ export default function DevolucionesPage() {
   // cualquier otra plataforma se guarda en la tabla aparte devoluciones_externas.
   const PLATAFORMA_OPTIONS = ['Mercado Libre', 'TikTok', 'Walmart', 'Amazon', 'FedEx', 'Estafeta', 'Otro'];
 
-  // Una devolución es "externa" (tabla propia) cuando no está en nuestra base Y su
-  // plataforma no es Mercado Libre. Es el discriminador que enruta el guardado.
+  // Una devolución es "externa" (tabla propia) cuando su plataforma de origen no es
+  // Mercado Libre. Se rutea por `origen` (no por isUnknown) porque una TikTok identificada
+  // en etiquetas_tiktok ya NO es "sin registro" pero SIGUE siendo externa. Los items de ML
+  // (etiquetas_i) nunca traen `origen`, así que caen a devoluciones_ml como antes.
   const esDevolucionExterna = (item: ReturnItem) =>
-      !!(item.isUnknown && item.origen && item.origen !== 'Mercado Libre');
+      !!(item.origen && item.origen !== 'Mercado Libre');
 
   const handleOrganizationChange = (code: string, organization: string) => {
       setReturnsList(prev => prev.map(item => item.code === code ? { ...item, organization } : item));
@@ -691,6 +716,9 @@ export default function DevolucionesPage() {
                   origen: item.origen,
                   tienda: resolveTienda(item.organization),
                   sku: item.sku && item.sku !== '---' ? item.sku : null,
+                  // Datos jalados de etiquetas_tiktok al escanear (NULL en externas sin match).
+                  product_name: item.product && item.product !== '---' ? item.product : null,
+                  order_id: item.sales_num ? String(item.sales_num) : null,
                   transportista: paqueteria,
                   driver_name: driverName,
                   driver_plate: driverPlate,

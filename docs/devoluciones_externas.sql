@@ -27,7 +27,9 @@ create table if not exists public.devoluciones_externas (
   entregado      boolean      not null default true,
   date_entregado timestamptz,
   name_inc       uuid,                            -- usuario que la procesó (auth uid)
-  observacion    text
+  observacion    text,
+  product_name   text,                            -- producto (de etiquetas_tiktok al escanear)
+  order_id       text                             -- id de la orden (de etiquetas_tiktok)
 );
 
 -- Búsquedas por código (dedup / "¿ya se devolvió?")
