@@ -1,6 +1,7 @@
 'use client';
 import {useEffect, useRef, useState, useCallback, useMemo} from 'react';
 import Head from 'next/head';
+import dynamic from 'next/dynamic';
 import { Html5Qrcode, Html5QrcodeScannerState } from 'html5-qrcode';
 import { supabase, supabaseEtiquetas } from '@/lib/supabaseClient';
 import {
@@ -53,6 +54,10 @@ import { Combobox } from '@/components/ui/combobox';
 import { useAuth } from '@/components/AuthProvider';
 import { Textarea } from '@/components/ui/textarea';
 import { cn, getCameraCapabilitiesWithRetry, withTimeout } from '@/lib/utils';
+
+// Escáner NUEVO (zxing-wasm), el mismo de /devoluciones, /entrega y /asignar. Solo cliente.
+// Convive con el viejo (html5-qrcode); el usuario elige cuál usar.
+const BarcodeScanner = dynamic(() => import('@/components/BarcodeScanner'), { ssr: false });
 
 type ScanResult = {
     name: string | null;
@@ -114,6 +119,9 @@ export default function CalificarPage() {
   const [selectedReport, setSelectedReport] = useState('');
   const [showReportSelect, setShowReportSelect] = useState(false);
   const [selectedScannerMode, setSelectedScannerMode] = useState('camara');
+  // Motor de cámara: 'viejo' = html5-qrcode (el actual), 'nuevo' = BarcodeScanner
+  // zxing-wasm (el de /devoluciones, /entrega y /asignar). Se recuerda por dispositivo.
+  const [scannerEngine, setScannerEngine] = useState<'viejo' | 'nuevo'>('viejo');
   const [encargado, setEncargado] = useState('');
   const [encargadosList, setEncargadosList] = useState<Encargado[]>([]);
   const [scanMode, setScanMode] = useState('individual');
@@ -152,6 +160,9 @@ export default function CalificarPage() {
   const messageTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const html5QrCodeRef = useRef<Html5Qrcode | null>(null);
+  // Track del escáner NUEVO (lo expone <BarcodeScanner/> vía onTrackReady): sobre él se
+  // aplican flash/zoom, igual que el viejo lo hace sobre el <video> de html5-qrcode.
+  const trackRef = useRef<MediaStreamTrack | null>(null);
   const readerRef = useRef<HTMLDivElement>(null);
   const lastScanTimeRef = useRef(Date.now());
   const MIN_SCAN_INTERVAL = 2000;
@@ -170,6 +181,15 @@ export default function CalificarPage() {
   // efecto que arranca/detiene la cámara y apaga el flash/zoom en cada escaneo.
   const loadingRef = useRef(false);
   useEffect(() => { loadingRef.current = loading; }, [loading]);
+
+  // Preferencia de motor de escáner, recordada por dispositivo.
+  useEffect(() => {
+    const saved = typeof window !== 'undefined' ? localStorage.getItem('calificar_scanner_engine') : null;
+    if (saved === 'viejo' || saved === 'nuevo') setScannerEngine(saved);
+  }, []);
+  useEffect(() => {
+    if (typeof window !== 'undefined') localStorage.setItem('calificar_scanner_engine', scannerEngine);
+  }, [scannerEngine]);
 
    const showAppMessage = (text: string, type: 'success' | 'error' | 'info' | 'warning') => {
     if (messageTimeoutRef.current) {
@@ -612,7 +632,14 @@ export default function CalificarPage() {
   }, [zoom, isFlashOn, isMobile]);
   
   useEffect(() => {
-    if (isMobile && scannerActive && selectedScannerMode === 'camara' && html5QrCodeRef.current?.getState() === Html5QrcodeScannerState.SCANNING) {
+    if (!(isMobile && scannerActive && selectedScannerMode === 'camara')) return;
+    // Motor nuevo: flash/zoom van sobre el track que expone <BarcodeScanner/>.
+    if (scannerEngine === 'nuevo') {
+      if (trackRef.current) applyCameraConstraints(trackRef.current);
+      return;
+    }
+    // Motor viejo: sobre el <video> que crea html5-qrcode dentro de #reader.
+    if (html5QrCodeRef.current?.getState() === Html5QrcodeScannerState.SCANNING) {
       const videoElement = readerRef.current?.querySelector('video');
       if (videoElement && videoElement.srcObject) {
         const stream = videoElement.srcObject as MediaStream;
@@ -620,7 +647,7 @@ export default function CalificarPage() {
         if (track) applyCameraConstraints(track);
       }
     }
-  }, [zoom, isFlashOn, scannerActive, selectedScannerMode, isMobile, applyCameraConstraints, loading, massScannedCodes.length, lastScannedResult]);
+  }, [zoom, isFlashOn, scannerActive, selectedScannerMode, isMobile, applyCameraConstraints, loading, massScannedCodes.length, lastScannedResult, scannerEngine]);
   
   useEffect(() => {
     if (!isMounted || !readerRef.current) return;
@@ -639,7 +666,7 @@ export default function CalificarPage() {
         }
         return Promise.resolve();
     };
-    if (scannerActive && selectedScannerMode === 'camara') {
+    if (scannerActive && selectedScannerMode === 'camara' && scannerEngine === 'viejo') {
       if (qrCode.getState() !== Html5QrcodeScannerState.SCANNING) {
         qrCode.start({ facingMode: "environment" }, { fps: 5, qrbox: { width: 250, height: 250 } }, onScanSuccess, (e: any) => {})
         .then(() => {
@@ -659,7 +686,7 @@ export default function CalificarPage() {
       }
     } else cleanup();
     return () => { cleanup(); };
-  }, [scannerActive, selectedScannerMode, isMobile, isMounted, onScanSuccess]);
+  }, [scannerActive, selectedScannerMode, isMobile, isMounted, onScanSuccess, scannerEngine]);
 
   const handleOpenRatingModal = (isOpen: boolean) => {
     setIsRatingModalOpen(isOpen);
@@ -1102,8 +1129,21 @@ const triggerMassQualify = async () => {
                       <button onClick={() => setSelectedScannerMode('camara')} className={`area-btn w-full px-4 py-3 text-sm rounded-md shadow-sm focus:outline-none ${selectedScannerMode === 'camara' ? 'scanner-mode-selected' : ''}`} disabled={scannerActive}>CÁMARA</button>
                       <button onClick={() => setSelectedScannerMode('fisico')} className={`area-btn w-full px-4 py-3 text-sm rounded-md shadow-sm focus:outline-none ${selectedScannerMode === 'fisico' ? 'scanner-mode-selected' : ''}`} disabled={scannerActive}>ESCÁNER FÍSICO</button>
                   </div>
+                  {/* El motor solo aplica a la cámara. El escáner físico (teclado) es igual en ambos. */}
+                  {selectedScannerMode === 'camara' && (
+                    <div className="mt-2">
+                        <label className="block text-xs font-bold text-starbucks-dark mb-1">Motor de cámara:</label>
+                        <div className="grid grid-cols-2 gap-2">
+                            <button onClick={() => setScannerEngine('nuevo')} className={`area-btn w-full px-3 py-2 text-xs rounded-md shadow-sm focus:outline-none ${scannerEngine === 'nuevo' ? 'scanner-mode-selected' : ''}`} disabled={scannerActive}>NUEVO (RÁPIDO)</button>
+                            <button onClick={() => setScannerEngine('viejo')} className={`area-btn w-full px-3 py-2 text-xs rounded-md shadow-sm focus:outline-none ${scannerEngine === 'viejo' ? 'scanner-mode-selected' : ''}`} disabled={scannerActive}>CLÁSICO</button>
+                        </div>
+                        <p className="text-[10px] text-gray-400 mt-1 uppercase font-bold">
+                            {scannerEngine === 'nuevo' ? 'ZXING-WASM · el mismo de Devoluciones y Entregas' : 'HTML5-QRCODE · el de siempre'}
+                        </p>
+                    </div>
+                  )}
               </div>
-              
+
               <div>
                   <label className="block text-sm font-bold text-starbucks-dark mb-1">Tipo de Escaneo:</label>
                   <div className="grid grid-cols-2 gap-2">
@@ -1133,13 +1173,31 @@ const triggerMassQualify = async () => {
 
           <div className="bg-starbucks-cream p-4 rounded-lg">
             <div className="scanner-container relative">
-                <div id="reader" ref={readerRef} style={{ display: selectedScannerMode === 'camara' && scannerActive ? 'block' : 'none' }}></div>
+                {/* Motor VIEJO: html5-qrcode dibuja el video dentro de #reader. */}
+                <div id="reader" ref={readerRef} style={{ display: selectedScannerMode === 'camara' && scannerActive && scannerEngine === 'viejo' ? 'block' : 'none' }}></div>
+
+                {/* Motor NUEVO: BarcodeScanner zxing-wasm (mismo contrato onDetected -> onScanSuccess). */}
+                {selectedScannerMode === 'camara' && scannerActive && scannerEngine === 'nuevo' && (
+                    <div className="w-full aspect-square max-h-[60vh] mx-auto overflow-hidden rounded-lg">
+                        <BarcodeScanner
+                            onDetected={onScanSuccess}
+                            onTrackReady={(track) => {
+                                trackRef.current = track;
+                                getCameraCapabilitiesWithRetry(track).then((caps) => {
+                                    setCameraCapabilities(caps);
+                                    applyCameraConstraints(track);
+                                });
+                            }}
+                            onError={(e) => { console.error('Error de cámara (calificar, nuevo):', e); showAppMessage('Error al iniciar la cámara. Revisa los permisos.', 'error'); setScannerActive(false); }}
+                        />
+                    </div>
+                )}
                 {message.show && (
                     <div className={`scanner-message ${messageClasses[message.type]}`}>
                         {message.text}
                     </div>
                 )}
-                {scannerActive && selectedScannerMode === 'camara' && <div id="laser-line"></div>}
+                {scannerActive && selectedScannerMode === 'camara' && scannerEngine === 'viejo' && <div id="laser-line"></div>}
                 <input type="text" id="physical-scanner-input" ref={physicalScannerInputRef} className="hidden-input" autoComplete="off" />
                 {selectedScannerMode === 'camara' && !scannerActive && (
                     <div className="text-center p-8 border-2 border-dashed border-gray-300 rounded-lg">
