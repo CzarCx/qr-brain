@@ -33,9 +33,10 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { 
-    AlertTriangle, 
-    Trash2, 
+import {
+    AlertTriangle,
+    ChevronDown,
+    Trash2,
     Zap, 
     ZoomIn, 
     PlusCircle, 
@@ -107,6 +108,145 @@ const STORAGE_KEY = 'calificar_session_list';
 // de la del equipo (o de UTC), para que ambas describan el mismo instante local.
 const MX_TIMEZONE = 'America/Mexico_City';
 
+// Desplazamiento al deslizar la card para revelar "Eliminar" (mismo criterio que /asignar).
+const SWIPE_OPEN_X = -84;
+
+// Card abatible para la lista masiva en móvil. Calcada de MobilePendingRow de /asignar:
+// deslizar a la izquierda revela Eliminar; tocar la cabecera despliega el detalle (producto
+// completo, empaquetado por, SKU/piezas) y el botón de Reportar Discrepancia. Sustituye la
+// tabla que en móvil crecía muchísimo porque el nombre del producto se partía en 10+ líneas.
+function MobileMassRow({
+  data,
+  index,
+  isOpen,
+  onOpenChange,
+  onDelete,
+  onReport,
+}: {
+  data: ScanResult;
+  index: number;
+  isOpen: boolean;
+  onOpenChange: (code: string | null) => void;
+  onDelete: (code: string) => void;
+  onReport: (item: ScanResult) => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const [dragX, setDragX] = useState(isOpen ? SWIPE_OPEN_X : 0);
+  const [isDragging, setIsDragging] = useState(false);
+  const dragStartXRef = useRef(0);
+  const baseXRef = useRef(0);
+  const movedRef = useRef(false);
+
+  useEffect(() => {
+    if (!isDragging) setDragX(isOpen ? SWIPE_OPEN_X : 0);
+  }, [isOpen, isDragging]);
+
+  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    setIsDragging(true);
+    movedRef.current = false;
+    dragStartXRef.current = e.clientX;
+    baseXRef.current = isOpen ? SWIPE_OPEN_X : 0;
+    e.currentTarget.setPointerCapture(e.pointerId);
+  };
+
+  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!isDragging) return;
+    const dx = e.clientX - dragStartXRef.current;
+    if (Math.abs(dx) > 6) movedRef.current = true;
+    setDragX(Math.max(SWIPE_OPEN_X, Math.min(0, baseXRef.current + dx)));
+  };
+
+  const endDrag = () => {
+    if (!isDragging) return;
+    setIsDragging(false);
+    setDragX(current => {
+      const shouldOpen = current < SWIPE_OPEN_X / 2;
+      onOpenChange(shouldOpen ? data.code : null);
+      return shouldOpen ? SWIPE_OPEN_X : 0;
+    });
+  };
+
+  const handleHeadClick = () => {
+    if (movedRef.current) { movedRef.current = false; return; }
+    if (isOpen) { onOpenChange(null); return; }
+    setExpanded(v => !v);
+  };
+
+  const esExterna = !!(data.origen && data.origen !== 'Mercado Libre');
+
+  return (
+    <div className="rounded-xl border border-gray-200 overflow-hidden mb-1.5 bg-white">
+      <div className="relative">
+        <div className="absolute inset-0 flex justify-end items-stretch bg-red-100">
+          <button
+            onClick={(e) => { e.stopPropagation(); onDelete(data.code); }}
+            className="w-[84px] bg-red-600 hover:bg-red-700 text-white flex flex-col items-center justify-center gap-0.5 text-[9px] font-black uppercase tracking-wide"
+          >
+            <Trash2 className="h-4 w-4" />
+            Eliminar
+          </button>
+        </div>
+        <div
+          className="relative z-10 bg-white"
+          style={{ transform: `translateX(${dragX}px)`, transition: isDragging ? 'none' : 'transform 0.2s ease', touchAction: 'pan-y' }}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={endDrag}
+          onPointerCancel={endDrag}
+        >
+          <div
+            className="flex items-center gap-2 px-2.5 py-2 cursor-pointer"
+            role="button"
+            tabIndex={0}
+            aria-expanded={expanded}
+            onClick={handleHeadClick}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleHeadClick(); } }}
+          >
+            <span className="text-[10px] font-bold text-gray-400 tabular-nums shrink-0">{index + 1}</span>
+            {/* Código arriba; producto (truncado) debajo. El detalle completo va al desplegar. */}
+            <div className="min-w-0 flex-1 flex flex-col gap-0.5">
+              <span className="font-mono text-xs font-bold text-starbucks-dark truncate">
+                {data.code}
+                {esExterna && (
+                  <span className="ml-1.5 px-1 py-0.5 rounded bg-amber-100 text-amber-800 text-[8px] font-black uppercase tracking-wider align-middle">{data.origen}</span>
+                )}
+              </span>
+              <span className="text-[10px] font-medium text-gray-500 truncate">{data.product || 'N/A'}</span>
+            </div>
+            {data.isNew && <span className="text-[7px] font-black text-green-600 border border-green-200 px-1 rounded-sm bg-green-50 shrink-0">NUEVO</span>}
+            <ChevronDown className={cn("h-3.5 w-3.5 text-gray-400 transition-transform flex-shrink-0", expanded && "rotate-180")} />
+          </div>
+          <div className="grid transition-[grid-template-rows] duration-200" style={{ gridTemplateRows: expanded ? '1fr' : '0fr' }}>
+            <div className="overflow-hidden">
+              <div className="px-2.5 pb-2.5 pt-2 pl-8 border-t border-dashed border-gray-200 mt-0.5">
+                <dl className="mb-2 space-y-1.5 text-[11px]">
+                  <div>
+                    <dt className="text-[8px] font-black uppercase tracking-wide text-gray-400">Producto</dt>
+                    <dd className="font-semibold text-starbucks-dark break-words">{data.product || 'N/A'}</dd>
+                  </div>
+                </dl>
+                <dl className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-[11px] mb-2.5">
+                  <div><dt className="text-[8px] font-black uppercase tracking-wide text-gray-400">Empaquetado por</dt><dd className="font-semibold text-starbucks-dark break-words">{data.name || 'N/A'}</dd></div>
+                  <div><dt className="text-[8px] font-black uppercase tracking-wide text-gray-400">SKU</dt><dd className="font-semibold text-starbucks-dark break-words">{data.sku || 'N/A'}</dd></div>
+                  <div><dt className="text-[8px] font-black uppercase tracking-wide text-gray-400">Piezas</dt><dd className="font-semibold text-starbucks-dark">{data.quantity ?? 'N/A'}</dd></div>
+                  {data.sales_num ? <div><dt className="text-[8px] font-black uppercase tracking-wide text-gray-400">Venta</dt><dd className="font-semibold text-starbucks-dark break-words">{data.sales_num}</dd></div> : null}
+                </dl>
+                <Button
+                  onClick={(e) => { e.stopPropagation(); onReport(data); }}
+                  variant="outline"
+                  className="w-full h-8 text-[11px] font-bold text-amber-600 border-amber-300 hover:bg-amber-50 gap-1.5"
+                >
+                  <FileWarning className="h-3.5 w-3.5" /> Reportar Discrepancia
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function CalificarPage() {
   const { profile, user } = useAuth();
   const [isMounted, setIsMounted] = useState(false);
@@ -126,6 +266,9 @@ export default function CalificarPage() {
   const [encargadosList, setEncargadosList] = useState<Encargado[]>([]);
   const [scanMode, setScanMode] = useState('individual');
   const [massScannedCodes, setMassScannedCodes] = useState<ScanResult[]>([]);
+  // Código de la card móvil actualmente deslizada/revelada (para eliminar). Vive aquí
+  // arriba de MobileMassRow para que abrir una cierre la otra.
+  const [openSwipeMassCode, setOpenSwipeMassCode] = useState<string | null>(null);
   const [cameraCapabilities, setCameraCapabilities] = useState<any>(null);
   const [isFlashOn, setIsFlashOn] = useState(false);
   const [zoom, setZoom] = useState(1);
@@ -1418,7 +1561,26 @@ const triggerMassQualify = async () => {
                             {loading ? 'Calificando...' : 'Calificar Todos'}
                         </Button>
                     </div>
-                    <div className="table-container border border-gray-200 rounded-lg max-h-80 overflow-auto">
+                    {/* Móvil: cards abatibles (la tabla de 4 columnas se salía y el nombre del
+                        producto estiraba cada fila; ahora se despliega solo al tocar). */}
+                    <div className="md:hidden max-h-[60vh] overflow-auto pr-0.5">
+                        {massScannedCodes.length > 0 ? massScannedCodes.map((item, index) => (
+                            <MobileMassRow
+                                key={item.code}
+                                data={item}
+                                index={index}
+                                isOpen={openSwipeMassCode === item.code}
+                                onOpenChange={setOpenSwipeMassCode}
+                                onDelete={removeFromMassList}
+                                onReport={handleOpenDiscrepancyModal}
+                            />
+                        )) : (
+                            <div className="text-center text-gray-500 py-10 text-[11px] uppercase font-bold">No hay códigos en la lista.</div>
+                        )}
+                    </div>
+
+                    {/* Escritorio: tabla completa. */}
+                    <div className="hidden md:block table-container border border-gray-200 rounded-lg max-h-80 overflow-auto">
                         <Table>
                             <TableHeader className="sticky top-0 bg-starbucks-cream">
                                 <TableRow>
