@@ -841,7 +841,7 @@ export default function Home() {
     oscillator.stop(context.currentTime + 0.2);
   };
 
- const addCodeAndUpdateCounters = useCallback(async (codeToAdd: string, details: { sku: string | null; cantidad: number | null; producto: string | null; empresa: string | null; venta: string | null; deli_date: string | null; }) => {
+ const addCodeAndUpdateCounters = useCallback(async (codeToAdd: string, details: { sku: string | null; cantidad: number | null; producto: string | null; empresa: string | null; venta: string | null; deli_date: string | null; origen?: string | null; }) => {
     // El código ya se reserva en `scannedCodesRef` desde `processScan` (antes de
     // las consultas a etiquetas_i/v_code/personal), así que aquí no hace falta
     // repetir el check ni el `add`: para cuando se llega aquí, ya está reservado.
@@ -940,6 +940,9 @@ export default function Home() {
       venta: details.venta,
       esti_time: totalEstimatedTime > 0 ? totalEstimatedTime : null,
       deli_date: details.deli_date,
+      // Plataforma de origen. ML no lo trae (undefined) => al guardar cae a 'Mercado Libre';
+      // TikTok lo pasa explícito para enrutar/etiquetar igual que el modo externo.
+      origen: details.origen ?? null,
     };
 
     setScannedData(prevData => [...prevData, newItem]);
@@ -1312,16 +1315,68 @@ export default function Home() {
         // rechazado más abajo, se libera con `scannedCodesRef.current.delete`.
         scannedCodesRef.current.add(finalCode);
 
-        const { data: etiquetaRows, error: etiquetaInfoError } = await supabaseEtiquetas
-            .from('etiquetas_i')
-            .select('code_i, sku, quantity, product, organization, sales_num, deli_date')
-            .eq('code', finalCode);
-        
+        // Autocompletado en UN SOLO viaje: ML (etiquetas_i), TikTok (etiquetas_tiktok) y el
+        // check de "¿ya asignada?" (personal) se consultan EN PARALELO. Las tres columnas
+        // están indexadas (code / tracking_number / code), así que un scan "desperdicia" la
+        // tabla que no le toca, pero al ir juntas la latencia es la del viaje más lento, no
+        // la suma. Antes personal se consultaba encadenado, después del corte.
+        const [etiquetasRes, tiktokRes, personalRes] = await Promise.all([
+            supabaseEtiquetas
+                .from('etiquetas_i')
+                .select('code_i, sku, quantity, product, organization, sales_num, deli_date')
+                .eq('code', finalCode),
+            supabaseEtiquetas
+                .from('etiquetas_tiktok')
+                .select('seller_sku, product_name, qty, order_id, package_id')
+                .eq('tracking_number', finalCode)
+                .limit(1)
+                .maybeSingle(),
+            supabaseEtiquetas
+                .from('personal')
+                .select('code, name, name_inc')
+                .eq('code', finalCode),
+        ]);
+
+        const { data: etiquetaRows, error: etiquetaInfoError } = etiquetasRes;
         if (etiquetaInfoError) {
             throw new Error(`Error al buscar en 'etiquetas_i': ${etiquetaInfoError.message}`);
         }
 
         if (!etiquetaRows || etiquetaRows.length === 0) {
+            // No está en ML. Si es una etiqueta TikTok ya registrada, se autocompleta desde
+            // etiquetas_tiktok SIN validar corte (decisión: el corte solo se exige a ML).
+            const tiktokData = tiktokRes.data;
+            if (tiktokData) {
+                if (personalRes.data && personalRes.data.length > 0) {
+                    scannedCodesRef.current.delete(finalCode);
+                    const p = personalRes.data[0];
+                    playErrorSound();
+                    showAppMessage(
+                        <>El código {finalCode} ya fue asignado a <strong className="font-bold">{p.name}</strong> por <strong className="font-bold">{p.name_inc}</strong>.</>,
+                        'duplicate'
+                    );
+                    setLoading(false);
+                    return;
+                }
+                // Se reusa addCodeAndUpdateCounters: al pasar seller_sku como `sku`, el tiempo
+                // estimado y la subcategoría se cruzan por sku_alterno -> sku_m igual que ML
+                // (si el SKU del vendedor existe ahí; si no, quedan editables a mano en la fila).
+                await addCodeAndUpdateCounters(finalCode, {
+                    sku: tiktokData.seller_sku || null,
+                    cantidad: tiktokData.qty ?? null,
+                    producto: tiktokData.product_name || null,
+                    empresa: null,
+                    // OJO: personal.sales_num es numérico y al guardar hace Number(venta). El
+                    // order_id de TikTok es texto/largo (~18 díg. o alfanumérico) => forzarlo
+                    // perdería precisión o daría NaN y rompería el insert. Se deja en null; la
+                    // identidad de la etiqueta es su `code` (tracking), que sí se guarda.
+                    venta: null,
+                    deli_date: null,
+                    origen: 'TikTok',
+                });
+                return;
+            }
+
             scannedCodesRef.current.delete(finalCode);
             // Solo muestra modal si el código tiene más de 30 caracteres
             if (finalCode.length > 30) {
@@ -1363,10 +1418,9 @@ export default function Home() {
         }
 
 
-        const { data: personalRows, error: personalError } = await supabaseEtiquetas
-            .from('personal')
-            .select('code, name, name_inc')
-            .eq('code', finalCode);
+        // Reusa el resultado del lote paralelo de arriba (misma consulta por `code`), en vez
+        // de volver a ir a la BD: un viaje menos en el camino ML.
+        const { data: personalRows, error: personalError } = personalRes;
 
         if (personalError) {
             throw new Error(`Error al verificar en 'personal': ${personalError.message}`);
