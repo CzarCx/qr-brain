@@ -2063,10 +2063,12 @@ const deleteRow = (codeToDelete: string) => {
                 date: associationTimestamp.toISOString(),
                 // `date` se reescribe con la hora de ESTA carga (intencional: es lo que mete
                 // el registro en los tableros del día). Eso perdía la hora del escaneo, así
-                // que se conserva aparte en date_scan copiando personal_prog.date, que es la
-                // hora en que el lote se guardó al escanearlo. Si por lo que sea no viniera,
-                // el trigger de la BD lo deja igual a `date`.
-                date_scan: item.date ?? associationTimestamp.toISOString(),
+                // que se conserva aparte en date_scan copiando la de personal_prog:
+                //   1º date_scan (columna dedicada e inmutable, la fuente confiable),
+                //   2º date (fallback si aún no se corrió la migración de personal_prog),
+                //   3º la hora de la carga como último recurso.
+                // El trigger de `personal` respeta este valor (coalesce lo deja tal cual).
+                date_scan: item.date_scan ?? item.date ?? associationTimestamp.toISOString(),
                 status: 'ASIGNADO',
                 origen: item.origen ?? 'Mercado Libre',
                 esti_time: item.esti_time,

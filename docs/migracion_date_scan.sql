@@ -43,7 +43,9 @@ begin
     -- Si la app mandó la hora original (caso Cargar Producción, que copia
     -- personal_prog.date), se respeta. Si no, cae al `date` de ese momento —
     -- que en una creación normal ES la hora del escaneo.
-    new.date_scan := coalesce(new.date_scan, new.date);
+    -- El cast ::timestamptz hace que el coalesce funcione aunque `date` esté
+    -- guardada como text (ISO) en vez de timestamptz; si ya es timestamptz, es no-op.
+    new.date_scan := coalesce(new.date_scan, new.date::timestamptz);
   else
     -- UPDATE: inmutable una vez establecido. `coalesce(old, new)` conserva el
     -- valor viejo si existe, y permite fijarlo si venía en NULL.
@@ -61,6 +63,34 @@ create trigger trg_personal_set_date_scan
 -- 3) El tablero de KPIs agrupa/filtra por esta columna.
 create index if not exists idx_personal_date_scan
   on public.personal (date_scan);
+
+commit;
+
+-- ============================================================================
+-- Lo MISMO para `personal_prog`. Ahí también debe conservarse la hora del primer
+-- escaneo, porque es de donde `personal` la copia al recargar (Cargar Producción).
+-- Reutiliza la misma función personal_set_date_scan(): es genérica, solo toca
+-- date/date_scan, columnas que ambas tablas tienen. Al guardar el lote a
+-- programados, personal_prog.date ES la hora del escaneo, así que el trigger fija
+-- date_scan = date automáticamente (la app no necesita mandarlo).
+-- ============================================================================
+
+begin;
+
+alter table public.personal_prog
+  add column if not exists date_scan timestamptz null;
+
+comment on column public.personal_prog.date_scan is
+  'Hora del primer escaneo (= `date` al guardar el lote a programados). Inmutable, '
+  'igual que en personal. Se copia a personal.date_scan al recargar el lote.';
+
+drop trigger if exists trg_personal_prog_set_date_scan on public.personal_prog;
+create trigger trg_personal_prog_set_date_scan
+  before insert or update on public.personal_prog
+  for each row execute function public.personal_set_date_scan();
+
+create index if not exists idx_personal_prog_date_scan
+  on public.personal_prog (date_scan);
 
 commit;
 
