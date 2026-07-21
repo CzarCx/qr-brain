@@ -17,6 +17,9 @@ export interface SnapshotEntry {
   name: string | null;
   product: string | null;
   status: string;
+  // Subcategoría derivada del SKU (sku_alterno -> sku_m) al precargar el lote, para
+  // poder mostrarla también al escanear sin conexión.
+  subcategoria?: string | null;
 }
 
 export interface Snapshot {

@@ -39,7 +39,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { Textarea } from '@/components/ui/textarea';
 import { useAuth } from '@/components/AuthProvider';
-import { cn, getCameraCapabilitiesWithRetry } from '@/lib/utils';
+import { cn, getCameraCapabilitiesWithRetry, marketplaceFromOrigen, resolveOrganizationParaMarketplace } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 // Escáner NUEVO (zxing-wasm), el mismo de /devoluciones y /entrega. Se carga solo en
@@ -998,6 +998,7 @@ export default function Home() {
             }
             lastFinishTime = finishTime;
 
+            const marketplace = marketplaceFromOrigen(item.origen);
             return {
                 code: String(item.code),
                 sku: item.sku,
@@ -1008,11 +1009,12 @@ export default function Home() {
                 place: skipAreaSelection ? null : selectedArea,
                 product: item.producto,
                 quantity: item.cantidad,
-                organization: item.empresa,
+                organization: resolveOrganizationParaMarketplace(marketplace, item.empresa),
                 sales_num: item.venta ? Number(item.venta) : null,
                 date: associationTimestamp.toISOString(),
                 status: 'ASIGNADO',
                 origen: item.origen ?? 'Mercado Libre',
+                marketplace,
                 esti_time: item.esti_time,
                 deli_date: item.deli_date,
                 date_ini: startTime.toISOString(),
@@ -2044,6 +2046,7 @@ const deleteRow = (codeToDelete: string) => {
             }
             lastFinishTime = finishTime;
 
+            const marketplace = marketplaceFromOrigen(item.origen);
             return {
                 code: String(item.code),
                 sku: item.sku,
@@ -2054,9 +2057,16 @@ const deleteRow = (codeToDelete: string) => {
                 place: item.place,
                 product: item.product,
                 quantity: item.quantity,
-                organization: item.organization,
+                organization: resolveOrganizationParaMarketplace(marketplace, item.organization),
                 sales_num: item.sales_num && !isNaN(Number(item.sales_num)) ? Number(item.sales_num) : null,
+                marketplace,
                 date: associationTimestamp.toISOString(),
+                // `date` se reescribe con la hora de ESTA carga (intencional: es lo que mete
+                // el registro en los tableros del día). Eso perdía la hora del escaneo, así
+                // que se conserva aparte en date_scan copiando personal_prog.date, que es la
+                // hora en que el lote se guardó al escanearlo. Si por lo que sea no viniera,
+                // el trigger de la BD lo deja igual a `date`.
+                date_scan: item.date ?? associationTimestamp.toISOString(),
                 status: 'ASIGNADO',
                 origen: item.origen ?? 'Mercado Libre',
                 esti_time: item.esti_time,

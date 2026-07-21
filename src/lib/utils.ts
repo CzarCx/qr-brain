@@ -37,3 +37,26 @@ export async function getCameraCapabilitiesWithRetry(
   }
   return caps;
 }
+
+// ── Marketplace ─────────────────────────────────────────────────────────────
+// Valor normalizado para `personal.marketplace`, derivado del `origen` (plataforma)
+// del item. Cubre las dos variantes de TikTok ('TikTok' del autocompletado y
+// 'TikTok Shop' del modo externo). Cualquier otra externa (Amazon, Estafeta, Otro…)
+// se normaliza genéricamente a MAYÚSCULAS con espacios -> '_'.
+export function marketplaceFromOrigen(origen?: string | null): string {
+  const o = (origen || 'Mercado Libre').trim().toLowerCase();
+  if (o.includes('tiktok')) return 'TIKTOK';
+  if (o.includes('mercado')) return 'MERCADO_LIBRE';
+  if (o.includes('walmart')) return 'WALMART';
+  if (o.includes('fedex')) return 'FEDEX';
+  return o.toUpperCase().replace(/\s+/g, '_');
+}
+
+// TikTok/Walmart/FedEx no tienen "empresa/marca interna": su organización por defecto
+// es INMATMEX. El resto (Mercado Libre) conserva la empresa/tienda tal cual.
+const MARKETPLACES_INMATMEX = new Set(['TIKTOK', 'WALMART', 'FEDEX']);
+export function resolveOrganizationParaMarketplace(marketplace: string, empresa?: string | null): string | null {
+  const emp = empresa && empresa !== '---' ? empresa : null;
+  if (MARKETPLACES_INMATMEX.has(marketplace)) return emp ?? 'INMATMEX';
+  return emp;
+}

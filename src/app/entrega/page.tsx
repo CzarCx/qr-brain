@@ -7,7 +7,7 @@ import { supabase, supabaseEtiquetas } from '@/lib/supabaseClient';
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { XCircle, PackageCheck, AlertTriangle, Trash2, Zap, ZoomIn, PlusCircle, Download, FileUp, Clock, WifiOff, RefreshCw } from 'lucide-react';
+import { XCircle, PackageCheck, AlertTriangle, ChevronDown, Trash2, Zap, ZoomIn, PlusCircle, Download, FileUp, Clock, WifiOff, RefreshCw } from 'lucide-react';
 import {
   Select,
   SelectContent,
@@ -32,7 +32,11 @@ import { enqueue, mergeSnapshotEntries, getSnapshotEntries, updateQueueItem, Sna
 type DeliveryItem = {
   code: string;
   product: string | null;
+  // Operario que empaquetó/despachó la etiqueta (personal.name). Se muestra en la
+  // columna "Despachó".
   name: string | null;
+  // Subcategoría derivada del SKU (sku_alterno -> sku_m); personal no la guarda.
+  subcategoria?: string | null;
   // Plataforma de origen: null/'Mercado Libre' = ML; 'Walmart'/'TikTok Shop'/... = externa.
   origen?: string | null;
   // true cuando se aceptó offline sin poder validarlo contra un snapshot local
@@ -62,6 +66,197 @@ const BarcodeScanner = dynamic(() => import('@/components/BarcodeScanner'), { ss
 
 const STORAGE_KEY = 'entrega_session_list';
 
+// Desplazamiento al deslizar la card para revelar "Eliminar" (mismo criterio que /asignar).
+const SWIPE_OPEN_X = -84;
+
+// La subcategoría no vive en `personal`: se deriva del SKU cruzando sku_alterno -> sku_m,
+// igual que en /asignar y /devoluciones. Para un lote entero se cruza EN LOTE (dos consultas
+// con .in()) en vez de 1-2 por fila, que serían N viajes secuenciales.
+const buildSubcatMap = async (
+  skus: (string | null | undefined)[],
+): Promise<Map<string, string>> => {
+  const uniqueSkus = Array.from(new Set(
+    skus.flatMap(s => (s ? String(s).split(' | ').map(x => x.trim()).filter(Boolean) : [])),
+  ));
+  const result = new Map<string, string>();
+  if (uniqueSkus.length === 0) return result;
+  // Trocea los .in() para que un lote grande no arme una URL que PostgREST rechace.
+  const chunk = <T,>(arr: T[], n: number): T[][] => {
+    const out: T[][] = [];
+    for (let i = 0; i < arr.length; i += n) out.push(arr.slice(i, i + n));
+    return out;
+  };
+  try {
+    // sku -> sku_mdr
+    const skuToMdr = new Map<string, string>();
+    const mdrs: string[] = [];
+    for (const part of chunk(uniqueSkus, 200)) {
+      const { data: altRows } = await supabaseEtiquetas
+        .from('sku_alterno')
+        .select('sku, sku_mdr')
+        .in('sku', part);
+      (altRows || []).forEach((r: any) => {
+        if (r.sku && r.sku_mdr) { skuToMdr.set(String(r.sku), String(r.sku_mdr)); mdrs.push(String(r.sku_mdr)); }
+      });
+    }
+    // sku_mdr -> sub_cat
+    const mdrToSubcat = new Map<string, string>();
+    const uniqueMdrs = Array.from(new Set(mdrs));
+    for (const part of chunk(uniqueMdrs, 200)) {
+      const { data: mRows } = await supabaseEtiquetas
+        .from('sku_m')
+        .select('sku_mdr, sub_cat')
+        .in('sku_mdr', part);
+      (mRows || []).forEach((r: any) => { if (r.sku_mdr && r.sub_cat) mdrToSubcat.set(String(r.sku_mdr), r.sub_cat); });
+    }
+    // Si el SKU no cruza, se usa el propio SKU como fallback (mismo criterio que las otras pantallas).
+    uniqueSkus.forEach(sku => {
+      const mdr = skuToMdr.get(sku);
+      const sub = mdr ? mdrToSubcat.get(mdr) : undefined;
+      result.set(sku, sub || sku);
+    });
+  } catch { /* red caída: se devuelve lo que se haya podido armar (posiblemente vacío) */ }
+  return result;
+};
+
+// Combina la subcategoría de un SKU (que puede traer varios unidos por ' | ') desde el mapa.
+const subcatFromMap = (sku: string | null | undefined, map: Map<string, string>): string | null => {
+  if (!sku) return null;
+  const parts = String(sku).split(' | ').map(x => x.trim()).filter(Boolean);
+  if (parts.length === 0) return null;
+  const subs = parts.map(p => map.get(p) || p);
+  return Array.from(new Set(subs)).join(' | ');
+};
+
+// Card abatible para la lista de entrega en móvil. Calcada de MobilePendingRow de /asignar
+// (y MobileMassRow de /calificar): deslizar a la izquierda revela "Eliminar"; tocar la
+// cabecera despliega el detalle (producto completo, subcategoría, quién despachó). Sustituye
+// la tabla que en móvil crecía muchísimo porque el nombre del producto se partía en 10+ líneas.
+function MobileDeliveryRow({
+  data,
+  index,
+  isOpen,
+  onOpenChange,
+  onDelete,
+}: {
+  data: DeliveryItem;
+  index: number;
+  isOpen: boolean;
+  onOpenChange: (code: string | null) => void;
+  onDelete: (code: string) => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const [dragX, setDragX] = useState(isOpen ? SWIPE_OPEN_X : 0);
+  const [isDragging, setIsDragging] = useState(false);
+  const dragStartXRef = useRef(0);
+  const baseXRef = useRef(0);
+  const movedRef = useRef(false);
+
+  useEffect(() => {
+    if (!isDragging) setDragX(isOpen ? SWIPE_OPEN_X : 0);
+  }, [isOpen, isDragging]);
+
+  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    setIsDragging(true);
+    movedRef.current = false;
+    dragStartXRef.current = e.clientX;
+    baseXRef.current = isOpen ? SWIPE_OPEN_X : 0;
+    e.currentTarget.setPointerCapture(e.pointerId);
+  };
+
+  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!isDragging) return;
+    const dx = e.clientX - dragStartXRef.current;
+    if (Math.abs(dx) > 6) movedRef.current = true;
+    setDragX(Math.max(SWIPE_OPEN_X, Math.min(0, baseXRef.current + dx)));
+  };
+
+  const endDrag = () => {
+    if (!isDragging) return;
+    setIsDragging(false);
+    setDragX(current => {
+      const shouldOpen = current < SWIPE_OPEN_X / 2;
+      onOpenChange(shouldOpen ? data.code : null);
+      return shouldOpen ? SWIPE_OPEN_X : 0;
+    });
+  };
+
+  const handleHeadClick = () => {
+    if (movedRef.current) { movedRef.current = false; return; }
+    if (isOpen) { onOpenChange(null); return; }
+    setExpanded(v => !v);
+  };
+
+  const esExterna = !!(data.origen && data.origen !== 'Mercado Libre');
+
+  return (
+    <div className="rounded-xl border border-gray-200 overflow-hidden mb-1.5 bg-white">
+      <div className="relative">
+        <div className="absolute inset-0 flex justify-end items-stretch bg-red-100">
+          <button
+            onClick={(e) => { e.stopPropagation(); onDelete(data.code); }}
+            className="w-[84px] bg-red-600 hover:bg-red-700 text-white flex flex-col items-center justify-center gap-0.5 text-[9px] font-black uppercase tracking-wide"
+          >
+            <Trash2 className="h-4 w-4" />
+            Eliminar
+          </button>
+        </div>
+        <div
+          className="relative z-10 bg-white"
+          style={{ transform: `translateX(${dragX}px)`, transition: isDragging ? 'none' : 'transform 0.2s ease', touchAction: 'pan-y' }}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={endDrag}
+          onPointerCancel={endDrag}
+        >
+          <div
+            className="flex items-center gap-2 px-2.5 py-2 cursor-pointer"
+            role="button"
+            tabIndex={0}
+            aria-expanded={expanded}
+            onClick={handleHeadClick}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleHeadClick(); } }}
+          >
+            <span className="text-[10px] font-bold text-gray-400 tabular-nums shrink-0">{index + 1}</span>
+            {/* Código arriba; producto (truncado) debajo. El detalle completo va al desplegar. */}
+            <div className="min-w-0 flex-1 flex flex-col gap-0.5">
+              <span className="font-mono text-xs font-bold text-starbucks-dark truncate">
+                {data.code}
+                {esExterna && (
+                  <span className="ml-1.5 px-1 py-0.5 rounded bg-amber-100 text-amber-800 text-[8px] font-black uppercase tracking-wider align-middle">{data.origen}</span>
+                )}
+              </span>
+              <span className="text-[10px] font-medium text-gray-500 truncate">{data.product || 'N/A'}</span>
+            </div>
+            {data.unverified && (
+              <span title="No estaba en un lote precargado; se validará al sincronizar" className="inline-flex items-center gap-0.5 rounded-full bg-amber-100 text-amber-700 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide shrink-0">
+                <AlertTriangle className="h-2.5 w-2.5" /> Sin verif.
+              </span>
+            )}
+            <ChevronDown className={cn("h-3.5 w-3.5 text-gray-400 transition-transform flex-shrink-0", expanded && "rotate-180")} />
+          </div>
+          <div className="grid transition-[grid-template-rows] duration-200" style={{ gridTemplateRows: expanded ? '1fr' : '0fr' }}>
+            <div className="overflow-hidden">
+              <div className="px-2.5 pb-2.5 pt-2 pl-8 border-t border-dashed border-gray-200 mt-0.5">
+                <dl className="mb-2 space-y-1.5 text-[11px]">
+                  <div>
+                    <dt className="text-[8px] font-black uppercase tracking-wide text-gray-400">Producto</dt>
+                    <dd className="font-semibold text-starbucks-dark break-words">{data.product || 'N/A'}</dd>
+                  </div>
+                </dl>
+                <dl className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-[11px]">
+                  <div><dt className="text-[8px] font-black uppercase tracking-wide text-gray-400">Subcategoría</dt><dd className="font-black text-amber-700 uppercase break-words">{data.subcategoria || 'N/A'}</dd></div>
+                  <div><dt className="text-[8px] font-black uppercase tracking-wide text-gray-400">Despachó</dt><dd className="font-semibold text-starbucks-dark break-words">{data.name || 'N/A'}</dd></div>
+                </dl>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function Home() {
   const { profile, user } = useAuth();
   const [isMounted, setIsMounted] = useState(false);
@@ -70,6 +265,8 @@ export default function Home() {
   const [encargado, setEncargado] = useState('');
   const [encargadosList, setEncargadosList] = useState<Encargado[]>([]);
   const [deliveryList, setDeliveryList] = useState<DeliveryItem[]>([]);
+  // Código de la card móvil actualmente deslizada/revelada (para eliminar); abrir una cierra la otra.
+  const [openSwipeCode, setOpenSwipeCode] = useState<string | null>(null);
   const [selectedScannerMode, setSelectedScannerMode] = useState('camara');
   const [scannerActive, setScannerActive] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -300,7 +497,17 @@ export default function Home() {
     showAppMessage('Procesando código...', 'info');
     if ('vibrate' in navigator) navigator.vibrate(100);
 
-    const applyScanResult = async (data: { name: string | null; product: string | null; status: string; origen?: string | null } | null, offline: boolean) => {
+    // Subcategoría de un paquete recién escaneado: online se cruza el SKU (sku_alterno->sku_m);
+    // offline se toma la que quedó cacheada en el snapshot al precargar el lote.
+    const resolveItemSubcat = async (d: { sku?: string | null; subcategoria?: string | null }): Promise<string | null> => {
+        if (d.sku) {
+            const map = await buildSubcatMap([d.sku]);
+            return subcatFromMap(d.sku, map);
+        }
+        return d.subcategoria ?? null;
+    };
+
+    const applyScanResult = async (data: { name: string | null; product: string | null; status: string; origen?: string | null; sku?: string | null; subcategoria?: string | null } | null, offline: boolean) => {
         if (!data) {
             if (offline) {
                 // Sin snapshot para este código: en vez de bloquear, se acepta sin
@@ -348,16 +555,19 @@ export default function Home() {
             }
 
             playBeep();
-            setDeliveryList(prev => [{ code: finalCode, product: data.product, name: data.name, origen: data.origen }, ...prev]);
+            const subcatProd = await resolveItemSubcat(data);
+            setDeliveryList(prev => [{ code: finalCode, product: data.product, name: data.name, origen: data.origen, subcategoria: subcatProd }, ...prev]);
             scannedCodesRef.current.add(finalCode);
             showAppMessage(`Calificado automáticamente y añadido: ${finalCode}`, 'success');
         } else if (isValidationOverridden || data.status === 'CALIFICADO') {
             playBeep();
+            const subcatCal = await resolveItemSubcat(data);
             const newItem: DeliveryItem = {
                 code: finalCode,
                 product: data.product,
                 name: data.name,
                 origen: data.origen,
+                subcategoria: subcatCal,
             };
             setDeliveryList(prev => [newItem, ...prev]);
             scannedCodesRef.current.add(finalCode);
@@ -374,13 +584,16 @@ export default function Home() {
         } else {
             const { data, error } = await supabaseEtiquetas
                 .from('personal')
-                .select('name, product, status, origen')
+                .select('name, product, status, origen, sku')
                 .eq('code', finalCode)
                 .single();
 
             if (error && error.code !== 'PGRST116') { // PGRST116 = no rows found
                 throw error;
             }
+            // La subcategoría se deriva dentro de applyScanResult SOLO cuando el paquete se
+            // agrega (estatus CALIFICADO / EN PRODUCCION), no aquí: así un REPORTADO o un
+            // código no calificado no paga el cruce sku_alterno->sku_m ni retrasa el beep.
             await applyScanResult(data ?? null, false);
         }
     } catch (e: any) {
@@ -651,7 +864,7 @@ export default function Home() {
     try {
       const { data, error } = await supabaseEtiquetas
         .from('personal')
-        .select('code, product, name, status, origen')
+        .select('code, product, name, status, origen, sku')
         .eq('lote', loteId.trim());
 
       if (error) throw error;
@@ -661,11 +874,15 @@ export default function Home() {
         return;
       }
 
-      // Guardar snapshot local (nombre/producto/status) para poder validar
-      // estos códigos sin conexión más adelante en la sesión.
+      // Subcategoría del lote completo cruzada EN LOTE (dos consultas con .in()), no una por
+      // fila: así cargar un lote grande no dispara N viajes secuenciales.
+      const subcatMap = await buildSubcatMap(data.map((item: any) => item.sku));
+
+      // Guardar snapshot local (nombre/producto/status/subcategoría) para poder validar y
+      // mostrar la subcategoría de estos códigos sin conexión más adelante en la sesión.
       const snapshotEntries: Record<string, SnapshotEntry> = {};
       data.forEach((item: any) => {
-        snapshotEntries[String(item.code)] = { name: item.name, product: item.product, status: item.status };
+        snapshotEntries[String(item.code)] = { name: item.name, product: item.product, status: item.status, subcategoria: subcatFromMap(item.sku, subcatMap) };
       });
       snapshotRef.current = { ...snapshotRef.current, ...snapshotEntries };
       mergeSnapshotEntries('entrega', snapshotEntries).catch((err) => console.error('Error guardando snapshot offline:', err));
@@ -683,6 +900,7 @@ export default function Home() {
             product: item.product,
             name: item.name,
             origen: item.origen,
+            subcategoria: subcatFromMap(item.sku, subcatMap),
           });
         } else {
           skippedCount++;
@@ -1162,12 +1380,32 @@ export default function Home() {
                         </Button>
                     </div>
 
-                    <div className="table-container border border-gray-200 rounded-lg max-h-60 overflow-auto">
+                    {/* Móvil: cards abatibles (la tabla se salía y el nombre del producto
+                        estiraba cada fila; ahora se despliega solo al tocar). */}
+                    <div className="md:hidden max-h-[60vh] overflow-auto pr-0.5">
+                        {deliveryList.length > 0 ? deliveryList.map((item, index) => (
+                            <MobileDeliveryRow
+                                key={item.code}
+                                data={item}
+                                index={index}
+                                isOpen={openSwipeCode === item.code}
+                                onOpenChange={setOpenSwipeCode}
+                                onDelete={removeFromList}
+                            />
+                        )) : (
+                            <div className="text-center text-gray-500 py-10 text-[11px] uppercase font-bold">No hay paquetes en la lista.</div>
+                        )}
+                    </div>
+
+                    {/* Escritorio: tabla completa con las nuevas columnas Subcategoría y Despachó. */}
+                    <div className="hidden md:block table-container border border-gray-200 rounded-lg max-h-60 overflow-auto">
                         <Table>
                             <TableHeader className="sticky top-0 bg-starbucks-cream">
                                 <TableRow>
                                     <TableHead>Código</TableHead>
                                     <TableHead>Producto</TableHead>
+                                    <TableHead>Subcategoría</TableHead>
+                                    <TableHead>Despachó</TableHead>
                                     <TableHead className="text-right">Acción</TableHead>
                                 </TableRow>
                             </TableHeader>
@@ -1188,6 +1426,8 @@ export default function Home() {
                                             </div>
                                         </TableCell>
                                         <TableCell className="text-xs">{item.product || 'N/A'}</TableCell>
+                                        <TableCell className="text-xs font-black text-amber-700 uppercase">{item.subcategoria || 'N/A'}</TableCell>
+                                        <TableCell className="text-xs">{item.name || 'N/A'}</TableCell>
                                         <TableCell className="text-right">
                                             <Button variant="ghost" size="icon" onClick={() => removeFromList(item.code)} className="text-red-500 hover:text-red-700 h-8 w-8">
                                                 <Trash2 className="h-4 w-4" />
@@ -1196,7 +1436,7 @@ export default function Home() {
                                     </TableRow>
                                 )) : (
                                     <TableRow>
-                                        <TableCell colSpan={3} className="text-center text-gray-500 py-8">
+                                        <TableCell colSpan={5} className="text-center text-gray-500 py-8">
                                             No hay paquetes en la lista.
                                         </TableCell>
                                     </TableRow>

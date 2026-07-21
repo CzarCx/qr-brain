@@ -54,7 +54,7 @@ import { Switch } from '@/components/ui/switch';
 import { Combobox } from '@/components/ui/combobox';
 import { useAuth } from '@/components/AuthProvider';
 import { Textarea } from '@/components/ui/textarea';
-import { cn, getCameraCapabilitiesWithRetry, withTimeout } from '@/lib/utils';
+import { cn, getCameraCapabilitiesWithRetry, withTimeout, marketplaceFromOrigen, resolveOrganizationParaMarketplace } from '@/lib/utils';
 
 // Escáner NUEVO (zxing-wasm), el mismo de /devoluciones, /entrega y /asignar. Solo cliente.
 // Convive con el viejo (html5-qrcode); el usuario elige cuál usar.
@@ -690,6 +690,7 @@ export default function CalificarPage() {
                 if (scanMode === 'individual') {
                      const qualificationTimestamp = new Date();
                      if (isNextDayDelivery) qualificationTimestamp.setDate(qualificationTimestamp.getDate() + 1);
+                     const marketplace = marketplaceFromOrigen(result.origen);
                      const newPersonalRecord = {
                         code: result.code,
                         name: result.name,
@@ -697,14 +698,16 @@ export default function CalificarPage() {
                         sku: result.sku,
                         product: result.product,
                         quantity: result.quantity,
-                        organization: result.organization,
+                        organization: resolveOrganizationParaMarketplace(marketplace, result.organization),
                         sales_num: result.sales_num,
                         status: 'CALIFICADO',
                         date: qualificationTimestamp.toISOString(),
                         date_cal: qualificationTimestamp.toISOString(),
                         details: result.details,
                         name_cali: encargado || 'N/A',
-                        id_empleado_calificada: user?.id ?? null
+                        id_empleado_calificada: user?.id ?? null,
+                        origen: result.origen ?? 'Mercado Libre',
+                        marketplace,
                     };
                     const { error: insertError } = await withTimeout(supabaseEtiquetas.from('personal').insert(newPersonalRecord), SCAN_QUERY_TIMEOUT_MS);
                     if (insertError) throw insertError;
@@ -1013,6 +1016,7 @@ export default function CalificarPage() {
           // estatus RETRABAJANDO, siguiendo el mismo payload que usa el masivo.
           if (!updateData || updateData.length === 0) {
               const nowIso = new Date().toISOString();
+              const marketplace = marketplaceFromOrigen(itemToReport.origen);
               const { data: insData, error: insErr } = await supabaseEtiquetas.from('personal').insert({
                   code: itemToReport.code,
                   name: itemToReport.name,
@@ -1020,13 +1024,15 @@ export default function CalificarPage() {
                   sku: itemToReport.sku,
                   product: itemToReport.product,
                   quantity: itemToReport.quantity,
-                  organization: itemToReport.organization,
+                  organization: resolveOrganizationParaMarketplace(marketplace, itemToReport.organization),
                   sales_num: itemToReport.sales_num,
                   status: 'RETRABAJANDO',
                   date: nowIso,
                   details: detallesIncidencia,
                   name_cali: encargado || 'N/A',
                   id_empleado_calificada: user?.id ?? null,
+                  origen: itemToReport.origen ?? 'Mercado Libre',
+                  marketplace,
               }).select('code');
 
               if (insErr) throw new Error(`La incidencia se guardó, pero no se pudo registrar el paquete como retrabajando: ${insErr.message}`);
@@ -1113,23 +1119,28 @@ const handleMassQualify = async () => {
         const codesToUpdate = massScannedCodes.filter(item => !item.isNew).map(item => item.code);
         let successCount = 0;
         if (recordsToInsert.length > 0) {
-            const payload = recordsToInsert.map(item => ({
-                code: item.code,
-                name: item.name,
-                name_inc: encargado || 'N/A',
-                sku: item.sku,
-                product: item.product,
-                quantity: item.quantity,
-                organization: item.organization,
-                sales_num: item.sales_num,
-                status: 'CALIFICADO',
-                date: qualificationTimestamp.toISOString(),
-                date_cal: qualificationTimestamp.toISOString(),
-                details: item.details,
-                lote: loteId,
-                name_cali: encargado || 'N/A',
-                id_empleado_calificada: user?.id ?? null
-            }));
+            const payload = recordsToInsert.map(item => {
+                const marketplace = marketplaceFromOrigen(item.origen);
+                return {
+                    code: item.code,
+                    name: item.name,
+                    name_inc: encargado || 'N/A',
+                    sku: item.sku,
+                    product: item.product,
+                    quantity: item.quantity,
+                    organization: resolveOrganizationParaMarketplace(marketplace, item.organization),
+                    sales_num: item.sales_num,
+                    status: 'CALIFICADO',
+                    date: qualificationTimestamp.toISOString(),
+                    date_cal: qualificationTimestamp.toISOString(),
+                    details: item.details,
+                    lote: loteId,
+                    name_cali: encargado || 'N/A',
+                    id_empleado_calificada: user?.id ?? null,
+                    origen: item.origen ?? 'Mercado Libre',
+                    marketplace,
+                };
+            });
             const { data: insData, error: insErr } = await supabaseEtiquetas.from('personal').insert(payload).select('code');
             if (insErr) throw insErr;
             if (!insData || insData.length < recordsToInsert.length) {

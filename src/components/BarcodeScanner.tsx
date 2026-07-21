@@ -39,8 +39,12 @@ const FORMATS = ['qr_code', 'code_128', 'ean_13', 'ean_8', 'upc_a', 'upc_e', 'it
 
 // ~7 lecturas/seg: suficiente para leer al vuelo y suave para la CPU del iPhone.
 const DETECT_INTERVAL_MS = 140;
-// Lado máximo del frame que se manda a decodificar.
-const MAX_DIM = 1280;
+// Lado máximo del frame que se manda a decodificar. A 1920 (en vez de 1280) ZXing conserva
+// ~2.25x más píxeles: clave para códigos 1D INCLINADOS/diagonales, pequeños o lejanos, donde
+// las barras se proyectan más finas y al reescalar de más se perdían. El motor solo rota en
+// pasos de 90° (tryRotate), así que la resolución es la palanca real para ángulos intermedios.
+// Cuesta algo de CPU por frame; el guard `busy` ya salta frames si la decodificación tarda.
+const MAX_DIM = 1920;
 // Cuánto se mantiene el contorno tras el último avistamiento (evita parpadeo).
 const OUTLINE_HOLD_MS = 350;
 // Tras intentar reanudar, cuánto esperar antes de comprobar si de verdad se recuperó
@@ -172,7 +176,7 @@ export default function BarcodeScanner({ onDetected, onTrackReady, onError }: Pr
     const startCamera = async () => {
       try {
         stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 } },
+          video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } },
           audio: false,
         });
         if (cancelled) { stopStream(); return; }
