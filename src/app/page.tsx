@@ -1214,6 +1214,15 @@ export default function Home() {
             return;
         }
 
+        // BLOQUEO: varias etiquetas de Walmart traen un código de barras basura que decodifica
+        // un número de ≤3 cifras (p. ej. "1"). Se ignora EN SILENCIO para que no ensucie la
+        // lista ni tape el tracking bueno; el operario solo re-apunta. Va DESPUÉS del check de
+        // empleado (para no bloquear un ID de empleado corto) y antes de tocar la BD.
+        if (/^\d{1,3}$/.test(finalCode)) {
+            setLoading(false);
+            return;
+        }
+
         // MODO EXTERNO: etiquetas de otras paqueterías (Walmart, TikTok, etc.).
         // No pasan por etiquetas_i (no hay autocompletado todavía): se capturan
         // con plataforma + tiempo manual y entran a `personal` como las de ML,
@@ -1317,12 +1326,12 @@ export default function Home() {
         // rechazado más abajo, se libera con `scannedCodesRef.current.delete`.
         scannedCodesRef.current.add(finalCode);
 
-        // Autocompletado en UN SOLO viaje: ML (etiquetas_i), TikTok (etiquetas_tiktok) y el
-        // check de "¿ya asignada?" (personal) se consultan EN PARALELO. Las tres columnas
-        // están indexadas (code / tracking_number / code), así que un scan "desperdicia" la
-        // tabla que no le toca, pero al ir juntas la latencia es la del viaje más lento, no
-        // la suma. Antes personal se consultaba encadenado, después del corte.
-        const [etiquetasRes, tiktokRes, personalRes] = await Promise.all([
+        // Autocompletado en UN SOLO viaje: ML (etiquetas_i), TikTok (etiquetas_tiktok),
+        // Walmart (etiquetas_walmart) y el check de "¿ya asignada?" (personal) se consultan
+        // EN PARALELO. Todas las columnas están indexadas (code / tracking_number / tracking /
+        // code), así que un scan "desperdicia" las tablas que no le tocan, pero al ir juntas la
+        // latencia es la del viaje más lento, no la suma.
+        const [etiquetasRes, tiktokRes, walmartRes, personalRes] = await Promise.all([
             supabaseEtiquetas
                 .from('etiquetas_i')
                 .select('code_i, sku, quantity, product, organization, sales_num, deli_date')
@@ -1331,6 +1340,12 @@ export default function Home() {
                 .from('etiquetas_tiktok')
                 .select('seller_sku, product_name, qty, order_id, package_id')
                 .eq('tracking_number', finalCode)
+                .limit(1)
+                .maybeSingle(),
+            supabaseEtiquetas
+                .from('etiquetas_walmart')
+                .select('sku, nombre_producto, cantidad, numero_de_orden')
+                .eq('tracking', finalCode)
                 .limit(1)
                 .maybeSingle(),
             supabaseEtiquetas
@@ -1345,10 +1360,17 @@ export default function Home() {
         }
 
         if (!etiquetaRows || etiquetaRows.length === 0) {
-            // No está en ML. Si es una etiqueta TikTok ya registrada, se autocompleta desde
-            // etiquetas_tiktok SIN validar corte (decisión: el corte solo se exige a ML).
+            // No está en ML. Se resuelve como externa YA IDENTIFICADA si el tracking existe en
+            // etiquetas_tiktok o etiquetas_walmart (SIN validar corte: el corte solo se exige a
+            // ML). El `origen` enruta luego marketplace + organización (INMATMEX) al guardar.
             const tiktokData = tiktokRes.data;
-            if (tiktokData) {
+            const walmartData = walmartRes.data;
+            const externa = tiktokData
+                ? { origen: 'TikTok', sku: tiktokData.seller_sku, producto: tiktokData.product_name, cantidad: tiktokData.qty }
+                : walmartData
+                ? { origen: 'Walmart', sku: walmartData.sku, producto: walmartData.nombre_producto, cantidad: walmartData.cantidad }
+                : null;
+            if (externa) {
                 if (personalRes.data && personalRes.data.length > 0) {
                     scannedCodesRef.current.delete(finalCode);
                     const p = personalRes.data[0];
@@ -1360,21 +1382,21 @@ export default function Home() {
                     setLoading(false);
                     return;
                 }
-                // Se reusa addCodeAndUpdateCounters: al pasar seller_sku como `sku`, el tiempo
-                // estimado y la subcategoría se cruzan por sku_alterno -> sku_m igual que ML
-                // (si el SKU del vendedor existe ahí; si no, quedan editables a mano en la fila).
+                // Se reusa addCodeAndUpdateCounters: al pasar el SKU del vendedor como `sku`, el
+                // tiempo estimado y la subcategoría se cruzan por sku_alterno -> sku_m igual que
+                // ML (si el SKU existe ahí; si no, quedan editables a mano en la fila).
                 await addCodeAndUpdateCounters(finalCode, {
-                    sku: tiktokData.seller_sku || null,
-                    cantidad: tiktokData.qty ?? null,
-                    producto: tiktokData.product_name || null,
+                    sku: externa.sku || null,
+                    cantidad: externa.cantidad ?? null,
+                    producto: externa.producto || null,
                     empresa: null,
                     // OJO: personal.sales_num es numérico y al guardar hace Number(venta). El
-                    // order_id de TikTok es texto/largo (~18 díg. o alfanumérico) => forzarlo
-                    // perdería precisión o daría NaN y rompería el insert. Se deja en null; la
-                    // identidad de la etiqueta es su `code` (tracking), que sí se guarda.
+                    // número de orden externo es texto/largo (o alfanumérico) => forzarlo perdería
+                    // precisión o daría NaN y rompería el insert. Se deja en null; la identidad de
+                    // la etiqueta es su `code` (tracking), que sí se guarda.
                     venta: null,
                     deli_date: null,
-                    origen: 'TikTok',
+                    origen: externa.origen,
                 });
                 return;
             }
