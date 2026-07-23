@@ -20,6 +20,14 @@ export interface SnapshotEntry {
   // Subcategoría derivada del SKU (sku_alterno -> sku_m) al precargar el lote, para
   // poder mostrarla también al escanear sin conexión.
   subcategoria?: string | null;
+  // Campos que /calificar necesita mostrar y guardar al calificar sin conexión.
+  // Opcionales: los snapshots que ya existen en IndexedDB (creados por /entrega,
+  // que no los guarda) siguen siendo válidos sin migración ni bump de versión.
+  sku?: string | null;
+  quantity?: number | null;
+  details?: string | null;
+  origen?: string | null;
+  id_empleado_despacha?: string | null;
 }
 
 export interface Snapshot {

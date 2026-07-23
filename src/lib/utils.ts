@@ -17,6 +17,19 @@ export function withTimeout<T>(promise: PromiseLike<T>, ms: number): Promise<T> 
   ]);
 }
 
+// Distingue un fallo de RED de un error de datos. Hace falta porque el fallo de red
+// no llega de forma uniforme: a veces es un TypeError ("Load failed" en Safari,
+// "Failed to fetch" en Chrome), a veces el service worker responde "no-response",
+// y withTimeout rechaza con "Tiempo de espera agotado". Se usa para degradar a
+// offline (snapshot / cola) en vez de bloquear al operario con un modal de error.
+// navigator.onLine no basta: en iOS reporta "online" con señal fantasma.
+export function esErrorDeRed(e: any): boolean {
+  return (
+    e?.name === 'TypeError' ||
+    /no-response|Failed to fetch|Load failed|NetworkError|respondWith|Tiempo de espera agotado/i.test(e?.message ?? '')
+  );
+}
+
 // En Android, justo tras iniciar el stream la cámara a veces todavía no reporta
 // `torch` en sus capabilities (el hardware tarda un momento en exponerlo) aunque
 // sí lo soporte. Se reintenta unas veces antes de aceptar el resultado como final.

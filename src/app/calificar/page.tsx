@@ -46,7 +46,8 @@ import {
     Search,
     Loader2,
     Check,
-    Hourglass
+    Hourglass,
+    RefreshCw
 } from 'lucide-react';
 import Link from 'next/link';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -54,7 +55,10 @@ import { Switch } from '@/components/ui/switch';
 import { Combobox } from '@/components/ui/combobox';
 import { useAuth } from '@/components/AuthProvider';
 import { Textarea } from '@/components/ui/textarea';
-import { cn, getCameraCapabilitiesWithRetry, withTimeout, marketplaceFromOrigen, resolveOrganizationParaMarketplace } from '@/lib/utils';
+import { cn, getCameraCapabilitiesWithRetry, withTimeout, esErrorDeRed, marketplaceFromOrigen, resolveOrganizationParaMarketplace } from '@/lib/utils';
+import { useOnlineStatus } from '@/hooks/use-online-status';
+import { useOfflineSync, SyncOutcome } from '@/hooks/use-offline-sync';
+import { enqueue, mergeSnapshotEntries, getSnapshotEntries, updateQueueItem, SnapshotEntry, QueueItem } from '@/lib/offlineDb';
 
 // Escáner NUEVO (zxing-wasm), el mismo de /devoluciones, /entrega y /asignar. Solo cliente.
 // Convive con el viejo (html5-qrcode); el usuario elige cuál usar.
@@ -247,8 +251,30 @@ function MobileMassRow({
   );
 }
 
+/** Payload de una calificación encolada sin conexión. */
+type CalificarPayload = {
+  /** Códigos ya existentes en `personal` que pasan a CALIFICADO. */
+  codes: string[];
+  /** Filas nuevas (etiquetas que no existían) listas para insertar. */
+  inserts: any[];
+  qualificationTimestamp: string;
+  encargado: string;
+  userId: string | null;
+  lote: string;
+  elapsedTime: number;
+};
+
+// Al sincronizar no se pisa un paquete que ya avanzó en el flujo: si mientras el
+// dispositivo estaba sin red alguien lo entregó o lo canceló, calificarlo ahora
+// sería incorrecto. CALIFICADO no bloquea: reaplicarlo es idempotente.
+const ESTADOS_BLOQUEANTES_CALIFICAR = new Set(['ENTREGADO', 'CANCELADO', 'DEVUELTO']);
+
 export default function CalificarPage() {
   const { profile, user } = useAuth();
+  const isOnline = useOnlineStatus();
+  // Snapshot local de `personal` (lo que se precargó por lote con conexión): permite
+  // validar y MOSTRAR los datos del paquete al escanear sin red.
+  const snapshotRef = useRef<Record<string, SnapshotEntry>>({});
   const [isMounted, setIsMounted] = useState(false);
   const [message, setMessage] = useState({ text: 'Apunte la cámara a un código QR.', type: 'info', show: false });
   const [lastScannedResult, setLastScannedResult] = useState<ScanResult | null>(null);
@@ -313,7 +339,11 @@ export default function CalificarPage() {
   // rato, red inestable), una consulta puede quedarse colgada sin resolver ni
   // rechazar. Sin este timeout, el finally de onScanSuccess nunca corre, `loading`
   // queda pegado en true y la pantalla deja de aceptar escaneos hasta cerrar sesión.
-  const SCAN_QUERY_TIMEOUT_MS = 15000;
+  // 4s (antes 15s): con "online fantasma" —iOS reporta red sin tenerla— el fetch se
+  // cuelga hasta que el navegador se rinde solo, y el operario se quedaba mirando la
+  // pantalla 15s por cada etiqueta antes del error. Con este tope se degrada rápido
+  // al camino offline (snapshot / cola).
+  const SCAN_QUERY_TIMEOUT_MS = 4000;
   const massScannedCodesRef = useRef(new Set<string>());
   const physicalScannerInputRef = useRef<HTMLInputElement | null>(null);
   const bufferRef = useRef('');
@@ -364,6 +394,12 @@ export default function CalificarPage() {
         console.error("Error al recuperar sesión de calificación:", e);
       }
     }
+
+    // Recuperar el snapshot de lotes precargados, por si la app se recargó
+    // mientras estaba sin conexión.
+    getSnapshotEntries('calificar').then((entries) => {
+      snapshotRef.current = entries;
+    }).catch((err) => console.error('Error leyendo snapshot offline:', err));
   }, []);
 
   // Guardar en LocalStorage cada vez que cambien los datos clave
@@ -600,7 +636,87 @@ export default function CalificarPage() {
         return;
     }
     
+    // Aplica una fila de `personal` al flujo de calificación. Venga de la red o del
+    // snapshot offline, el comportamiento debe ser idéntico: por eso se extrajo aquí
+    // en vez de duplicar la lógica en el camino sin conexión.
+    const aplicarFilaPersonal = (
+        fila: {
+            name: string | null; product: string | null; status: string;
+            details?: string | null; sku?: string | null; quantity?: number | null;
+            id_empleado_despacha?: string | null; origen?: string | null;
+        },
+        offline: boolean,
+    ) => {
+        playBeep();
+        if (!timerStartedRef.current) {
+            setTimerStartTime(new Date());
+            timerStartedRef.current = true;
+        }
+        const result: ScanResult = {
+            name: fila.name,
+            product: fila.product,
+            code: finalCode,
+            found: true,
+            status: fila.status,
+            details: fila.details ?? null,
+            sku: fila.sku ?? null,
+            quantity: fila.quantity ?? null,
+            id_empleado_despacha: fila.id_empleado_despacha ?? null,
+            origen: fila.origen ?? null,
+        };
+        const sufijo = offline ? ' (sin conexión)' : '';
+
+        // Un paquete que vuelve de retrabajo se avisa distinto: no es un escaneo
+        // normal, es una recalificación tras haberse corregido una discrepancia.
+        const vieneDeRetrabajo = fila.status === 'RETRABAJANDO';
+
+        if (fila.status === 'CALIFICADO') {
+            showAppMessage(`Etiqueta ya procesada (Estado: ${fila.status}).`, 'warning');
+            setLastScannedResult(result);
+        } else {
+             if (scanMode === 'individual') {
+                setLastScannedResult(result);
+                if (vieneDeRetrabajo) {
+                    playWarningSound();
+                    showAppMessage('Paquete Retrabajado: volver a calificar.', 'warning');
+                } else {
+                    showAppMessage(`Etiqueta confirmada correctamente${sufijo}.`, 'success');
+                }
+                setIsRatingModalOpen(true);
+            } else {
+                if (vieneDeRetrabajo) {
+                    playWarningSound();
+                    showAppMessage(`Paquete Retrabajado: volver a calificar (${finalCode}).`, 'warning');
+                }
+                else if (fila.status === 'REPORTADO') showAppMessage(`Añadido (Reportado): ${finalCode}`, 'info');
+                else showAppMessage(`Añadido a la lista${sufijo}: ${finalCode}`, 'success');
+                setMassScannedCodes(prev => [result, ...prev]);
+                massScannedCodesRef.current.add(finalCode);
+            }
+        }
+    };
+
+    // Escaneo SIN conexión: se resuelve contra el snapshot del lote precargado. A
+    // diferencia de /entrega, aquí NO se acepta un código desconocido "sin verificar":
+    // calificar exige ver producto, SKU y piezas para juzgar el empaque, y sin esos
+    // datos el operario estaría calificando a ciegas.
+    const escanearDesdeSnapshot = () => {
+        const fila = snapshotRef.current[finalCode];
+        if (fila) {
+            aplicarFilaPersonal(fila, true);
+            return;
+        }
+        playWarningSound();
+        setLastScannedResult({ name: null, product: null, code: finalCode, found: false });
+        showAppMessage(`Sin conexión: ${finalCode} no está en un lote precargado. Carga su lote con señal para poder calificarlo.`, 'warning');
+    };
+
     try {
+        if (!isOnline) {
+            escanearDesdeSnapshot();
+            return;
+        }
+
         const { data: personalData, error: personalError } = await withTimeout(supabaseEtiquetas
             .from('personal')
             .select('name, product, status, details, sku, quantity, id_empleado_despacha, origen')
@@ -609,53 +725,7 @@ export default function CalificarPage() {
         if (personalError) throw personalError;
 
         if (personalData && personalData.length > 0) {
-            const firstP = personalData[0];
-            playBeep();
-             if (!timerStartedRef.current) {
-                setTimerStartTime(new Date());
-                timerStartedRef.current = true;
-            }
-            const result: ScanResult = {
-                name: firstP.name,
-                product: firstP.product,
-                code: finalCode,
-                found: true,
-                status: firstP.status,
-                details: firstP.details,
-                sku: firstP.sku,
-                quantity: firstP.quantity,
-                id_empleado_despacha: firstP.id_empleado_despacha,
-                origen: firstP.origen,
-            };
-
-            // Un paquete que vuelve de retrabajo se avisa distinto: no es un escaneo
-            // normal, es una recalificación tras haberse corregido una discrepancia.
-            const vieneDeRetrabajo = firstP.status === 'RETRABAJANDO';
-
-            if (firstP.status === 'CALIFICADO') {
-                showAppMessage(`Etiqueta ya procesada (Estado: ${firstP.status}).`, 'warning');
-                setLastScannedResult(result);
-            } else {
-                 if (scanMode === 'individual') {
-                    setLastScannedResult(result);
-                    if (vieneDeRetrabajo) {
-                        playWarningSound();
-                        showAppMessage('Paquete Retrabajado: volver a calificar.', 'warning');
-                    } else {
-                        showAppMessage('Etiqueta confirmada correctamente.', 'success');
-                    }
-                    setIsRatingModalOpen(true);
-                } else {
-                    if (vieneDeRetrabajo) {
-                        playWarningSound();
-                        showAppMessage(`Paquete Retrabajado: volver a calificar (${finalCode}).`, 'warning');
-                    }
-                    else if (firstP.status === 'REPORTADO') showAppMessage(`Añadido (Reportado): ${finalCode}`, 'info');
-                    else showAppMessage(`Añadido a la lista: ${finalCode}`, 'success');
-                    setMassScannedCodes(prev => [result, ...prev]);
-                    massScannedCodesRef.current.add(finalCode);
-                }
-            }
+            aplicarFilaPersonal(personalData[0], false);
         } else {
             const { data: etiquetaData, error: etiquetaError } = await withTimeout(supabaseEtiquetas
                 .from('etiquetas_i')
@@ -726,14 +796,20 @@ export default function CalificarPage() {
             }
         }
     } catch (e: any) {
-        playWarningSound();
-        const result: ScanResult = { name: null, product: null, code: finalCode, found: false, error: e.message };
-        setLastScannedResult(result);
-        showAppMessage(`Error al consultar la base de datos: ${e.message}`, 'error');
+        // navigator.onLine miente en iOS: si el fetch falló por RED, se degrada al
+        // snapshot en vez de dar un error crudo de postgrest que al operario de piso
+        // no le dice nada (parece que la etiqueta está mal, cuando solo falta señal).
+        if (esErrorDeRed(e)) {
+            escanearDesdeSnapshot();
+        } else {
+            playWarningSound();
+            setLastScannedResult({ name: null, product: null, code: finalCode, found: false, error: e.message });
+            showAppMessage(`Error al consultar la base de datos: ${e.message}`, 'error');
+        }
     } finally {
         setLoading(false);
     }
-  }, [scanMode, encargado, isNextDayDelivery]);
+  }, [scanMode, encargado, isNextDayDelivery, isOnline]);
   
     const formatElapsedTime = (totalSeconds: number) => {
         if (totalSeconds < 0) return '00:00';
@@ -1107,60 +1183,197 @@ export default function CalificarPage() {
     else await refreshRetrabajosAbiertos();
   }, [refreshRetrabajosAbiertos]);
 
+  /**
+   * Reaplica una calificación encolada sin conexión. Antes de pisar nada, relee el
+   * estado actual en el servidor: un paquete que mientras tanto se entregó o canceló
+   * en otro dispositivo NO se recalifica, se deja como conflicto para revisión manual.
+   */
+  const processCalificarItem = async (item: QueueItem): Promise<SyncOutcome> => {
+    const {
+      codes, inserts, qualificationTimestamp,
+      encargado: itemEncargado, userId, lote, elapsedTime: itemElapsed,
+    } = item.payload as CalificarPayload;
+
+    let aplicados = 0;
+    const bloqueados: string[] = [];
+
+    // 1) Actualizaciones a CALIFICADO.
+    if (codes.length > 0) {
+      const { data, error } = await supabaseEtiquetas.from('personal').select('code, status').in('code', codes);
+      if (error) throw error;
+      const statusByCode = new Map((data ?? []).map((r: any) => [String(r.code), r.status as string]));
+      const aplicables = codes.filter((c) => {
+        const st = statusByCode.get(c);
+        // status undefined = el código no existe (no se puede calificar la nada).
+        if (st === undefined || ESTADOS_BLOQUEANTES_CALIFICAR.has(st)) { bloqueados.push(c); return false; }
+        return true;
+      });
+      if (aplicables.length > 0) {
+        const { error: updErr } = await supabaseEtiquetas.from('personal').update({
+          status: 'CALIFICADO',
+          details: null,
+          date_cal: qualificationTimestamp,
+          ...(lote ? { lote } : {}),
+          name_cali: itemEncargado || 'N/A',
+          id_empleado_calificada: userId,
+        }).in('code', aplicables);
+        if (updErr) throw updErr;
+        aplicados += aplicables.length;
+      }
+    }
+
+    // 2) Etiquetas nuevas. Si otro dispositivo ya las creó, no se duplican: se
+    //    marcan como conflicto en vez de reventar el insert por clave repetida.
+    if (inserts.length > 0) {
+      const codigosNuevos = inserts.map((r: any) => String(r.code));
+      const { data: existentes, error: exErr } = await supabaseEtiquetas.from('personal').select('code').in('code', codigosNuevos);
+      if (exErr) throw exErr;
+      const yaExisten = new Set((existentes ?? []).map((r: any) => String(r.code)));
+      yaExisten.forEach((c) => bloqueados.push(c));
+      const insertables = inserts.filter((r: any) => !yaExisten.has(String(r.code)));
+      if (insertables.length > 0) {
+        const { error: insErr } = await supabaseEtiquetas.from('personal').insert(insertables);
+        if (insErr) throw insErr;
+        aplicados += insertables.length;
+      }
+    }
+
+    if (aplicados > 0) {
+      await cerrarRetrabajo([...codes, ...inserts.map((r: any) => String(r.code))]);
+      await saveKpiData(itemEncargado, aplicados, itemElapsed);
+    }
+
+    if (bloqueados.length > 0) {
+      // Se reduce el item a los conflictivos, para no reprocesar lo ya sincronizado.
+      await updateQueueItem(item.id, { payload: { ...item.payload, codes: bloqueados, inserts: [] } });
+      return 'conflict';
+    }
+    return 'synced';
+  };
+
+  const { pendingCount, conflicts, isSyncing, refresh: refreshSync, retryConflict, discardConflict } =
+    useOfflineSync('calificar', processCalificarItem);
+
   const handleAccept = async () => {
     if (!lastScannedResult?.code) return;
+    const code = lastScannedResult.code;
     setLoading(true);
+    const qualificationTimestamp = new Date();
+    if (isNextDayDelivery) qualificationTimestamp.setDate(qualificationTimestamp.getDate() + 1);
+
+    const encolar = async () => {
+      await enqueue({
+        id: crypto.randomUUID(),
+        page: 'calificar',
+        type: 'calificar',
+        payload: {
+          codes: [code],
+          inserts: [],
+          qualificationTimestamp: qualificationTimestamp.toISOString(),
+          encargado: encargado || 'N/A',
+          userId: user?.id ?? null,
+          lote: loteId,
+          elapsedTime,
+        } as CalificarPayload,
+        createdAt: Date.now(),
+      });
+      await refreshSync();
+      alert('Guardado sin conexión. Se sincronizará automáticamente cuando vuelva la señal.');
+      handleOpenRatingModal(false);
+    };
+
     try {
-        const qualificationTimestamp = new Date();
-        if (isNextDayDelivery) qualificationTimestamp.setDate(qualificationTimestamp.getDate() + 1);
-        const { data, error } = await supabaseEtiquetas.from('personal').update({
+        if (!isOnline) { await encolar(); return; }
+        const { data, error } = await withTimeout(supabaseEtiquetas.from('personal').update({
             status: 'CALIFICADO',
             details: null,
             date_cal: qualificationTimestamp.toISOString(),
             name_cali: encargado || 'N/A',
             id_empleado_calificada: user?.id ?? null
-        }).eq('code', lastScannedResult.code).select('code');
+        }).eq('code', code).select('code'), SCAN_QUERY_TIMEOUT_MS);
         if (error) throw error;
         if (!data || data.length === 0) throw new Error('No se actualizó ningún registro (0 filas afectadas). Verifica permisos o que el código siga existiendo.');
-        await cerrarRetrabajo([lastScannedResult.code]);
+        await cerrarRetrabajo([code]);
         await saveKpiData(encargado, 1, elapsedTime);
         alert('Calificación guardada correctamente.');
         handleOpenRatingModal(false);
-    } catch (e: any) { alert(`Error al guardar la calificación: ${e.message}`); } finally { setLoading(false); }
+    } catch (e: any) {
+        // Online fantasma: falló la RED, no los datos → encolar en vez de perder la calificación.
+        if (esErrorDeRed(e)) {
+            try { await encolar(); } catch (qe: any) { alert(`No se pudo guardar sin conexión: ${qe.message}`); }
+        } else {
+            alert(`Error al guardar la calificación: ${e.message}`);
+        }
+    } finally { setLoading(false); }
   };
 
 const handleMassQualify = async () => {
     setLoteConfirmation({ isOpen: false, existingCount: 0, newCount: 0 });
     setLoading(true);
+
+    const qualificationTimestamp = new Date();
+    if (isNextDayDelivery) qualificationTimestamp.setDate(qualificationTimestamp.getDate() + 1);
+    const recordsToInsert = massScannedCodes.filter(item => item.isNew);
+    const codesToUpdate = massScannedCodes.filter(item => !item.isNew).map(item => item.code);
+    // Las filas nuevas se arman aquí (no dentro del try) para que el camino offline
+    // pueda encolarlas tal cual, sin repetir la construcción del payload.
+    const payload = recordsToInsert.map(item => {
+        const marketplace = marketplaceFromOrigen(item.origen);
+        return {
+            code: item.code,
+            name: item.name,
+            name_inc: encargado || 'N/A',
+            sku: item.sku,
+            product: item.product,
+            quantity: item.quantity,
+            organization: resolveOrganizationParaMarketplace(marketplace, item.organization),
+            sales_num: item.sales_num,
+            status: 'CALIFICADO',
+            date: qualificationTimestamp.toISOString(),
+            date_cal: qualificationTimestamp.toISOString(),
+            details: item.details,
+            lote: loteId,
+            name_cali: encargado || 'N/A',
+            id_empleado_calificada: user?.id ?? null,
+            origen: item.origen ?? 'Mercado Libre',
+            marketplace,
+        };
+    });
+
+    const limpiarSesion = () => {
+        setMassScannedCodes([]);
+        massScannedCodesRef.current.clear();
+        localStorage.removeItem(STORAGE_KEY);
+        setLoteId('');
+        setTimerStartTime(null);
+        timerStartedRef.current = false;
+    };
+
+    const encolar = async () => {
+        await enqueue({
+            id: crypto.randomUUID(),
+            page: 'calificar',
+            type: 'calificar',
+            payload: {
+                codes: codesToUpdate,
+                inserts: payload,
+                qualificationTimestamp: qualificationTimestamp.toISOString(),
+                encargado: encargado || 'N/A',
+                userId: user?.id ?? null,
+                lote: loteId,
+                elapsedTime,
+            } as CalificarPayload,
+            createdAt: Date.now(),
+        });
+        await refreshSync();
+        alert(`Guardado sin conexión: ${codesToUpdate.length + payload.length} etiquetas. Se sincronizarán automáticamente cuando vuelva la señal.`);
+        limpiarSesion();
+    };
+
     try {
-        const qualificationTimestamp = new Date();
-        if (isNextDayDelivery) qualificationTimestamp.setDate(qualificationTimestamp.getDate() + 1);
-        const recordsToInsert = massScannedCodes.filter(item => item.isNew);
-        const codesToUpdate = massScannedCodes.filter(item => !item.isNew).map(item => item.code);
+        if (!isOnline) { await encolar(); return; }
         let successCount = 0;
         if (recordsToInsert.length > 0) {
-            const payload = recordsToInsert.map(item => {
-                const marketplace = marketplaceFromOrigen(item.origen);
-                return {
-                    code: item.code,
-                    name: item.name,
-                    name_inc: encargado || 'N/A',
-                    sku: item.sku,
-                    product: item.product,
-                    quantity: item.quantity,
-                    organization: resolveOrganizationParaMarketplace(marketplace, item.organization),
-                    sales_num: item.sales_num,
-                    status: 'CALIFICADO',
-                    date: qualificationTimestamp.toISOString(),
-                    date_cal: qualificationTimestamp.toISOString(),
-                    details: item.details,
-                    lote: loteId,
-                    name_cali: encargado || 'N/A',
-                    id_empleado_calificada: user?.id ?? null,
-                    origen: item.origen ?? 'Mercado Libre',
-                    marketplace,
-                };
-            });
             const { data: insData, error: insErr } = await supabaseEtiquetas.from('personal').insert(payload).select('code');
             if (insErr) throw insErr;
             if (!insData || insData.length < recordsToInsert.length) {
@@ -1187,13 +1400,16 @@ const handleMassQualify = async () => {
         await cerrarRetrabajo(massScannedCodes.map(item => item.code));
         alert(`Se procesaron ${successCount} etiquetas correctamente.`);
         if (successCount > 0) await saveKpiData(encargado, successCount, elapsedTime);
-        setMassScannedCodes([]);
-        massScannedCodesRef.current.clear();
-        localStorage.removeItem(STORAGE_KEY); // Limpiar sesión al finalizar con éxito
-        setLoteId('');
-        setTimerStartTime(null);
-        timerStartedRef.current = false;
-    } catch (e: any) { alert(`Error al calificar masivamente: ${e.message}`); } finally { setLoading(false); }
+        limpiarSesion(); // Limpiar sesión al finalizar con éxito
+    } catch (e: any) {
+        // Online fantasma: falló la RED, no los datos → encolar el lote completo en
+        // vez de perder todo lo escaneado.
+        if (esErrorDeRed(e)) {
+            try { await encolar(); } catch (qe: any) { alert(`No se pudo guardar sin conexión: ${qe.message}`); }
+        } else {
+            alert(`Error al calificar masivamente: ${e.message}`);
+        }
+    } finally { setLoading(false); }
 };
 
 const triggerMassQualify = async () => {
@@ -1236,11 +1452,35 @@ const triggerMassQualify = async () => {
   
     const handleLoadLote = async () => {
     if (!loteToLoad.trim()) return;
+    // Cargar un lote NUEVO necesita red; los ya precargados siguen sirviendo sin ella.
+    if (!isOnline) {
+      showAppMessage('Necesitas conexión para cargar un lote nuevo. Los lotes ya precargados siguen disponibles sin conexión.', 'warning');
+      return;
+    }
     setLoading(true);
     try {
       const { data, error } = await supabaseEtiquetas.from('personal').select('*').eq('lote', loteToLoad.trim());
       if (error) throw error;
       if (!data || data.length === 0) { showAppMessage(`No se encontraron paquetes.`, 'warning'); return; }
+
+      // Precarga offline: se cachea lo que /calificar necesita para poder validar y
+      // MOSTRAR el paquete al escanearlo sin red (producto, sku, piezas, quién empacó).
+      const snapshotEntries: Record<string, SnapshotEntry> = {};
+      data.forEach((item: any) => {
+        snapshotEntries[String(item.code)] = {
+          name: item.name,
+          product: item.product,
+          status: item.status,
+          sku: item.sku,
+          quantity: item.quantity,
+          details: item.details,
+          origen: item.origen,
+          id_empleado_despacha: item.id_empleado_despacha,
+        };
+      });
+      snapshotRef.current = { ...snapshotRef.current, ...snapshotEntries };
+      mergeSnapshotEntries('calificar', snapshotEntries).catch((err) => console.error('Error guardando snapshot offline:', err));
+
       const newItems: ScanResult[] = data.map(item => ({ code: item.code, name: item.name, product: item.product, status: item.status, details: item.details, sku: item.sku, quantity: item.quantity, organization: item.organization, sales_num: item.sales_num, found: true, isNew: false, id_empleado_despacha: item.id_empleado_despacha }));
       const currentCodes = new Set(massScannedCodes.map(c => c.code));
       const itemsToAdd = newItems.filter(item => { if (!currentCodes.has(item.code)) { massScannedCodesRef.current.add(item.code); return true; } return false; });
@@ -1282,6 +1522,35 @@ const triggerMassQualify = async () => {
               {retrabajosAbiertos > 0 ? `${retrabajosAbiertos} en retrabajo` : 'Retrabajos'}
             </Link>
           </header>
+
+          {pendingCount > 0 && (
+            <div className="flex items-center justify-center gap-2 bg-blue-50 border border-blue-200 text-blue-700 text-xs font-bold p-2 rounded-lg">
+              {isSyncing ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Clock className="h-4 w-4" />}
+              {pendingCount} calificación(es) pendiente(s) de sincronizar
+            </div>
+          )}
+
+          {conflicts.length > 0 && (
+            <div className="bg-red-50 border border-red-300 rounded-lg p-3 space-y-2">
+              <h3 className="text-sm font-black text-red-700 uppercase tracking-wide flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4" /> Conflictos de sincronización ({conflicts.length})
+              </h3>
+              <p className="text-xs text-red-600">
+                Estos códigos ya fueron entregados, cancelados o no existen. No se recalificaron; revísalos y decide manualmente.
+              </p>
+              <ul className="space-y-2">
+                {conflicts.map((c) => (
+                  <li key={c.id} className="bg-white border border-red-200 rounded-md p-2 text-xs space-y-2">
+                    <div className="font-mono break-all">{((c.payload as CalificarPayload).codes || []).join(', ')}</div>
+                    <div className="flex gap-2">
+                      <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => retryConflict(c.id)}>Reintentar</Button>
+                      <Button size="sm" variant="destructive" className="h-7 text-xs" onClick={() => discardConflict(c.id)}>Descartar</Button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
 
           <div className="space-y-4">
               <div>
@@ -1344,6 +1613,17 @@ const triggerMassQualify = async () => {
                   </div>
               )}
           </div>
+
+          {/* Contador flotante: la tarjeta "Escaneados" de arriba se pierde al hacer
+              scroll por la lista. Abajo a la izquierda para no tapar el FAB de ajustes
+              de la esquina inferior derecha. isMounted evita el desajuste de hidratación
+              (la lista se restaura de localStorage después del render del servidor). */}
+          {isMounted && scanMode === 'masivo' && massScannedCodes.length > 0 && (
+              <div className="fixed bottom-6 left-4 z-[9990] flex items-center gap-2 rounded-full bg-starbucks-green text-white px-4 py-2 shadow-lg shadow-black/20 select-none pointer-events-none">
+                  <Check className="h-4 w-4 shrink-0" />
+                  <span className="text-sm font-black tabular-nums">Escaneados: {massScannedCodes.length}</span>
+              </div>
+          )}
 
           <div className="bg-starbucks-cream p-4 rounded-lg">
             <div className="scanner-container relative">

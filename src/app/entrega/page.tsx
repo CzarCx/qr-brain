@@ -23,7 +23,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import Papa from 'papaparse';
 import { Combobox } from '@/components/ui/combobox';
 import { useAuth } from '@/components/AuthProvider';
-import { cn, getCameraCapabilitiesWithRetry, withTimeout } from '@/lib/utils';
+import { cn, getCameraCapabilitiesWithRetry, withTimeout, esErrorDeRed } from '@/lib/utils';
 import { useOnlineStatus } from '@/hooks/use-online-status';
 import { useOfflineSync, SyncOutcome } from '@/hooks/use-offline-sync';
 import { enqueue, mergeSnapshotEntries, getSnapshotEntries, updateQueueItem, SnapshotEntry, QueueItem } from '@/lib/offlineDb';
@@ -74,15 +74,6 @@ const SCAN_QUERY_TIMEOUT_MS = 4000;
 // Tope para el UPDATE masivo al confirmar entrega: si la red cuelga, se aborta y
 // la entrega se encola en vez de quedarse esperando (o fallar con el modal rojo).
 const DELIVERY_UPDATE_TIMEOUT_MS = 8000;
-
-// Un fallo de RED (no un error de datos): postgrest/fetch no rechazan de forma
-// uniforme —a veces TypeError "Load failed"/"Failed to fetch", a veces el SW
-// devuelve "no-response", y withTimeout lanza "Tiempo de espera agotado"—. Se
-// detecta por firma para degradar a offline (snapshot / cola) en lugar de
-// bloquear con un modal. navigator.onLine no basta: en iOS reporta online sin serlo.
-const esErrorDeRed = (e: any): boolean =>
-  e?.name === 'TypeError' ||
-  /no-response|Failed to fetch|Load failed|NetworkError|respondWith|Tiempo de espera agotado/i.test(e?.message ?? '');
 
 // Desplazamiento al deslizar la card para revelar "Eliminar" (mismo criterio que /asignar).
 const SWIPE_OPEN_X = -84;
