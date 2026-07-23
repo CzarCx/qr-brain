@@ -227,10 +227,11 @@ export default function RetrabajosPage() {
     return () => clearInterval(t);
   }, [enCurso.length]);
 
-  const promedioCerrados = useMemo(() => {
+  const { totalCerrados, promedioCerrados } = useMemo(() => {
     const conDuracion = historial.filter(i => typeof i.segundos_retrabajo === 'number');
-    if (conDuracion.length === 0) return null;
-    return conDuracion.reduce((acc, i) => acc + (i.segundos_retrabajo || 0), 0) / conDuracion.length;
+    if (conDuracion.length === 0) return { totalCerrados: null, promedioCerrados: null };
+    const suma = conDuracion.reduce((acc, i) => acc + (i.segundos_retrabajo || 0), 0);
+    return { totalCerrados: suma, promedioCerrados: suma / conDuracion.length };
   }, [historial]);
 
   const segundosAbiertos = (i: Incidencia) =>
@@ -271,7 +272,7 @@ export default function RetrabajosPage() {
           </Alert>
         )}
 
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <div className="bg-white border border-gray-200 rounded-xl p-3 text-center shadow-sm">
             <p className="text-2xl font-black text-amber-600">{enCurso.length}</p>
             <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">En curso</p>
@@ -280,9 +281,13 @@ export default function RetrabajosPage() {
             <p className="text-2xl font-black text-slate-700">{historial.length}</p>
             <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Resueltos</p>
           </div>
-          <div className="bg-white border border-gray-200 rounded-xl p-3 text-center shadow-sm col-span-2 md:col-span-1">
+          <div className="bg-white border border-gray-200 rounded-xl p-3 text-center shadow-sm">
             <p className="text-2xl font-black text-starbucks-green">{promedioCerrados !== null ? formatDuration(promedioCerrados) : '—'}</p>
             <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Promedio</p>
+          </div>
+          <div className="bg-white border border-gray-200 rounded-xl p-3 text-center shadow-sm">
+            <p className="text-2xl font-black text-starbucks-dark">{totalCerrados !== null ? formatDuration(totalCerrados) : '—'}</p>
+            <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Total</p>
           </div>
         </div>
 

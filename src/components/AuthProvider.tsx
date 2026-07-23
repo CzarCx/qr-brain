@@ -151,6 +151,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         supabaseEtiquetas.from('user_roles').select('roles(code)').eq('user_id', currentUser.id)
       ]), SUPABASE_TIMEOUT_MS);
 
+      // postgrest-js NO rechaza ante un fallo de red: resuelve con { data: null, error }.
+      // Sin esta guarda, estando offline caíamos al camino de "éxito" de abajo y
+      // sobrescribíamos roles y la caché con [] — dejando al usuario sin módulos
+      // ("No tienes módulos asignados") pese a tener sesión y caché válidas. Al lanzar
+      // el error de red, se cae al catch, que conserva la caché y NO pinea
+      // lastSyncedUserId (así un reintento posterior con red sí resincroniza).
+      if (rolesRes.error || profileRes.error) {
+        throw rolesRes.error || profileRes.error;
+      }
+
       const profile = (profileRes.data as Profile | null) ?? null;
       const codes = rolesRes.data
         ? (rolesRes.data as any[]).map((r: any) => r.roles?.code).filter(Boolean)

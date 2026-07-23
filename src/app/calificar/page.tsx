@@ -915,7 +915,9 @@ export default function CalificarPage() {
     if (!selectedReport || !lastScannedResult?.code) { alert("Por favor, selecciona un motivo de reporte."); return; }
     setLoading(true);
     try {
-        const { data, error } = await supabaseEtiquetas.from('personal').update({ details: selectedReport, status: 'REPORTADO', id_empleado_calificada: user?.id ?? null }).eq('code', lastScannedResult.code).select('code');
+        // Sella `date_cal` también en los REPORTADO: sin esto quedaban fuera de la
+        // ventana de "revisados en QC" y no contaban en FPY / % con incidencia.
+        const { data, error } = await supabaseEtiquetas.from('personal').update({ details: selectedReport, status: 'REPORTADO', id_empleado_calificada: user?.id ?? null, date_cal: new Date().toISOString() }).eq('code', lastScannedResult.code).select('code');
         if (error) throw error;
         if (!data || data.length === 0) throw new Error('No se actualizó ningún registro (0 filas afectadas). Verifica permisos o que el código siga existiendo.');
         await saveKpiData(encargado, 1, elapsedTime);
@@ -963,6 +965,22 @@ export default function CalificarPage() {
               sinSubcategoria ? `[Sin subcategoría asociada al SKU: ${skuTexto}]` : '',
           ].filter(Boolean).join(' ');
 
+          // Categoriza la discrepancia para el KPI "tipo de error más frecuente":
+          // compara producto solicitado vs. despachado y piezas solicitadas vs.
+          // encontradas, con los mismos valores que se guardan en el record.
+          const prodSolicitado = subcatSolicitada ?? (skuTexto || null);
+          const prodDespachado = searchQueryDespachado || null;
+          const productoDifiere = !!prodDespachado && prodSolicitado !== prodDespachado;
+          const cantidadDifiere =
+              (isNaN(pSolicitadas) ? 0 : pSolicitadas) !== (isNaN(pDespachadas) ? 0 : pDespachadas);
+          const tipoError = productoDifiere && cantidadDifiere
+              ? 'CANTIDAD_Y_PRODUCTO'
+              : productoDifiere
+              ? 'PRODUCTO'
+              : cantidadDifiere
+              ? 'CANTIDAD'
+              : 'OTRO';
+
           const record = {
               // Ambos se fijan a hora de México. Antes `fecha` salía en UTC y `hora`
               // en la hora local del equipo: por la noche la fecha ya había avanzado
@@ -976,8 +994,10 @@ export default function CalificarPage() {
               id_producto_solicitado: skuEsNumerico ? Number(skuTexto) : null,
               // Par simétrico de columnas text: la subcategoría del SKU solicitado
               // contra la que el operador encontró físicamente.
-              producto_solicitado: subcatSolicitada ?? (skuTexto || null),
-              producto_despachado: searchQueryDespachado || null,
+              producto_solicitado: prodSolicitado,
+              producto_despachado: prodDespachado,
+              // Categoría para el KPI "tipo de error más frecuente".
+              tipo_error: tipoError,
               piezas_solicitadas: isNaN(pSolicitadas) ? 0 : pSolicitadas,
               piezas_despachadas: isNaN(pDespachadas) ? 0 : pDespachadas,
               observaciones: observacionesFinal,
