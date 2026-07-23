@@ -597,7 +597,21 @@ export default function Home() {
             await applyScanResult(data ?? null, false);
         }
     } catch (e: any) {
-        showModalNotification('Error de Base de Datos', `Hubo un problema al consultar el código: ${e.message}`, 'destructive');
+        // navigator.onLine miente en iOS: reporta "online" con señal fantasma, así
+        // que el fetch a Supabase se intentó y el SW (NetworkOnly) no pudo responder
+        // ("FetchEvent.respondWith received an error: no-response"). Ante un fallo de
+        // RED, degradar al camino offline —encolar sin verificar, igual que si
+        // !isOnline— en vez de bloquear con el modal rojo. El motor de sincronización
+        // revalida el código contra el servidor al reconectar. El modal solo se
+        // reserva para errores que NO son de red (un bug real, no la falta de señal).
+        const esFalloDeRed =
+            e?.name === 'TypeError' ||
+            /no-response|Failed to fetch|Load failed|NetworkError|respondWith/i.test(e?.message ?? '');
+        if (esFalloDeRed) {
+            await applyScanResult(snapshotRef.current[finalCode] ?? null, true);
+        } else {
+            showModalNotification('Error de Base de Datos', `Hubo un problema al consultar el código: ${e.message}`, 'destructive');
+        }
     } finally {
         setLoading(false);
     }
