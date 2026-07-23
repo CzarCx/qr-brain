@@ -71,6 +71,18 @@ const FORCE_OFFLINE_KEY = 'entrega_force_offline';
 // red sin haberla) el fetch se cuelga hasta que el navegador se rinde solo. Con
 // este tope se aborta rápido y el escaneo cae al camino offline sin hacer esperar.
 const SCAN_QUERY_TIMEOUT_MS = 4000;
+// Tope para el UPDATE masivo al confirmar entrega: si la red cuelga, se aborta y
+// la entrega se encola en vez de quedarse esperando (o fallar con el modal rojo).
+const DELIVERY_UPDATE_TIMEOUT_MS = 8000;
+
+// Un fallo de RED (no un error de datos): postgrest/fetch no rechazan de forma
+// uniforme —a veces TypeError "Load failed"/"Failed to fetch", a veces el SW
+// devuelve "no-response", y withTimeout lanza "Tiempo de espera agotado"—. Se
+// detecta por firma para degradar a offline (snapshot / cola) en lugar de
+// bloquear con un modal. navigator.onLine no basta: en iOS reporta online sin serlo.
+const esErrorDeRed = (e: any): boolean =>
+  e?.name === 'TypeError' ||
+  /no-response|Failed to fetch|Load failed|NetworkError|respondWith|Tiempo de espera agotado/i.test(e?.message ?? '');
 
 // Desplazamiento al deslizar la card para revelar "Eliminar" (mismo criterio que /asignar).
 const SWIPE_OPEN_X = -84;
@@ -632,10 +644,7 @@ export default function Home() {
         // !isOnline— en vez de bloquear con el modal rojo. El motor de sincronización
         // revalida el código contra el servidor al reconectar. El modal solo se
         // reserva para errores que NO son de red (un bug real, no la falta de señal).
-        const esFalloDeRed =
-            e?.name === 'TypeError' ||
-            /no-response|Failed to fetch|Load failed|NetworkError|respondWith|Tiempo de espera agotado/i.test(e?.message ?? '');
-        if (esFalloDeRed) {
+        if (esErrorDeRed(e)) {
             await applyScanResult(snapshotRef.current[finalCode] ?? null, true);
         } else {
             showModalNotification('Error de Base de Datos', `Hubo un problema al consultar el código: ${e.message}`, 'destructive');
@@ -809,26 +818,32 @@ export default function Home() {
     const codesToUpdate = deliveryList.map(item => item.code);
     const deliveryTimestamp = new Date().toISOString();
 
-    if (!isOnline) {
-      try {
-        await enqueue({
-          id: crypto.randomUUID(),
-          page: 'entrega',
-          type: 'deliver',
-          payload: { codes: codesToUpdate, driverName, driverPlate, encargado, deliveryTimestamp, userId: user?.id ?? null } as DeliverPayload,
-          createdAt: Date.now(),
-        });
-        await refreshSync();
+    // Encola la entrega en la cola offline y limpia la sesión. Reutilizado por el
+    // camino !isOnline y por el fallback cuando el UPDATE online falla por red.
+    const encolarEntrega = async () => {
+      await enqueue({
+        id: crypto.randomUUID(),
+        page: 'entrega',
+        type: 'deliver',
+        payload: { codes: codesToUpdate, driverName, driverPlate, encargado, deliveryTimestamp, userId: user?.id ?? null } as DeliverPayload,
+        createdAt: Date.now(),
+      });
+      await refreshSync();
 
-        setIsDeliveryModalOpen(false);
-        showModalNotification('Guardado sin conexión', `Se encolaron ${codesToUpdate.length} paquetes. Se sincronizarán automáticamente cuando vuelva la conexión.`);
-        setDeliveryList([]);
-        scannedCodesRef.current.clear();
-        localStorage.removeItem(STORAGE_KEY);
-        setDriverName('');
-        setDriverPlate('');
-        setLotesCargadosCount(0);
-        showAppMessage('Esperando para escanear...', 'info');
+      setIsDeliveryModalOpen(false);
+      showModalNotification('Guardado sin conexión', `Se encolaron ${codesToUpdate.length} paquetes. Se sincronizarán automáticamente cuando vuelva la conexión.`);
+      setDeliveryList([]);
+      scannedCodesRef.current.clear();
+      localStorage.removeItem(STORAGE_KEY);
+      setDriverName('');
+      setDriverPlate('');
+      setLotesCargadosCount(0);
+      showAppMessage('Esperando para escanear...', 'info');
+    };
+
+    if (!isOnline || forceOffline) {
+      try {
+        await encolarEntrega();
       } catch (e: any) {
         showModalNotification('Error al Guardar', `No se pudo encolar la entrega: ${e.message}`, 'destructive');
       } finally {
@@ -838,7 +853,9 @@ export default function Home() {
     }
 
     try {
-      const { error } = await supabaseEtiquetas
+      // withTimeout aborta si la red cuelga (online fantasma); al fallar por red,
+      // el catch de abajo encola la entrega en vez de perderla con el modal rojo.
+      const { error } = await withTimeout(supabaseEtiquetas
         .from('personal')
         .update({
             status: 'ENTREGADO',
@@ -848,7 +865,7 @@ export default function Home() {
             name_entrega: encargado || 'N/A',
             id_empleado_entrega: user?.id ?? null
         })
-        .in('code', codesToUpdate);
+        .in('code', codesToUpdate), DELIVERY_UPDATE_TIMEOUT_MS);
 
       if (error) throw error;
 
@@ -867,7 +884,16 @@ export default function Home() {
       showAppMessage('Esperando para escanear...', 'info');
 
     } catch (e: any) {
-      showModalNotification('Error al Actualizar', `No se pudieron actualizar los registros: ${e.message}`, 'destructive');
+      // Online fantasma: el UPDATE falló por RED, no por datos → encolar como offline.
+      if (esErrorDeRed(e)) {
+        try {
+          await encolarEntrega();
+        } catch (qe: any) {
+          showModalNotification('Error al Guardar', `No se pudo encolar la entrega: ${qe.message}`, 'destructive');
+        }
+      } else {
+        showModalNotification('Error al Actualizar', `No se pudieron actualizar los registros: ${e.message}`, 'destructive');
+      }
     } finally {
       setLoading(false);
     }
@@ -1279,6 +1305,16 @@ export default function Home() {
                 </div>
                 
                 <h2 className="text-lg font-bold text-starbucks-dark">Para Entrega ({deliveryList.length})</h2>
+
+                {/* Contador flotante: sigue visible al hacer scroll, sin importar
+                    dónde esté la lista. Abajo a la izquierda para no tapar el engrane
+                    (FAB) de la esquina inferior derecha. */}
+                {isMounted && deliveryList.length > 0 && (
+                    <div className="fixed bottom-6 left-4 z-[9990] flex items-center gap-2 rounded-full bg-starbucks-green text-white px-4 py-2 shadow-lg shadow-black/20 select-none pointer-events-none">
+                        <PackageCheck className="h-4 w-4 shrink-0" />
+                        <span className="text-sm font-black tabular-nums">Para entrega: {deliveryList.length}</span>
+                    </div>
+                )}
 
                 <div className="bg-starbucks-cream p-4 rounded-lg">
                     <div className="scanner-container relative aspect-square max-h-[50vh] mx-auto bg-black rounded-lg overflow-hidden">
