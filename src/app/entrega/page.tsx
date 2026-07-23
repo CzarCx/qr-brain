@@ -23,7 +23,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import Papa from 'papaparse';
 import { Combobox } from '@/components/ui/combobox';
 import { useAuth } from '@/components/AuthProvider';
-import { cn, getCameraCapabilitiesWithRetry } from '@/lib/utils';
+import { cn, getCameraCapabilitiesWithRetry, withTimeout } from '@/lib/utils';
 import { useOnlineStatus } from '@/hooks/use-online-status';
 import { useOfflineSync, SyncOutcome } from '@/hooks/use-offline-sync';
 import { enqueue, mergeSnapshotEntries, getSnapshotEntries, updateQueueItem, SnapshotEntry, QueueItem } from '@/lib/offlineDb';
@@ -65,6 +65,12 @@ type DeliverPayload = {
 const BarcodeScanner = dynamic(() => import('@/components/BarcodeScanner'), { ssr: false });
 
 const STORAGE_KEY = 'entrega_session_list';
+const FORCE_OFFLINE_KEY = 'entrega_force_offline';
+
+// Límite de la validación por red al escanear: con "online fantasma" (iOS reporta
+// red sin haberla) el fetch se cuelga hasta que el navegador se rinde solo. Con
+// este tope se aborta rápido y el escaneo cae al camino offline sin hacer esperar.
+const SCAN_QUERY_TIMEOUT_MS = 4000;
 
 // Desplazamiento al deslizar la card para revelar "Eliminar" (mismo criterio que /asignar).
 const SWIPE_OPEN_X = -84;
@@ -277,6 +283,11 @@ export default function Home() {
   const [zoom, setZoom] = useState(1);
   const isMobile = useIsMobile();
   const [isValidationOverridden, setIsValidationOverridden] = useState(false);
+  // Modo offline manual: el repartidor lo activa cuando sabe que sale sin señal.
+  // Salta la validación por red (y su espera) y encola directo contra el snapshot,
+  // sin depender del navigator.onLine (que en iOS miente). El timeout de arriba
+  // sigue como respaldo por si se les olvida activarlo.
+  const [forceOffline, setForceOffline] = useState(false);
   const [isDeliveryModalOpen, setIsDeliveryModalOpen] = useState(false);
   const [driverName, setDriverName] = useState('');
   const [driverPlate, setDriverPlate] = useState('');
@@ -325,12 +336,27 @@ export default function Home() {
       }
     }
 
+    // Restaurar el modo offline manual elegido en la sesión anterior: si el
+    // repartidor lo dejó activado, sigue activo tras recargar sin tener que
+    // volver a tocarlo (se lee dentro del efecto, no en el useState, para no
+    // desincronizar el render del servidor con el del cliente).
+    if (localStorage.getItem(FORCE_OFFLINE_KEY) === 'true') {
+      setForceOffline(true);
+    }
+
     // Recuperar snapshot offline (lotes cargados previamente), por si la app
     // se recargó mientras estaba sin conexión.
     getSnapshotEntries('entrega').then((entries) => {
       snapshotRef.current = entries;
     });
   }, []);
+
+  // Persistir el modo offline manual cada vez que cambie.
+  useEffect(() => {
+    if (isMounted) {
+      localStorage.setItem(FORCE_OFFLINE_KEY, String(forceOffline));
+    }
+  }, [forceOffline, isMounted]);
 
   // Guardar en LocalStorage cada vez que cambie la lista
   useEffect(() => {
@@ -579,14 +605,16 @@ export default function Home() {
     };
 
     try {
-        if (!isOnline) {
+        if (!isOnline || forceOffline) {
             await applyScanResult(snapshotRef.current[finalCode] ?? null, true);
         } else {
-            const { data, error } = await supabaseEtiquetas
+            // withTimeout aborta a los 4s si la red está colgada (online fantasma);
+            // al rechazar, el catch de abajo degrada al camino offline.
+            const { data, error } = await withTimeout(supabaseEtiquetas
                 .from('personal')
                 .select('name, product, status, origen, sku')
                 .eq('code', finalCode)
-                .single();
+                .single(), SCAN_QUERY_TIMEOUT_MS);
 
             if (error && error.code !== 'PGRST116') { // PGRST116 = no rows found
                 throw error;
@@ -606,7 +634,7 @@ export default function Home() {
         // reserva para errores que NO son de red (un bug real, no la falta de señal).
         const esFalloDeRed =
             e?.name === 'TypeError' ||
-            /no-response|Failed to fetch|Load failed|NetworkError|respondWith/i.test(e?.message ?? '');
+            /no-response|Failed to fetch|Load failed|NetworkError|respondWith|Tiempo de espera agotado/i.test(e?.message ?? '');
         if (esFalloDeRed) {
             await applyScanResult(snapshotRef.current[finalCode] ?? null, true);
         } else {
@@ -615,7 +643,7 @@ export default function Home() {
     } finally {
         setLoading(false);
     }
-  }, [isValidationOverridden, isOnline, user, encargado]);
+  }, [isValidationOverridden, isOnline, forceOffline, user, encargado]);
 
     useEffect(() => {
         const handlePhysicalScannerInput = (event: KeyboardEvent) => {
@@ -1242,6 +1270,11 @@ export default function Home() {
                     <div className="flex items-center space-x-2 bg-yellow-100 border border-yellow-300 p-3 rounded-lg">
                         <Switch id="validation-override" checked={isValidationOverridden} onCheckedChange={setIsValidationOverridden} />
                         <Label htmlFor="validation-override" className="text-sm font-medium text-yellow-800">Omitir validación de 'Calificado'</Label>
+                    </div>
+
+                    <div className="flex items-center space-x-2 bg-blue-100 border border-blue-300 p-3 rounded-lg">
+                        <Switch id="force-offline" checked={forceOffline} onCheckedChange={setForceOffline} />
+                        <Label htmlFor="force-offline" className="text-sm font-medium text-blue-800">Modo offline (escanear sin validar por red)</Label>
                     </div>
                 </div>
                 
