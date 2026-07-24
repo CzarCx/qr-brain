@@ -1358,7 +1358,8 @@ const handleMassQualify = async () => {
             date: qualificationTimestamp.toISOString(),
             date_cal: qualificationTimestamp.toISOString(),
             details: item.details,
-            lote: loteId,
+            // Lote opcional: solo se guarda si se especificó uno.
+            ...(loteId.trim() ? { lote: loteId.trim() } : {}),
             name_cali: encargado || 'N/A',
             id_empleado_calificada: user?.id ?? null,
             origen: item.origen ?? 'Mercado Libre',
@@ -1412,7 +1413,9 @@ const handleMassQualify = async () => {
                 status: 'CALIFICADO',
                 details: null,
                 date_cal: qualificationTimestamp.toISOString(),
-                lote: loteId,
+                // Lote opcional: sin lote NO se toca el campo, para no borrar el que
+                // el paquete ya tuviera.
+                ...(loteId.trim() ? { lote: loteId.trim() } : {}),
                 name_cali: encargado || 'N/A',
                 id_empleado_calificada: user?.id ?? null
             }).in('code', codesToUpdate).select('code');
@@ -1440,10 +1443,14 @@ const handleMassQualify = async () => {
 
 const triggerMassQualify = async () => {
     if (massScannedCodes.length === 0) { alert("No hay códigos en la lista."); return; }
-    if (!loteId.trim()) { alert("Por favor, ingresa un lote."); return; }
+    const lote = loteId.trim();
+    // El lote es OPCIONAL: sin lote no hay que preguntar por lotes existentes ni
+    // agrupar; se califica directo (esto también evita el chequeo de red, que
+    // fallaría sin conexión).
+    if (!lote) { await handleMassQualify(); return; }
     setLoading(true);
     try {
-        const { count, error } = await supabaseEtiquetas.from('personal').select('code', { count: 'exact', head: true }).eq('lote', loteId.trim());
+        const { count, error } = await supabaseEtiquetas.from('personal').select('code', { count: 'exact', head: true }).eq('lote', lote);
         if (error) throw error;
         if (count && count > 0) setLoteConfirmation({ isOpen: true, existingCount: count, newCount: massScannedCodes.length });
         else await handleMassQualify();
@@ -1718,10 +1725,13 @@ const triggerMassQualify = async () => {
                 </div>
              )}
             <div id="scanner-controls" className="mt-4 flex flex-wrap gap-2 justify-center">
-              <button onClick={() => { setScannerActive(true); setLastScannedResult(null); showAppMessage('Apunte la cámara a un código QR.', 'info'); }} disabled={scannerActive || loading || !encargado} className="px-4 py-2 text-white font-semibold rounded-lg shadow-md transition-colors duration-200 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-sm">
+              <button type="button" onClick={() => { setScannerActive(true); setLastScannedResult(null); showAppMessage('Apunte la cámara a un código QR.', 'info'); }} disabled={scannerActive || loading || !encargado} className="px-4 py-2 text-white font-semibold rounded-lg shadow-md transition-colors duration-200 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-sm">
                 Iniciar
               </button>
-              <button onClick={() => window.location.reload()} disabled={!scannerActive} className="px-4 py-2 text-white font-semibold rounded-lg shadow-md transition-colors duration-200 bg-red-600 hover:bg-red-700 disabled:bg-gray-400 text-sm">
+              {/* Antes hacía window.location.reload(): recargaba TODA la página (y offline
+                  caía al dino de "sin internet"). Detener solo debe apagar el escáner;
+                  el efecto de arriba limpia la cámara al pasar scannerActive a false. */}
+              <button type="button" onClick={() => { setScannerActive(false); showAppMessage('Escáner detenido.', 'info'); }} disabled={!scannerActive} className="px-4 py-2 text-white font-semibold rounded-lg shadow-md transition-colors duration-200 bg-red-600 hover:bg-red-700 disabled:bg-gray-400 text-sm">
                 Detener
               </button>
             </div>
@@ -1882,13 +1892,13 @@ const triggerMassQualify = async () => {
                         </div>
                     </div>
                     <div className="space-y-2">
-                         <Label htmlFor="lote-id" className="font-bold text-starbucks-dark">Lote / Tanda:</Label>
+                         <Label htmlFor="lote-id" className="font-bold text-starbucks-dark">Lote / Tanda: <span className="font-normal text-gray-400">(opcional)</span></Label>
                          <Input
                            id="lote-id"
                            type="text"
                            value={loteId}
                            onChange={(e) => setLoteId(e.target.value)}
-                           placeholder="Ingresa un identificador de lote"
+                           placeholder="Opcional: identificador de lote"
                            className="bg-transparent"
                            disabled={loading}
                          />

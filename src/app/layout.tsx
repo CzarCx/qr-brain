@@ -107,6 +107,37 @@ export default function RootLayout({
     };
   }, []);
 
+  // Anti-refresco-accidental cuando NO hay conexión. Recargar la página offline
+  // pierde la sesión de escaneo y (si el service worker no sirve la navegación
+  // desde caché) cae al "sin internet" del navegador. Dos capas:
+  //   1) beforeunload: pide confirmación antes de recargar/cerrar (útil en
+  //      escritorio; iOS Safari suele ignorarlo, por eso no es la única capa).
+  //   2) overscroll-behavior: desactiva "jalar para refrescar" —el gesto con el
+  //      que más se recarga sin querer en el celular—. Solo mientras se esté
+  //      offline; se restaura al reconectar.
+  useEffect(() => {
+    const beforeUnload = (e: BeforeUnloadEvent) => {
+      if (!navigator.onLine) {
+        e.preventDefault();
+        e.returnValue = ''; // requerido para que el navegador muestre el diálogo
+      }
+    };
+    const applyPullToRefreshGuard = () => {
+      document.documentElement.style.overscrollBehaviorY = navigator.onLine ? '' : 'contain';
+    };
+
+    applyPullToRefreshGuard();
+    window.addEventListener('beforeunload', beforeUnload);
+    window.addEventListener('online', applyPullToRefreshGuard);
+    window.addEventListener('offline', applyPullToRefreshGuard);
+    return () => {
+      window.removeEventListener('beforeunload', beforeUnload);
+      window.removeEventListener('online', applyPullToRefreshGuard);
+      window.removeEventListener('offline', applyPullToRefreshGuard);
+      document.documentElement.style.overscrollBehaviorY = '';
+    };
+  }, []);
+
   useEffect(() => {
     const savedTime = localStorage.getItem('unassignedReportTime');
     if (savedTime) {

@@ -16,10 +16,28 @@ const serwist = new Serwist({
   precacheEntries: [
     ...(self.__SW_MANIFEST ?? []),
     { url: '/wasm/zxing_reader.wasm', revision: 'zxing-wasm-3.1.1' },
+    // Página offline estática (autocontenida, sin chunks de Next): se precachea
+    // para poder servirla como fallback de navegación cuando no hay red. Súbele el
+    // revision si editas public/offline.html, para forzar el recacheo.
+    { url: '/offline.html', revision: 'offline-v1' },
   ],
   skipWaiting: true,
   clientsClaim: true,
   navigationPreload: true,
+  // Fallback de navegación: cuando una navegación (recarga/entrar a una ruta) falla
+  // sin conexión y NetworkFirst no la tiene en caché —ruta no visitada este deploy,
+  // o caché expirada—, en vez del "sin internet" del navegador (el dino) se sirve
+  // /offline.html. Las rutas que SÍ se visitaron online siguen sirviéndose reales
+  // desde la caché de NetworkFirst; esto solo cubre el hueco. El plugin de fallback
+  // se adjunta automáticamente a las estrategias de runtimeCaching (incl. defaultCache).
+  fallbacks: {
+    entries: [
+      {
+        url: '/offline.html',
+        matcher: ({ request }) => request.destination === 'document',
+      },
+    ],
+  },
   runtimeCaching: [
     // Los datos de Supabase (PostgREST /rest/v1, Auth /auth/v1) son transaccionales y en
     // vivo: NUNCA deben servirse desde caché. El defaultCache los trata como "cross-origin"
