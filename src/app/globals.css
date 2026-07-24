@@ -251,6 +251,31 @@ body {
 .laser-flash {
   animation: flash-green 400ms ease-out;
 }
+
+/* Pop del contador flotante al sumar un escaneo. Se re-dispara con `key` (React
+   remonta el elemento en cada incremento), así la animación siempre reinicia. */
+@keyframes scan-pop {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+  }
+  25% {
+    transform: scale(1.4);
+    background-color: #22c55e;
+    box-shadow: 0 0 0 8px rgba(34, 197, 94, 0.45), 0 6px 16px rgba(0, 0, 0, 0.25);
+  }
+  60% {
+    transform: scale(1.1);
+    box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.25);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+  }
+}
+.animate-scan-pop {
+  animation: scan-pop 600ms ease-out;
+}
 .hidden-input {
   position: absolute;
   opacity: 0;

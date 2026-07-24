@@ -314,10 +314,6 @@ export default function CalificarPage() {
   const [loteConfirmation, setLoteConfirmation] = useState<LoteConfirmationState>({ isOpen: false, existingCount: 0, newCount: 0 });
   const [timerStartTime, setTimerStartTime] = useState<Date | null>(null);
   const [elapsedTime, setElapsedTime] = useState(0);
-  // Pulso del contador flotante al agregar un escaneo: señal visual infalible de
-  // que SÍ contó, independiente del mensaje transitorio (fácil de perder offline).
-  const [scanPulse, setScanPulse] = useState(false);
-  const prevMassCountRef = useRef(0);
 
   const [isDiscrepancyModalOpen, setIsDiscrepancyModalOpen] = useState(false);
   const [itemToReport, setItemToReport] = useState<ScanResult | null>(null);
@@ -377,19 +373,7 @@ export default function CalificarPage() {
     if (typeof window !== 'undefined') localStorage.setItem('calificar_scanner_engine', scannerEngine);
   }, [scannerEngine]);
 
-   // Dispara el pulso del contador cada vez que la lista CRECE (un escaneo nuevo
-  // que contó). Se ignora cuando decrece (borrados) o al restaurar la sesión.
-  useEffect(() => {
-    if (massScannedCodes.length > prevMassCountRef.current) {
-      setScanPulse(true);
-      const t = setTimeout(() => setScanPulse(false), 550);
-      prevMassCountRef.current = massScannedCodes.length;
-      return () => clearTimeout(t);
-    }
-    prevMassCountRef.current = massScannedCodes.length;
-  }, [massScannedCodes.length]);
-
-  const showAppMessage = (text: string, type: 'success' | 'error' | 'info' | 'warning') => {
+   const showAppMessage = (text: string, type: 'success' | 'error' | 'info' | 'warning') => {
     if (messageTimeoutRef.current) {
       clearTimeout(messageTimeoutRef.current);
     }
@@ -1689,12 +1673,12 @@ const triggerMassQualify = async () => {
               de la esquina inferior derecha. isMounted evita el desajuste de hidratación
               (la lista se restaura de localStorage después del render del servidor). */}
           {isMounted && scanMode === 'masivo' && massScannedCodes.length > 0 && (
-              <div className={cn(
-                  "fixed bottom-6 left-4 z-[9990] flex items-center gap-2 rounded-full text-white px-4 py-2 shadow-lg shadow-black/20 select-none pointer-events-none transition-all duration-200 ease-out",
-                  scanPulse
-                    ? "bg-green-500 scale-125 ring-4 ring-green-300"
-                    : "bg-starbucks-green scale-100 ring-0",
-              )}>
+              // key = conteo: React remonta el pill en cada incremento, reiniciando la
+              // animación `scan-pop` — así el destello SIEMPRE se ve, sin estado ni timers.
+              <div
+                  key={massScannedCodes.length}
+                  className="animate-scan-pop fixed bottom-6 left-4 z-[9990] flex items-center gap-2 rounded-full bg-starbucks-green text-white px-4 py-2 shadow-lg shadow-black/20 select-none pointer-events-none"
+              >
                   <Check className="h-4 w-4 shrink-0" />
                   <span className="text-sm font-black tabular-nums">Escaneados: {massScannedCodes.length}</span>
               </div>
