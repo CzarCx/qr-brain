@@ -77,6 +77,10 @@ type ScanResult = {
     organization?: string | null;
     sales_num?: string | number | null;
     isNew?: boolean;
+    // Escaneado sin conexión y sin estar en un lote precargado: no se pudo validar
+    // contra el servidor. Se califica igual (el producto se lee de la etiqueta física)
+    // y se revalida al sincronizar; si el código no existe, saldrá como conflicto.
+    unverified?: boolean;
     // Operario que despachó/empaquetó la etiqueta (personal.id_empleado_despacha),
     // que es a quien se le atribuye la incidencia. No confundir con
     // id_empleado_entrega: ese lo escribe /entrega al entregar, o sea después de QC,
@@ -217,6 +221,11 @@ function MobileMassRow({
               </span>
               <span className="text-[10px] font-medium text-gray-500 truncate">{data.product || 'N/A'}</span>
             </div>
+            {data.unverified && (
+              <span title="Escaneado sin conexión; se validará al sincronizar" className="inline-flex items-center gap-0.5 rounded-full bg-amber-100 text-amber-700 px-1.5 py-0.5 text-[8px] font-black uppercase tracking-wide shrink-0">
+                <AlertTriangle className="h-2.5 w-2.5" /> Sin verif.
+              </span>
+            )}
             {data.isNew && <span className="text-[7px] font-black text-green-600 border border-green-200 px-1 rounded-sm bg-green-50 shrink-0">NUEVO</span>}
             <ChevronDown className={cn("h-3.5 w-3.5 text-gray-400 transition-transform flex-shrink-0", expanded && "rotate-180")} />
           </div>
@@ -696,19 +705,36 @@ export default function CalificarPage() {
         }
     };
 
-    // Escaneo SIN conexión: se resuelve contra el snapshot del lote precargado. A
-    // diferencia de /entrega, aquí NO se acepta un código desconocido "sin verificar":
-    // calificar exige ver producto, SKU y piezas para juzgar el empaque, y sin esos
-    // datos el operario estaría calificando a ciegas.
+    // Escaneo SIN conexión. Si el código está en el snapshot del lote precargado,
+    // se muestran sus datos reales. Si NO está, se acepta igual como "sin verificar":
+    // el producto se lee de la etiqueta física, así que el calificador puede juzgarlo
+    // aunque la app no tenga los datos. Se revalida al sincronizar (y si el código no
+    // existe en la base, saldrá como conflicto para revisión manual).
     const escanearDesdeSnapshot = () => {
         const fila = snapshotRef.current[finalCode];
         if (fila) {
             aplicarFilaPersonal(fila, true);
             return;
         }
-        playWarningSound();
-        setLastScannedResult({ name: null, product: null, code: finalCode, found: false });
-        showAppMessage(`Sin conexión: ${finalCode} no está en un lote precargado. Carga su lote con señal para poder calificarlo.`, 'warning');
+
+        playBeep();
+        if (!timerStartedRef.current) {
+            setTimerStartTime(new Date());
+            timerStartedRef.current = true;
+        }
+        // isNew:false → al sincronizar se intenta un UPDATE a CALIFICADO; si el código
+        // no existe, processCalificarItem lo marca como conflicto (no lo inventa).
+        const result: ScanResult = { name: null, product: null, code: finalCode, found: true, status: null, unverified: true, isNew: false };
+
+        if (scanMode === 'individual') {
+            setLastScannedResult(result);
+            showAppMessage(`Sin verificar (sin conexión): ${finalCode}`, 'warning');
+            setIsRatingModalOpen(true);
+        } else {
+            setMassScannedCodes(prev => [result, ...prev]);
+            massScannedCodesRef.current.add(finalCode);
+            showAppMessage(`Añadido sin verificar (sin conexión): ${finalCode}`, 'warning');
+        }
     };
 
     try {
@@ -1904,7 +1930,16 @@ const triggerMassQualify = async () => {
                             <TableBody>
                                 {massScannedCodes.length > 0 ? massScannedCodes.map((item) => (
                                     <TableRow key={item.code}>
-                                        <TableCell className="font-mono text-xs">{item.code}</TableCell>
+                                        <TableCell className="font-mono text-xs">
+                                            <div className="flex items-center gap-1.5">
+                                                {item.code}
+                                                {item.unverified && (
+                                                    <span title="Escaneado sin conexión; se validará al sincronizar" className="inline-flex items-center gap-0.5 rounded-full bg-amber-100 text-amber-700 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide">
+                                                        <AlertTriangle className="h-2.5 w-2.5" /> Sin verif.
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </TableCell>
                                         <TableCell className="text-xs">{item.product || 'N/A'}</TableCell>
                                         <TableCell className="text-xs">{item.name || 'N/A'}</TableCell>
                                         <TableCell className="text-right whitespace-nowrap">
