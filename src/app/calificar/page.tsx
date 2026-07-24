@@ -314,6 +314,10 @@ export default function CalificarPage() {
   const [loteConfirmation, setLoteConfirmation] = useState<LoteConfirmationState>({ isOpen: false, existingCount: 0, newCount: 0 });
   const [timerStartTime, setTimerStartTime] = useState<Date | null>(null);
   const [elapsedTime, setElapsedTime] = useState(0);
+  // Pulso del contador flotante al agregar un escaneo: señal visual infalible de
+  // que SÍ contó, independiente del mensaje transitorio (fácil de perder offline).
+  const [scanPulse, setScanPulse] = useState(false);
+  const prevMassCountRef = useRef(0);
 
   const [isDiscrepancyModalOpen, setIsDiscrepancyModalOpen] = useState(false);
   const [itemToReport, setItemToReport] = useState<ScanResult | null>(null);
@@ -373,7 +377,19 @@ export default function CalificarPage() {
     if (typeof window !== 'undefined') localStorage.setItem('calificar_scanner_engine', scannerEngine);
   }, [scannerEngine]);
 
-   const showAppMessage = (text: string, type: 'success' | 'error' | 'info' | 'warning') => {
+   // Dispara el pulso del contador cada vez que la lista CRECE (un escaneo nuevo
+  // que contó). Se ignora cuando decrece (borrados) o al restaurar la sesión.
+  useEffect(() => {
+    if (massScannedCodes.length > prevMassCountRef.current) {
+      setScanPulse(true);
+      const t = setTimeout(() => setScanPulse(false), 550);
+      prevMassCountRef.current = massScannedCodes.length;
+      return () => clearTimeout(t);
+    }
+    prevMassCountRef.current = massScannedCodes.length;
+  }, [massScannedCodes.length]);
+
+  const showAppMessage = (text: string, type: 'success' | 'error' | 'info' | 'warning') => {
     if (messageTimeoutRef.current) {
       clearTimeout(messageTimeoutRef.current);
     }
@@ -595,34 +611,53 @@ export default function CalificarPage() {
     return () => { if (interval) clearInterval(interval); };
   }, [timerStartTime]);
 
-  const playBeep = () => {
-    const context = new (window.AudioContext || (window as any).webkitAudioContext)();
+  // Un SOLO AudioContext reutilizado. En Safari iOS un contexto nace 'suspended' y
+  // solo se puede desbloquear dentro de un gesto del usuario; crear uno nuevo por
+  // beep (como antes) hacía que casi nunca se oyera en el iPhone. Se desbloquea al
+  // tocar "Iniciar" (unlockAudio) y de ahí en adelante los beeps suenan.
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const getAudioCtx = (): AudioContext | null => {
+    if (typeof window === 'undefined') return null;
+    if (!audioCtxRef.current) {
+      const Ctor = window.AudioContext || (window as any).webkitAudioContext;
+      if (!Ctor) return null;
+      audioCtxRef.current = new Ctor();
+    }
+    if (audioCtxRef.current.state === 'suspended') audioCtxRef.current.resume().catch(() => {});
+    return audioCtxRef.current;
+  };
+  // Llamar desde un gesto (botón Iniciar) para que iOS habilite el audio.
+  const unlockAudio = () => { getAudioCtx(); };
+
+  const tone = (freq: number, durationS: number, type: OscillatorType, gain: number) => {
+    const context = getAudioCtx();
     if (!context) return;
     const oscillator = context.createOscillator();
     const gainNode = context.createGain();
-    oscillator.type = 'square';
-    oscillator.frequency.setValueAtTime(880, context.currentTime);
-    gainNode.gain.setValueAtTime(1, context.currentTime);
-    gainNode.gain.exponentialRampToValueAtTime(0.00001, context.currentTime + 0.1);
+    oscillator.type = type;
+    oscillator.frequency.setValueAtTime(freq, context.currentTime);
+    gainNode.gain.setValueAtTime(gain, context.currentTime);
+    gainNode.gain.exponentialRampToValueAtTime(0.00001, context.currentTime + durationS);
     oscillator.connect(gainNode);
     gainNode.connect(context.destination);
     oscillator.start();
-    oscillator.stop(context.currentTime + 0.1);
+    oscillator.stop(context.currentTime + durationS);
   };
 
-  const playWarningSound = () => {
-    const context = new (window.AudioContext || (window as any).webkitAudioContext)();
-    if (!context) return;
-    const oscillator = context.createOscillator();
-    const gainNode = context.createGain();
-    oscillator.type = 'sawtooth';
-    oscillator.frequency.setValueAtTime(440, context.currentTime);
-    gainNode.gain.setValueAtTime(1.5, context.currentTime);
-    gainNode.gain.exponentialRampToValueAtTime(0.00001, context.currentTime + 0.2);
-    oscillator.connect(gainNode);
-    gainNode.connect(context.destination);
-    oscillator.start();
-    oscillator.stop(context.currentTime + 0.2);
+  const playBeep = () => tone(880, 0.1, 'square', 1);
+  const playWarningSound = () => tone(440, 0.2, 'sawtooth', 1.5);
+
+  // Señal de ESCANEO EXITOSO: beep + vibración. Doble tono ascendente para que se
+  // distinga claramente del "ya procesado"/error. La vibración es no-op en Safari
+  // iOS (Apple no soporta navigator.vibrate), pero funciona en Android.
+  const signalSuccess = () => {
+    tone(660, 0.09, 'square', 0.9);
+    const ctx = audioCtxRef.current;
+    if (ctx) {
+      // Segundo tono un pelín después, sobre el mismo contexto.
+      window.setTimeout(() => tone(990, 0.11, 'square', 0.9), 90);
+    }
+    if (typeof navigator !== 'undefined' && 'vibrate' in navigator) navigator.vibrate([45, 35, 70]);
   };
 
   const onScanSuccess = useCallback(async (decodedText: string) => {
@@ -630,7 +665,8 @@ export default function CalificarPage() {
     lastScanTimeRef.current = Date.now();
     setLoading(true);
     showAppMessage('Procesando código...', 'info');
-    if ('vibrate' in navigator) navigator.vibrate(100);
+    // La vibración se movió al momento de ÉXITO (signalSuccess): antes vibraba en
+    // cada intento de lectura, aunque el código fuera duplicado o ilegible.
 
     let finalCode = decodedText;
     try {
@@ -656,7 +692,6 @@ export default function CalificarPage() {
         },
         offline: boolean,
     ) => {
-        playBeep();
         if (!timerStartedRef.current) {
             setTimerStartTime(new Date());
             timerStartedRef.current = true;
@@ -680,6 +715,7 @@ export default function CalificarPage() {
         const vieneDeRetrabajo = fila.status === 'RETRABAJANDO';
 
         if (fila.status === 'CALIFICADO') {
+            playWarningSound();
             showAppMessage(`Etiqueta ya procesada (Estado: ${fila.status}).`, 'warning');
             setLastScannedResult(result);
         } else {
@@ -689,6 +725,7 @@ export default function CalificarPage() {
                     playWarningSound();
                     showAppMessage('Paquete Retrabajado: volver a calificar.', 'warning');
                 } else {
+                    signalSuccess();
                     showAppMessage(`Etiqueta confirmada correctamente${sufijo}.`, 'success');
                 }
                 setIsRatingModalOpen(true);
@@ -697,8 +734,8 @@ export default function CalificarPage() {
                     playWarningSound();
                     showAppMessage(`Paquete Retrabajado: volver a calificar (${finalCode}).`, 'warning');
                 }
-                else if (fila.status === 'REPORTADO') showAppMessage(`Añadido (Reportado): ${finalCode}`, 'info');
-                else showAppMessage(`Añadido a la lista${sufijo}: ${finalCode}`, 'success');
+                else if (fila.status === 'REPORTADO') { signalSuccess(); showAppMessage(`Añadido (Reportado): ${finalCode}`, 'info'); }
+                else { signalSuccess(); showAppMessage(`Añadido a la lista${sufijo}: ${finalCode}`, 'success'); }
                 setMassScannedCodes(prev => [result, ...prev]);
                 massScannedCodesRef.current.add(finalCode);
             }
@@ -717,7 +754,7 @@ export default function CalificarPage() {
             return;
         }
 
-        playBeep();
+        signalSuccess();
         if (!timerStartedRef.current) {
             setTimerStartTime(new Date());
             timerStartedRef.current = true;
@@ -764,7 +801,7 @@ export default function CalificarPage() {
                 const firstE = etiquetaData[0];
                 const totalQty = etiquetaData.reduce((acc, curr) => acc + (curr.quantity || 0), 0);
 
-                playBeep();
+                signalSuccess();
                  if (!timerStartedRef.current) {
                     setTimerStartTime(new Date());
                     timerStartedRef.current = true;
@@ -1652,7 +1689,12 @@ const triggerMassQualify = async () => {
               de la esquina inferior derecha. isMounted evita el desajuste de hidratación
               (la lista se restaura de localStorage después del render del servidor). */}
           {isMounted && scanMode === 'masivo' && massScannedCodes.length > 0 && (
-              <div className="fixed bottom-6 left-4 z-[9990] flex items-center gap-2 rounded-full bg-starbucks-green text-white px-4 py-2 shadow-lg shadow-black/20 select-none pointer-events-none">
+              <div className={cn(
+                  "fixed bottom-6 left-4 z-[9990] flex items-center gap-2 rounded-full text-white px-4 py-2 shadow-lg shadow-black/20 select-none pointer-events-none transition-all duration-200 ease-out",
+                  scanPulse
+                    ? "bg-green-500 scale-125 ring-4 ring-green-300"
+                    : "bg-starbucks-green scale-100 ring-0",
+              )}>
                   <Check className="h-4 w-4 shrink-0" />
                   <span className="text-sm font-black tabular-nums">Escaneados: {massScannedCodes.length}</span>
               </div>
@@ -1725,7 +1767,7 @@ const triggerMassQualify = async () => {
                 </div>
              )}
             <div id="scanner-controls" className="mt-4 flex flex-wrap gap-2 justify-center">
-              <button type="button" onClick={() => { setScannerActive(true); setLastScannedResult(null); showAppMessage('Apunte la cámara a un código QR.', 'info'); }} disabled={scannerActive || loading || !encargado} className="px-4 py-2 text-white font-semibold rounded-lg shadow-md transition-colors duration-200 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-sm">
+              <button type="button" onClick={() => { unlockAudio(); setScannerActive(true); setLastScannedResult(null); showAppMessage('Apunte la cámara a un código QR.', 'info'); }} disabled={scannerActive || loading || !encargado} className="px-4 py-2 text-white font-semibold rounded-lg shadow-md transition-colors duration-200 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-sm">
                 Iniciar
               </button>
               {/* Antes hacía window.location.reload(): recargaba TODA la página (y offline
