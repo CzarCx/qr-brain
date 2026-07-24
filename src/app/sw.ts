@@ -33,8 +33,11 @@ const serwist = new Serwist({
   fallbacks: {
     entries: [
       {
+        // `mode === 'navigate'` es el detector canónico de navegaciones y el más
+        // confiable en Safari iOS (donde `destination` a veces llega vacío). Se
+        // deja `destination` como respaldo por si algún navegador no puebla `mode`.
         url: '/offline.html',
-        matcher: ({ request }) => request.destination === 'document',
+        matcher: ({ request }) => request.mode === 'navigate' || request.destination === 'document',
       },
     ],
   },
