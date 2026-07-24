@@ -61,6 +61,11 @@ export default function BarcodeScanner({ onDetected, onTrackReady, onError }: Pr
   const videoRef = useRef<HTMLVideoElement>(null);
   const overlayRef = useRef<HTMLCanvasElement>(null);
   const [ready, setReady] = useState(false);
+  // Primer error REAL de decodificación (p. ej. el WASM no cargó offline). detect()
+  // sólo rechaza ante fallos reales —"no hay código" resuelve con []—, así que
+  // cualquier rechazo es diagnosticable. Se muestra en pantalla para poder verlo
+  // sin consola (imposible de abrir cómodo en el celular del piso).
+  const [decodeErr, setDecodeErr] = useState<string | null>(null);
   // Callbacks por ref: que el padre los recree en cada render no debe reiniciar la cámara.
   const cbRef = useRef({ onDetected, onTrackReady, onError });
   useEffect(() => { cbRef.current = { onDetected, onTrackReady, onError }; });
@@ -145,7 +150,13 @@ export default function BarcodeScanner({ onDetected, onTrackReady, onError }: Pr
                 if (c.rawValue) cbRef.current.onDetected(c.rawValue);
               }
             })
-            .catch(() => { /* frame ilegible o wasm cargando aún: se reintenta el próximo */ })
+            .catch((err) => {
+              // Un rechazo aquí NO es "frame sin código" (eso resuelve con []): es un
+              // error real (WASM no cargó, decodificador reventó). Se registra el
+              // primero para diagnosticar; el loop sigue (no apaga la cámara).
+              console.error('[BarcodeScanner] detect() falló:', err);
+              if (!cancelled) setDecodeErr((prev) => prev ?? String((err as any)?.message || err));
+            })
             .finally(() => { busy = false; });
         } else {
           busy = false;
@@ -244,6 +255,12 @@ export default function BarcodeScanner({ onDetected, onTrackReady, onError }: Pr
       <span className="absolute top-1 left-1 z-20 text-[8px] font-black uppercase tracking-wider bg-black/60 text-green-400 px-1.5 py-0.5 rounded">
         ⚡ ZXing-WASM {ready ? '●' : '…'}
       </span>
+      {/* Diagnóstico visible del primer error de decodificación (WASM offline, etc.). */}
+      {decodeErr && (
+        <span className="absolute top-1 right-1 z-20 max-w-[75%] truncate text-[8px] font-black uppercase tracking-wider bg-red-600/85 text-white px-1.5 py-0.5 rounded" title={decodeErr}>
+          ⚠ {decodeErr}
+        </span>
+      )}
     </div>
   );
 }
